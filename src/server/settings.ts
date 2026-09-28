@@ -168,6 +168,9 @@ export async function updateSetting(key: SettingKey, value: unknown, actor: Acto
     }
     clean = v;
   }
+  // Skip no-op saves so the history stays readable. Re-saving the rate is kept:
+  // it confirms the rate is still current and resets its age.
+  if (key !== "rate" && JSON.stringify(current[key]) === JSON.stringify(clean)) return;
   await writeSetting(key, clean, actor, ip);
 }
 

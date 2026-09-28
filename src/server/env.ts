@@ -35,9 +35,21 @@ export const env = {
   get secureCookies() {
     return (process.env.SECURE_COOKIES ?? (this.appUrl.startsWith("https") ? "true" : "false")) === "true";
   },
+  /** Read at request time (not baked into the build), so one Docker image works everywhere. */
   firebase: {
     get projectId() {
-      return opt("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+      return opt("FIREBASE_PROJECT_ID");
+    },
+    get webConfig() {
+      const apiKey = opt("FIREBASE_API_KEY");
+      const projectId = opt("FIREBASE_PROJECT_ID");
+      if (!apiKey || !projectId) return null;
+      return {
+        apiKey,
+        projectId,
+        authDomain: opt("FIREBASE_AUTH_DOMAIN") ?? `${projectId}.firebaseapp.com`,
+        appId: opt("FIREBASE_APP_ID"),
+      };
     },
   },
   storage: {
