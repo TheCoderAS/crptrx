@@ -1,0 +1,82 @@
+# Test-phase stack: `docker compose up -d` then open http://localhost:3000
+# Everything runs in TEST mode (Tron Nile + BSC Testnet). No real money moves.
+# Admin panel: http://localhost:3000/admin  (owner@example.com / change-me-now-please)
+# Do NOT use these defaults in production. See README "Going live".
+
+x-app: &app
+  image: ${APP_IMAGE:-ghcr.io/thecoderas/crptrx:latest}
+  build: .
+  init: true
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+  volumes:
+    - appdata:/app/.data
+  environment:
+    DATABASE_URL: postgresql://usdt:usdt@db:5432/usdt
+    APP_URL: ${APP_URL:-http://localhost:3000}
+    SECURE_COOKIES: ${SECURE_COOKIES:-false}
+    AUTO_GENERATE_SECRETS: "true"
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+    # Test helpers: email-only test sign-in, OTP shown on screen, payment simulator.
+    DEV_LOGIN_ENABLED: ${DEV_LOGIN_ENABLED:-true}
+    DEV_TOOLS_ENABLED: ${DEV_TOOLS_ENABLED:-true}
+    # Google sign-in: fill these to test real Firebase login (optional).
+    FIREBASE_API_KEY: ${FIREBASE_API_KEY:-}
+    FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
+    FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+    FIREBASE_APP_ID: ${FIREBASE_APP_ID:-}
+    # Email/SMS: "console" stores messages in the admin Test tools outbox.
+    EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+    SMS_PROVIDER: ${SMS_PROVIDER:-console}
+    STORAGE_DRIVER: local
+    # Blockchain data (testnets work without keys at low volume).
+    TRONGRID_API_KEY: ${TRONGRID_API_KEY:-}
+    BSC_TEST_RPC_URL: ${BSC_TEST_RPC_URL:-https://data-seed-prebsc-1-s1.bnbchain.org:8545}
+    # First-run seed (only used when the database is empty).
+    SEED_SUPER_ADMIN_EMAIL: ${SEED_SUPER_ADMIN_EMAIL:-owner@example.com}
+    SEED_SUPER_ADMIN_PASSWORD: ${SEED_SUPER_ADMIN_PASSWORD:-change-me-now-please}
+    SEED_RATE: ${SEED_RATE:-88.50}
+    # Placeholder test addresses nobody controls. Replace with your own testnet wallets
+    # (Settings > Deposit addresses) before sending real testnet tokens.
+    SEED_TEST_DEPOSIT_TRON: ${SEED_TEST_DEPOSIT_TRON:-TCkmv2uUUPBTuci1UjZxbH7HYPn7ciwUUk}
+    SEED_TEST_DEPOSIT_BSC: ${SEED_TEST_DEPOSIT_BSC:-0xB8c4153B1FBE8Ee7707a299A201e755f704F21Af}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: usdt
+      POSTGRES_PASSWORD: usdt
+      POSTGRES_DB: usdt
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U usdt -d usdt"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  web:
+    <<: *app
+    command: ["web"]
+    ports:
+      - "${PORT:-3000}:3000"
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    # The image health check probes the web port; the worker has none.
+    healthcheck:
+      disable: true
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+
+volumes:
+  pgdata:
+  appdata:

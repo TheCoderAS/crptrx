@@ -43,7 +43,9 @@ export async function sendMobileOtp(userId: string, mobileInput: string): Promis
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   await prisma.otpCode.create({ data: { userId, mobile, codeHash: sha256(`${userId}:${code}`), expiresAt: new Date(Date.now() + OTP_TTL_MS) } });
   await sendSms(mobile, `${code} is your verification code. It expires in 10 minutes. Never share it.`, code);
-  return env.devToolsEnabled ? code : null;
+  // Shown on screen only in test phases (never in Live mode).
+  const { getSettings } = await import("../settings");
+  return env.devToolsEnabled && (await getSettings()).network_mode === "TEST" ? code : null;
 }
 
 export async function verifyMobileOtp(userId: string, code: string) {

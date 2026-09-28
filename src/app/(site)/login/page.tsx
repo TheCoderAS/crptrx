@@ -4,12 +4,14 @@ import { env } from "@/server/env";
 import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { ApiForm } from "@/components/ApiForm";
 import { Banner } from "@/components/ui";
+import { getSettings } from "@/server/settings";
 
 export const metadata = { title: "Log in" };
 
 export default async function Login() {
   if (await currentUser()) redirect("/dashboard");
   const fb = env.firebase.webConfig;
+  const devLogin = env.devLoginEnabled && (await getSettings()).network_mode !== "LIVE";
   return (
     <div className="mx-auto max-w-sm space-y-6">
       <h1 className="h1">Log in or sign up</h1>
@@ -19,9 +21,9 @@ export default async function Login() {
           <p className="muted">We use your Google account to sign you in. Your email must be verified with Google.</p>
         </div>
       ) : (
-        !env.devLoginEnabled && <Banner tone="warn">Sign-in isn&apos;t configured yet. The owner must set the Firebase settings.</Banner>
+        !devLogin && <Banner tone="warn">Sign-in isn&apos;t configured yet. The owner must set the Firebase settings.</Banner>
       )}
-      {env.devLoginEnabled && (
+      {devLogin && (
         <div className="card space-y-3">
           <Banner tone="warn">Test sign-in (test phases only). Anyone can log in as any email. Turn this off before launch.</Banner>
           <ApiForm action="/api/auth/dev-login" className="space-y-3">

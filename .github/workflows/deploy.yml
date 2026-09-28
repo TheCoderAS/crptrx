@@ -1,0 +1,58 @@
+name: Deploy
+
+# Deploys the pushed image to a Docker host over SSH.
+# Setup (repo Settings > Environments > "staging" / "production"):
+#   secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY  (+ optional DEPLOY_PORT)
+#   variables: DEPLOY_PATH (folder on the server with docker-compose.prod.yml and .env)
+# The server needs Docker and a one-time `docker login ghcr.io` if the package is private.
+
+on:
+  workflow_run:
+    workflows: ["Docker image"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+      tag:
+        description: Image tag (default latest)
+        default: latest
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - name: Check deploy settings
+        id: check
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -z "$HOST" ]; then
+            echo "::notice::DEPLOY_HOST is not set for this environment; skipping deploy."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+      - name: Deploy over SSH
+        if: steps.check.outputs.skip != 'true'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/usdt-exchange' }}
+          TAG: ${{ inputs.tag || 'latest' }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:${TAG}"
+          install -m 600 /dev/null key && printf '%s\n' "$KEY" > key
+          SSH="ssh -i key -p $PORT -o StrictHostKeyChecking=accept-new $USER@$HOST"
+          $SSH "mkdir -p '$DEPLOY_PATH'"
+          scp -i key -P "$PORT" -o StrictHostKeyChecking=accept-new deploy/docker-compose.prod.yml "$USER@$HOST:$DEPLOY_PATH/docker-compose.yml"
+          $SSH "cd '$DEPLOY_PATH' && export APP_IMAGE='$IMAGE' && docker compose pull && docker compose up -d --remove-orphans && docker image prune -f"
+          rm -f key

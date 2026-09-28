@@ -9,7 +9,6 @@ const securityHeaders = [
 ];
 
 const config: NextConfig = {
-  output: "standalone",
   poweredByHeader: false,
   serverExternalPackages: ["@prisma/client", "bcryptjs"],
   experimental: { serverActions: { bodySizeLimit: "25mb" } },
