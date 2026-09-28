@@ -1,0 +1,420 @@
+// USDT -> INR exchange, Release 1 data model.
+// Money: USDT as Decimal(38,18), rupees as Decimal(14,2). Never floats.
+// History tables (OrderEvent, SettingsHistory, AuditLog) are append-only,
+// enforced by database triggers created in the migration SQL.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Network {
+  TRON
+  BSC
+}
+
+enum NetworkMode {
+  TEST
+  LIVE
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum KycStatus {
+  NOT_STARTED
+  SUBMITTED
+  APPROVED
+  NEEDS_CHANGES
+  DECLINED
+}
+
+enum PayoutType {
+  BANK
+  UPI
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+enum OrderStatus {
+  QUOTE_READY
+  EXPIRED
+  PAYMENT_SUBMITTED
+  PAYMENT_CONFIRMED
+  UNDER_REVIEW
+  ON_HOLD
+  APPROVED
+  PAID
+  CLOSED_MANUAL
+}
+
+enum ActorType {
+  USER
+  ADMIN
+  SYSTEM
+}
+
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AdminStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum TransferStatus {
+  MATCHED
+  UNMATCHED
+  MANUAL_HANDLING
+  IGNORED_WRONG_TOKEN
+}
+
+model User {
+  id               String     @id @default(cuid())
+  email            String     @unique
+  emailVerified    Boolean    @default(false)
+  firebaseUid      String?    @unique
+  mobile           String?
+  mobileVerifiedAt DateTime?
+  displayName      String?
+  status           UserStatus @default(ACTIVE)
+  kycStatus        KycStatus  @default(NOT_STARTED)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  kycSubmissions KycSubmission[]
+  payoutMethods  PayoutMethod[]
+  orders         Order[]
+  supportMessages SupportMessage[]
+
+  @@map("users")
+}
+
+model KycSubmission {
+  id            String    @id @default(cuid())
+  userId        String
+  fullName      String
+  dob           String // YYYY-MM-DD, no time zone games
+  panEncrypted  String
+  panMasked     String
+  address       String
+  panDocKey     String
+  aadhaarFrontKey String
+  aadhaarBackKey  String
+  selfieKey     String
+  maskedConfirmed Boolean
+  status        KycStatus
+  reviewerId    String?
+  reason        String?
+  submittedAt   DateTime  @default(now())
+  reviewedAt    DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  user     User   @relation(fields: [userId], references: [id])
+  reviewer Admin? @relation(fields: [reviewerId], references: [id])
+
+  @@index([status, submittedAt])
+  @@map("kyc_submissions")
+}
+
+model PayoutMethod {
+  id                     String       @id @default(cuid())
+  userId                 String
+  type                   PayoutType
+  holderName             String
+  accountNumberEncrypted String?
+  accountLast4           String?
+  ifsc                   String?
+  upiId                  String?
+  status                 PayoutStatus @default(PENDING)
+  reviewerId             String?
+  reason                 String?
+  isDefault              Boolean      @default(false)
+  createdAt              DateTime     @default(now())
+  reviewedAt             DateTime?
+  deletedAt              DateTime?
+
+  user     User   @relation(fields: [userId], references: [id])
+  reviewer Admin? @relation(fields: [reviewerId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("payout_methods")
+}
+
+model Order {
+  id                  String      @id // ORD-2026-000123
+  seq                 Int         @unique @default(autoincrement())
+  userId              String
+  status              OrderStatus
+  network             Network
+  networkMode         NetworkMode
+  depositAddress      String
+  tokenContract       String
+  usdtAmount          Decimal     @db.Decimal(38, 18)
+  rate                Decimal     @db.Decimal(14, 4)
+  gross               Decimal     @db.Decimal(14, 2)
+  taxPercent          Decimal     @db.Decimal(7, 4)
+  taxHeld             Decimal     @db.Decimal(14, 2)
+  feePercent          Decimal     @db.Decimal(7, 4)
+  fee                 Decimal     @db.Decimal(14, 2)
+  gstPercent          Decimal     @db.Decimal(7, 4)
+  gstOnFee            Decimal     @db.Decimal(14, 2)
+  net                 Decimal     @db.Decimal(14, 2)
+  payoutMethodId      String
+  payoutSnapshot      Json
+  quoteExpiresAt      DateTime
+  submittedTxid       String?
+  txid                String?
+  transferPosition    Int?
+  senderAddress       String?
+  receivedAmount      Decimal?    @db.Decimal(38, 18)
+  confirmedAt         DateTime?
+  holdReason          String?
+  holdMessage         String?
+  walletCheckResult   String? // CLEAN | SUSPICIOUS
+  walletCheckNote     String?
+  walletCheckedBy     String?
+  utr                 String?
+  paidAmount          Decimal?    @db.Decimal(14, 2)
+  paidAt              DateTime?
+  paidByAdminId       String?
+  resolutionNote      String?
+  returnTxid          String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  user      User             @relation(fields: [userId], references: [id])
+  events    OrderEvent[]
+  transfers IncomingTransfer[]
+  support   SupportMessage[]
+  notes     AdminNote[]
+
+  @@unique([network, txid, transferPosition])
+  @@index([status, createdAt])
+  @@index([network, depositAddress, usdtAmount, status])
+  @@index([userId, createdAt])
+  @@map("orders")
+}
+
+model IncomingTransfer {
+  id               String         @id @default(cuid())
+  network          Network
+  txid             String
+  transferPosition Int
+  tokenContract    String
+  toAddress        String
+  fromAddress      String
+  amount           Decimal        @db.Decimal(38, 18)
+  rawAmount        String
+  blockNumber      BigInt
+  blockTime        DateTime
+  status           TransferStatus @default(UNMATCHED)
+  matchedOrderId   String?
+  handlingNote     String?
+  raw              Json
+  createdAt        DateTime       @default(now())
+
+  order Order? @relation(fields: [matchedOrderId], references: [id])
+
+  @@unique([network, txid, transferPosition])
+  @@index([status])
+  @@map("incoming_transfers")
+}
+
+model WatcherState {
+  network         Network   @id
+  cursor          Json // BSC: { lastBlock }, TRON: { [address]: lastTimestampMs }
+  lastSuccessAt   DateTime?
+  lastErrorAt     DateTime?
+  lastError       String?
+  failingSince    DateTime?
+  alertSentAt     DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  @@map("watcher_state")
+}
+
+model OrderEvent {
+  id            String      @id @default(cuid())
+  orderId       String
+  fromStatus    OrderStatus?
+  toStatus      OrderStatus
+  actorType     ActorType
+  actorId       String?
+  publicMessage String?
+  privateNote   String?
+  createdAt     DateTime    @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, createdAt])
+  @@map("order_events")
+}
+
+model AdminNote {
+  id        String   @id @default(cuid())
+  orderId   String
+  adminId   String
+  note      String
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+  admin Admin @relation(fields: [adminId], references: [id])
+
+  @@map("admin_notes")
+}
+
+model SupportMessage {
+  id            String   @id @default(cuid())
+  orderId       String?
+  userId        String
+  message       String
+  attachmentKey String?
+  handled       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  order Order? @relation(fields: [orderId], references: [id])
+  user  User   @relation(fields: [userId], references: [id])
+
+  @@map("support_messages")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model SettingsHistory {
+  id        String   @id @default(cuid())
+  key       String
+  oldValue  Json?
+  newValue  Json
+  changedBy String?
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+  @@map("settings_history")
+}
+
+model DepositAddressChange {
+  id              String    @id @default(cuid())
+  network         Network
+  networkMode     NetworkMode
+  newAddress      String
+  oldAddress      String?
+  requestedBy     String
+  cancelTokenHash String    @unique
+  effectiveAt     DateTime
+  cancelledAt     DateTime?
+  cancelledBy     String?
+  appliedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([network, networkMode, effectiveAt])
+  @@map("deposit_address_changes")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorType  ActorType
+  actorId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  details    Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+model Admin {
+  id                  String      @id @default(cuid())
+  name                String
+  email               String      @unique
+  passwordHash        String
+  role                AdminRole   @default(ADMIN)
+  totpSecretEncrypted String?
+  totpEnabled         Boolean     @default(false)
+  status              AdminStatus @default(ACTIVE)
+  failedLogins        Int         @default(0)
+  lockedUntil         DateTime?
+  lastTotpStep        Int? // replay protection
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  kycReviews    KycSubmission[]
+  payoutReviews PayoutMethod[]
+  notes         AdminNote[]
+
+  @@map("admins")
+}
+
+model Session {
+  id          String    @id // sha256 of the cookie token
+  subjectType String // USER | ADMIN
+  subjectId   String
+  stage       String    @default("FULL") // ADMIN: PASSWORD_OK -> FULL
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  expiresAt   DateTime
+
+  @@index([subjectType, subjectId])
+  @@map("sessions")
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  userId    String
+  mobile    String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("otp_codes")
+}
+
+model RateLimit {
+  key       String   @id
+  count     Int
+  windowEnd DateTime
+
+  @@map("rate_limits")
+}
+
+model OutboundMessage {
+  id        String   @id @default(cuid())
+  channel   String // EMAIL | SMS
+  to        String
+  subject   String?
+  body      String
+  provider  String
+  status    String
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("outbound_messages")
+}

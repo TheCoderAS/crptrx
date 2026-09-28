@@ -1,0 +1,128 @@
+import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
+import { prisma } from "./db";
+import { env } from "./env";
+import { fmtInr, fmtUsdt } from "./money";
+import { maskedPayout, type PayoutSnapshot } from "./payouts";
+import { getSettings } from "./settings";
+import type { MatchEvent } from "./matching";
+
+// ---------------------------------------------------------------------------
+// Providers. "console" stores the message in outbound_messages and logs it,
+// so the Docker test setup works without any email/SMS account.
+// ---------------------------------------------------------------------------
+
+export async function sendEmail(to: string, subject: string, body: string) {
+  const provider = env.email.provider;
+  let status = "SENT";
+  let error: string | undefined;
+  try {
+    if (provider === "resend") {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { authorization: `Bearer ${env.email.resendApiKey}`, "content-type": "application/json" },
+        body: JSON.stringify({ from: env.email.from, to: [to], subject, text: body }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) throw new Error(`Resend HTTP ${res.status}`);
+    } else {
+      console.log(`[email] to=${to} subject=${subject}\n${body}\n`);
+    }
+  } catch (e) {
+    status = "FAILED";
+    error = (e as Error).message;
+    console.error(`[email] failed to=${to}: ${error}`);
+  }
+  await prisma.outboundMessage.create({ data: { channel: "EMAIL", to, subject, body, provider, status, error } });
+}
+
+export async function sendSms(to: string, body: string, otp?: string) {
+  const provider = env.sms.provider;
+  let status = "SENT";
+  let error: string | undefined;
+  try {
+    if (provider === "msg91") {
+      if (!otp) return; // R1 uses SMS for OTP only unless the owner enables alerts with a DLT template
+      const res = await fetch(`https://control.msg91.com/api/v5/otp?template_id=${env.sms.msg91TemplateId}&mobile=${to.replace(/^\+/, "")}&otp=${otp}`, {
+        method: "POST",
+        headers: { authkey: env.sms.msg91AuthKey },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) throw new Error(`MSG91 HTTP ${res.status}`);
+    } else {
+      console.log(`[sms] to=${to} ${body}`);
+    }
+  } catch (e) {
+    status = "FAILED";
+    error = (e as Error).message;
+  }
+  // Never store OTP codes in plain text.
+  await prisma.outboundMessage.create({ data: { channel: "SMS", to, body: otp ? body.replace(otp, "******") : body, provider, status, error } });
+}
+
+// ---------------------------------------------------------------------------
+// Templates (spec 4.9)
+// ---------------------------------------------------------------------------
+
+async function toUser(userId: string, subject: string, body: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return;
+  const s = await getSettings();
+  const footer = `\n\n— ${s.company_name}\n${s.business_hours_text}\nNeed help? Reply to ${s.support_email}`;
+  await sendEmail(user.email, subject, body + footer);
+  if (s.sms_notifications_enabled && user.mobile) await sendSms(user.mobile, `${subject}. ${body}`.slice(0, 300));
+}
+
+const orderLink = (id: string) => `${env.appUrl}/orders/${id}`;
+
+export async function notifyOrder(orderId: string, kind: "PAYMENT_DETECTED" | "ON_HOLD" | "APPROVED" | "PAID" | "EXPIRED") {
+  const o = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!o) return;
+  const nw = NETWORK_INFO[o.network as NetworkCode].name;
+  const snap = o.payoutSnapshot as unknown as PayoutSnapshot;
+  const map = {
+    PAYMENT_DETECTED: [`Payment received for ${o.id}`, `We received ${fmtUsdt(o.usdtAmount)} USDT on ${nw}. Your order is waiting for review.`],
+    ON_HOLD: [`Order ${o.id} is on hold`, `Your order is on hold: ${o.holdReason ?? ""} ${o.holdMessage ?? ""}\nOur team will contact you, or you can contact support from the order page.`],
+    APPROVED: [`Order ${o.id} approved`, `Approved. ${fmtInr(o.net)} is being sent to ${maskedPayout(snap)}.`],
+    PAID: [`${fmtInr(o.net)} sent for ${o.id}`, `We sent ${fmtInr(o.net)} to ${maskedPayout(snap)}.\nBank reference (UTR): ${o.utr}\nYou can download your receipt from the order page.`],
+    EXPIRED: [`Quote ${o.id} expired`, `No payment was received in time. Nothing was charged. If you already sent USDT, contact support right away with your transaction ID.`],
+  } as const;
+  const [subject, body] = map[kind];
+  await toUser(o.userId, subject, `${body}\n\n${orderLink(o.id)}`);
+}
+
+export async function notifyKyc(userId: string, status: "APPROVED" | "NEEDS_CHANGES" | "DECLINED", reason?: string | null) {
+  const m = {
+    APPROVED: ["Your identity check is approved", "You can now add a bank account or UPI ID."],
+    NEEDS_CHANGES: ["Your identity check needs changes", `Please fix this and upload again: ${reason ?? ""}`],
+    DECLINED: ["Your identity check was declined", `Reason: ${reason ?? ""}`],
+  }[status];
+  await toUser(userId, m[0], `${m[1]}\n\n${env.appUrl}/kyc`);
+}
+
+export async function notifyPayoutMethod(userId: string, approved: boolean, reason?: string | null) {
+  await toUser(
+    userId,
+    approved ? "Your payout method is approved" : "Your payout method was declined",
+    approved ? `You can now sell USDT.\n\n${env.appUrl}/sell` : `Reason: ${reason ?? ""}\n\n${env.appUrl}/payout-methods`,
+  );
+}
+
+export async function notifyMatchEvents(events: MatchEvent[]) {
+  for (const e of events) {
+    try {
+      await notifyOrder(e.orderId, e.kind === "CONFIRMED" ? "PAYMENT_DETECTED" : "ON_HOLD");
+    } catch (err) {
+      console.error("notify failed", err);
+    }
+  }
+}
+
+export async function notifySuperAdmins(subject: string, body: string) {
+  const admins = await prisma.admin.findMany({ where: { role: "SUPER_ADMIN", status: "ACTIVE" } });
+  for (const a of admins) await sendEmail(a.email, subject, body);
+}
+
+export async function notifyAllAdmins(subject: string, body: string) {
+  const admins = await prisma.admin.findMany({ where: { status: "ACTIVE" } });
+  for (const a of admins) await sendEmail(a.email, subject, body);
+}
