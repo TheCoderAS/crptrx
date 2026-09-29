@@ -1,4 +1,4 @@
-name: Testnet chain check
+name: Live data check
 
 # Runs the real Tron Nile and BSC Testnet readers against live test networks.
 # Run it manually (Actions tab) any time, e.g. after changing test tokens.
@@ -15,6 +15,8 @@ on:
     paths:
       - "src/server/networks/**"
       - "scripts/check-chains.ts"
+      - "scripts/check-rate-sources.ts"
+      - "src/server/rateFeed.ts"
       - ".github/workflows/chain-check.yml"
   schedule:
     - cron: "17 3 * * 1" # weekly, to notice testnet or provider changes
@@ -34,4 +36,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx tsx scripts/check-chains.ts
+      - name: Testnet chain readers (Tron Nile + BSC Testnet)
+        run: npx tsx scripts/check-chains.ts
+      - name: USDT/INR price sources (Auto rate mode)
+        if: always()
+        run: npx tsx scripts/check-rate-sources.ts

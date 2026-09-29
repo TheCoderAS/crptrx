@@ -10,6 +10,7 @@ import { notifyOrder } from "@/server/notify";
 import { expireQuotes } from "@/server/orders/quote";
 import { getSettings, tokenContractFor } from "@/server/settings";
 import { networkTick } from "@/server/watcher";
+import { refreshAutoRate } from "@/server/rateFeed";
 
 const INTERVAL_MS: Record<NetworkCode, number> = { TRON: 45_000, BSC: 20_000 };
 let stopping = false;
@@ -55,6 +56,10 @@ async function main() {
   process.on("SIGINT", () => (stopping = true));
   await Promise.all([
     loop("expiry", 60_000, housekeeping),
+    loop("rate", 120_000, async () => {
+      const r = await refreshAutoRate();
+      if ("ok" in r && !r.ok) log(`[rate] not updated: ${r.reason}`);
+    }),
     ...(["TRON", "BSC"] as NetworkCode[]).map((n) => loop(`watch:${NETWORK_INFO[n].name}`, INTERVAL_MS[n], () => watcher(n))),
   ]);
   await prisma.$disconnect();

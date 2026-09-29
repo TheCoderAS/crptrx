@@ -1,5 +1,6 @@
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
+import { RATE_SOURCE_IDS, rateFeedState } from "@/server/rateFeed";
 import { getSettings, LIVE_CONFIRM_PHRASE, rateIsStale, tokenContractFor } from "@/server/settings";
 import { NETWORK_CODES, NETWORK_INFO } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
   const s = await getSettings();
   const pending = await prisma.depositAddressChange.findMany({ where: { appliedAt: null, cancelledAt: null }, orderBy: { createdAt: "desc" } });
   const history = await prisma.settingsHistory.findMany({ orderBy: { createdAt: "desc" }, take: 20 });
+  const feed = await rateFeedState();
   const mode = s.network_mode;
   const group = (title: string, children: React.ReactNode, extra?: React.ReactNode) => (
     <ApiForm action="/api/admin/settings" className="card space-y-3">
@@ -35,14 +37,64 @@ export default async function SettingsPage() {
     <div className="space-y-6">
       <h1 className="h1">Settings</h1>
 
-      {group(
-        "Rate",
-        <>
-          <Field name="rate" label="Rate (₹ per USDT)" value={s.rate} hint={`Last changed ${fmtIST(s.rateUpdatedAt)}. Affects new quotes only.`} />
-          <Field name="rate_max_age_hours" label="Block new quotes if the rate is older than (hours)" value={s.rate_max_age_hours} type="number" />
-        </>,
-        rateIsStale(s) ? <Banner tone="danger">The rate is stale or not set. New quotes are blocked until you update it.</Banner> : undefined,
-      )}
+      <div className="card space-y-4">
+        <ApiForm action="/api/admin/settings" className="space-y-3">
+          <h2 className="h2">Rate (₹ per USDT)</h2>
+          {rateIsStale(s) && <Banner tone="danger">The rate is stale or not set. New quotes are blocked until it is updated.</Banner>}
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-2"><input type="radio" name="rate_mode" value="MANUAL" defaultChecked={s.rate_mode === "MANUAL"} /> Manual: I type the rate</label>
+            <label className="flex items-center gap-2"><input type="radio" name="rate_mode" value="AUTO" defaultChecked={s.rate_mode === "AUTO"} /> Auto: live market price minus my margin</label>
+          </div>
+          <p className="text-2xl font-bold">
+            Current rate: ₹{s.rate} <span className="text-sm font-normal text-gray-500">({s.rate_mode === "AUTO" ? "auto" : "manual"}, updated {fmtIST(s.rateUpdatedAt)})</span>
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="rate">Manual rate</label>
+              <input id="rate" name="rate" defaultValue={s.rate} disabled={s.rate_mode === "AUTO"} className="input disabled:bg-gray-100" />
+              <p className="muted mt-1">{s.rate_mode === "AUTO" ? "Set automatically in Auto mode." : "Affects new quotes only."}</p>
+            </div>
+            <Field name="rate_max_age_hours" label="Manual: block quotes if the rate is older than (hours)" value={s.rate_max_age_hours} type="number" />
+            <Field name="rate_margin_percent" label="Auto: my margin %" value={s.rate_margin_percent} hint="Rate = market price × (1 − margin%). Tax and fee still apply after this." />
+            <Field name="rate_max_jump_percent" label="Auto: refuse a market move bigger than (%)" value={s.rate_max_jump_percent} hint="Checked between two updates (every 2 minutes)." />
+            <Field name="rate_floor" label="Auto: never offer less than (₹)" value={s.rate_floor} />
+            <Field name="rate_ceiling" label="Auto: never offer more than (₹)" value={s.rate_ceiling} />
+            <Field name="rate_feed_max_age_minutes" label="Auto: block quotes if the feed fails for (minutes)" value={s.rate_feed_max_age_minutes} type="number" />
+            <Field name="rate_min_sources" label="Auto: price sources that must agree" value={s.rate_min_sources} type="number" />
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor="rate_sources">Auto: price sources (one per line: {RATE_SOURCE_IDS.join(", ")})</label>
+              <textarea id="rate_sources" name="rate_sources" rows={3} className="input font-mono" defaultValue={s.rate_sources.join("\n")} />
+            </div>
+          </div>
+          <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+        </ApiForm>
+
+        <div className="rounded-lg bg-gray-50 p-3 text-sm">
+          <p className="font-semibold">Live price feed</p>
+          {feed?.sources ? (
+            <ul className="mt-1 space-y-0.5">
+              {(feed.sources as { source: string; price?: string; error?: string }[]).map((r) => (
+                <li key={r.source}>
+                  {r.source}: {r.price ? `₹${Number(r.price).toFixed(2)}` : <span className="text-red-700">{r.error}</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No reading yet.</p>
+          )}
+          {feed?.lastMarket && <p className="mt-1">Market (agreed): ₹{Number(feed.lastMarket).toFixed(2)} · last good update {fmtIST(feed.lastOkAt)}</p>}
+          {feed?.lastError && <p className="mt-1 font-medium text-red-700">Last problem ({fmtIST(feed.lastErrorAt)}): {feed.lastError}</p>}
+          <div className="mt-3 flex flex-wrap gap-3">
+            <ApiForm action="/api/admin/rate/refresh"><button className="btn-secondary">Fetch now</button></ApiForm>
+            {feed?.lastError?.includes("above your") && (
+              <ApiForm action="/api/admin/rate/accept" className="flex items-end gap-2">
+                <TotpField />
+                <button className="btn-danger">Accept new market price</button>
+              </ApiForm>
+            )}
+          </div>
+        </div>
+      </div>
 
       {group(
         "Fees and tax",
