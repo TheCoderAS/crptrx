@@ -11,11 +11,11 @@
  * Usage: npx tsx scripts/check-chains.ts
  * Override tokens with CHECK_TRON_TOKEN / CHECK_BSC_TOKEN.
  */
-import { createPublicClient, fallback, getAddress, http } from "viem";
+import { createPublicClient, getAddress, http } from "viem";
 import { bscTestnet } from "viem/chains";
 import { NETWORK_INFO } from "@/lib/networks";
 import { env } from "@/server/env";
-import { bscAdapter, getTransferLogsAdaptive } from "@/server/networks/bsc";
+import { bscAdapter, getTransferLogsAdaptive, resetLearnedSpanForTests } from "@/server/networks/bsc";
 import { tronAdapter } from "@/server/networks/tron";
 import type { NetworkContext } from "@/server/networks/types";
 import { SETTING_DEFAULTS } from "@/server/settings";
@@ -56,15 +56,52 @@ async function checkTron() {
   record("tron: lookup by TxID", false, "none of the recent events were in solidified data yet");
 }
 
+/** Free BSC testnet endpoints to probe; the first that serves eth_getLogs is used. */
+const BSC_CANDIDATES = [
+  process.env.BSC_TEST_RPC_URL,
+  "https://bsc-testnet-rpc.publicnode.com",
+  "https://bsc-testnet.drpc.org",
+  "https://bsc-testnet.bnbchain.org",
+  "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
+].filter((u, i, a): u is string => !!u && a.indexOf(u) === i);
+
+async function probeBsc(url: string, token: `0x${string}`) {
+  const c = createPublicClient({ chain: bscTestnet, transport: http(url, { timeout: 15_000, retryCount: 0 }) });
+  const latest = await c.getBlockNumber();
+  let finalized = false;
+  try {
+    finalized = (await c.getBlock({ blockTag: "finalized" })).number != null;
+  } catch {
+    /* not supported */
+  }
+  const r = await getTransferLogsAdaptive(c as never, { token, fromBlock: latest - 49n, toBlock: latest });
+  return { latest, finalized, span: r.coveredTo - (latest - 49n) + 1n };
+}
+
 async function checkBsc() {
   const token = getAddress(process.env.CHECK_BSC_TOKEN || SETTING_DEFAULTS.test_token_contract.BSC);
+  console.log(`\n== BSC Testnet, token ${token}`);
+  let chosen: string | null = null;
+  for (const url of BSC_CANDIDATES) {
+    try {
+      resetLearnedSpanForTests();
+      const p = await probeBsc(url, token);
+      console.log(`  provider ${url}: OK (block ${p.latest}, finalized tag ${p.finalized ? "yes" : "no"}, accepts ${p.span}-block log queries)`);
+      chosen ??= url;
+    } catch (e) {
+      console.log(`  provider ${url}: NO (${(e as Error).message.split("\n")[0].slice(0, 120)})`);
+    }
+  }
+  record("bsc: a free testnet provider serves log queries", !!chosen, chosen ? `using ${chosen}` : "none of the candidates work");
+  if (!chosen) return;
+  resetLearnedSpanForTests();
+  process.env.BSC_TEST_RPC_URL = chosen;
+  delete process.env.BSC_TEST_RPC_BACKUP_URL;
   const ctx: NetworkContext = { ...baseCtx, tokenContract: token };
-  console.log(`\n== BSC Testnet, token ${token} (${env.bsc.testRpcUrl})`);
-  const c = createPublicClient({ chain: bscTestnet, transport: fallback([http(env.bsc.testRpcUrl), http(env.bsc.testRpcBackupUrl!)]) });
+  const c = createPublicClient({ chain: bscTestnet, transport: http(chosen) });
   let fin: bigint;
   try {
-    const b = await c.getBlock({ blockTag: "finalized" });
-    fin = b.number!;
+    fin = (await c.getBlock({ blockTag: "finalized" })).number!;
     record("bsc: provider supports 'finalized'", true, `finalized block ${fin}`);
   } catch (e) {
     fin = (await c.getBlockNumber()) - 15n;
@@ -79,7 +116,7 @@ async function checkBsc() {
     const from = to - width + 1n;
     const r = await getTransferLogsAdaptive(c as never, { token, fromBlock: from, toBlock: to });
     if (r.coveredTo < to) {
-      width = r.coveredTo - from + 1n; // provider limit learned; retry this window smaller
+      width = r.coveredTo - from + 1n;
       continue;
     }
     logs = r.logs;

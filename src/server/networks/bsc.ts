@@ -105,7 +105,12 @@ export async function getTransferLogsAdaptive(
       });
       return { logs, coveredTo: end };
     } catch (e) {
-      if (!isRangeLimitError(e) || span <= 1n) throw e;
+      if (!isRangeLimitError(e)) throw e;
+      if (span <= 1n)
+        throw new Error(
+          "The BNB Smart Chain data provider refuses log queries even for one block (it doesn't support eth_getLogs). " +
+            "Set BSC_TEST_RPC_URL / BSC_LIVE_RPC_URL to a provider that does.",
+        );
       span = span / 2n;
       learnedSpan = span;
     }
