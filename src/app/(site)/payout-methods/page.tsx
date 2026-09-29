@@ -42,11 +42,11 @@ export default async function PayoutMethods() {
               {m.status === "DECLINED" && m.reason && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">Declined: {m.reason}</p>}
               <div className="mt-3 flex justify-end gap-1 border-t border-slate-100 pt-3">
                 {!m.isDefault && m.status === "APPROVED" && (
-                  <ApiForm action={`/api/payout-methods/${m.id}`}><input type="hidden" name="action" value="default" /><button className="btn-ghost px-3 py-1.5 text-xs">Make default</button></ApiForm>
+                  <ApiForm action={`/api/payout-methods/${m.id}`}><input type="hidden" name="action" value="default" /><button className="btn-ghost min-h-10 px-3 text-xs">Make default</button></ApiForm>
                 )}
                 <ApiForm action={`/api/payout-methods/${m.id}`} confirm="Remove this payout method? Past orders keep their details.">
                   <input type="hidden" name="action" value="delete" />
-                  <button className="btn-ghost px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700">Remove</button>
+                  <button className="btn-ghost min-h-10 px-3 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700">Remove</button>
                 </ApiForm>
               </div>
             </li>

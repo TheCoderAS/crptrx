@@ -5,6 +5,8 @@ import { getSettings } from "@/server/settings";
 import { USER_MIN_PASSWORD } from "@/server/auth/password";
 import { ApiForm } from "@/components/ApiForm";
 import { PasswordInput } from "@/components/PasswordInput";
+import { ContactLinks } from "@/components/ContactLinks";
+import { contactChannels } from "@/server/contact";
 import { Banner, PageHeader, Row, Section, StatusPill } from "@/components/ui";
 import { fmtIST } from "@/lib/time";
 
@@ -93,6 +95,15 @@ export default async function Account() {
       <Banner tone="info" title="Keep your account safe">
         {google ? "Turn on 2-Step Verification in your Google settings. " : "Use a password you don't use anywhere else. "}We will never ask for your password or codes by phone or chat.
       </Banner>
+      <div className="card-flat space-y-3">
+        <p className="text-sm font-medium text-slate-900">Need help?</p>
+        <ContactLinks channels={contactChannels(s)} />
+        <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500" aria-label="Help and legal">
+          <Link href="/help" className="hover:text-slate-900">Help &amp; FAQ</Link>
+          <Link href="/terms" className="hover:text-slate-900">Terms</Link>
+          <Link href="/privacy" className="hover:text-slate-900">Privacy</Link>
+        </nav>
+      </div>
     </div>
   );
 }

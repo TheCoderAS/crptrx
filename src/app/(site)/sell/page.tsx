@@ -1,3 +1,5 @@
+import { contactChannels } from "@/server/contact";
+import { ContactLinks } from "@/components/ContactLinks";
 import Link from "next/link";
 import { ArrowLeftRight } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
@@ -25,6 +27,7 @@ export default async function Sell() {
         <Banner tone={o.blockedReason ? "danger" : "warn"} title={o.blockedReason ? undefined : "Almost there"}>
           {notReadyMessage(o)} {!o.blockedReason && <Link className="font-medium underline" href="/dashboard">See what&apos;s left</Link>}
         </Banner>
+        {o.blockedReason && <div className="mt-3"><ContactLinks channels={contactChannels(s)} /></div>}
       </div>
     );
   const stale = rateIsStale(s);

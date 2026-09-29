@@ -13,7 +13,7 @@ export function PayoutMethodForm({ first, kycRequired = true }: { first?: boolea
       </div>
       <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Payout type">
         {([["BANK", "Bank account", Landmark], ["UPI", "UPI ID", Smartphone]] as const).map(([t, label, Icon]) => (
-          <label key={t} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition ${type === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+          <label key={t} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition focus-within:outline-2 focus-within:outline-brand-600 ${type === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
             <input type="radio" name="type" value={t} checked={type === t} onChange={() => setType(t)} className="sr-only" />
             <Icon className="size-4" aria-hidden /> {label}
           </label>

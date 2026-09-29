@@ -20,12 +20,24 @@ export function Tabs({ tabs }: { tabs: { id: string; label: string; content: Rea
         {tabs.map((t) => (
           <button
             key={t.id}
+            id={`tab-${t.id}`}
             role="tab"
             type="button"
             aria-selected={active === t.id}
+            aria-controls={`panel-${t.id}`}
+            tabIndex={active === t.id ? 0 : -1}
             onClick={() => {
               setActive(t.id);
               history.replaceState(null, "", `#${t.id}`);
+            }}
+            onKeyDown={(e) => {
+              // Left/right arrows move between tabs, as screen-reader users expect.
+              if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+              const i = tabs.findIndex((x) => x.id === t.id);
+              const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+              setActive(next.id);
+              history.replaceState(null, "", `#${next.id}`);
+              document.getElementById(`tab-${next.id}`)?.focus();
             }}
             className={`relative shrink-0 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition ${active === t.id ? "text-brand-700" : "text-slate-500 hover:text-slate-900"}`}
           >
@@ -36,7 +48,7 @@ export function Tabs({ tabs }: { tabs: { id: string; label: string; content: Rea
         ))}
       </div>
       {tabs.map((t) => (
-        <div key={t.id} role="tabpanel" hidden={active !== t.id} className="space-y-6">
+        <div key={t.id} id={`panel-${t.id}`} role="tabpanel" aria-labelledby={`tab-${t.id}`} hidden={active !== t.id} className="space-y-6">
           {t.content}
         </div>
       ))}

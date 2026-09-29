@@ -53,11 +53,24 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
               <input type="hidden" name="decision" value="APPROVED" />
               <button className="btn w-full bg-emerald-600 px-6 text-white hover:bg-emerald-700 lg:w-auto">{needsCheck ? "Looks good" : "Approve"}</button>
             </ApiForm>
-            <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row">
-              <select name="decision" className="input sm:w-56"><option value="NEEDS_CHANGES">Needs changes</option><option value="DECLINED">Decline</option></select>
-              <input name="reason" required className="input flex-1" placeholder="Reason shown to the user, e.g. Selfie is blurry" />
-              <button className="btn-danger">Send</button>
-            </ApiForm>
+            <div className="space-y-3">
+              <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-end">
+                <input type="hidden" name="decision" value="NEEDS_CHANGES" />
+                <div className="flex-1">
+                  <label className="label" htmlFor="reason-changes">Ask for changes (the user can fix and resend)</label>
+                  <input id="reason-changes" name="reason" required className="input" placeholder="Shown to the user, e.g. Selfie is blurry" />
+                </div>
+                <button className="btn-secondary">Ask for changes</button>
+              </ApiForm>
+              <ApiForm action={`/api/admin/kyc/${s.id}`} confirm="Decline this identity check? The user will be blocked from placing orders." className="flex flex-col gap-2 rounded-xl bg-rose-50/60 p-3 sm:flex-row sm:items-end">
+                <input type="hidden" name="decision" value="DECLINED" />
+                <div className="flex-1">
+                  <label className="label" htmlFor="reason-decline">Decline (blocks the user)</label>
+                  <input id="reason-decline" name="reason" required className="input" placeholder="Shown to the user, e.g. Documents belong to someone else" />
+                </div>
+                <button className="btn-danger">Decline</button>
+              </ApiForm>
+            </div>
           </div>
         </div>
       )}

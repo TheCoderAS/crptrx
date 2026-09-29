@@ -5,7 +5,9 @@ import { prisma } from "./db";
 import { AppError } from "./errors";
 import { D, fmtUsdt } from "./money";
 import { maskedPayout, type PayoutSnapshot } from "./payouts";
-import { getSettings } from "./settings";
+import { getLogo } from "./brand";
+import { companyName } from "./contact";
+import { isRealValue, getSettings } from "./settings";
 
 // Standard PDF fonts can't draw the rupee sign, so amounts read "INR 1,234.56".
 const inr = (v: { toString(): string }) => {
@@ -31,13 +33,23 @@ export async function buildReceipt(orderId: string, userId?: string): Promise<Ui
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   let y = 790;
   const text = (t: string, x: number, size = 10, f = font) => page.drawText(t, { x, y, size, font: f, color: rgb(0.1, 0.1, 0.1) });
-  text(s.company_name, 50, 16, bold);
-  y -= 18;
-  for (const line of s.company_address.split("\n")) {
-    text(line, 50, 9);
-    y -= 12;
+  // The admin's logo (PNG/JPG) in the top-right corner.
+  const logo = s.brand_logo_version ? await getLogo() : null;
+  if (logo && (logo.mime === "image/png" || logo.mime === "image/jpeg")) {
+    const bytes = Buffer.from(logo.data, "base64");
+    const img = logo.mime === "image/png" ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    const scale = 48 / Math.max(img.width, img.height);
+    page.drawImage(img, { x: 545 - img.width * scale, y: 790 - img.height * scale + 14, width: img.width * scale, height: img.height * scale });
   }
-  text(`FIU registration no.: ${s.company_fiu_reg}   GSTIN: ${s.company_gstin}`, 50, 9);
+  text(companyName(s), 50, 16, bold);
+  y -= 18;
+  if (isRealValue(s.company_address))
+    for (const line of s.company_address.split("\n")) {
+      text(line, 50, 9);
+      y -= 12;
+    }
+  const reg = [isRealValue(s.company_fiu_reg) && `FIU registration no.: ${s.company_fiu_reg}`, isRealValue(s.company_gstin) && `GSTIN: ${s.company_gstin}`].filter(Boolean).join("   ");
+  if (reg) text(reg, 50, 9);
   y -= 30;
   text("Payment receipt", 50, 14, bold);
   y -= 24;

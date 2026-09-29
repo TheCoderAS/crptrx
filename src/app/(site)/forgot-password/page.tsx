@@ -9,7 +9,7 @@ export const metadata = { title: "Reset your password", robots: { index: false, 
 export default async function Forgot() {
   const m = await signInMethods();
   return (
-    <AuthShell brand={m.brand} title="Reset your password" subtitle="We'll email you a link to choose a new one." footer={<Link href="/login" className="font-semibold text-brand-700 hover:underline">Back to log in</Link>}>
+    <AuthShell brand={m.brand} logo={m.logo} title="Reset your password" subtitle="We'll email you a link to choose a new one." footer={<Link href="/login" className="font-semibold text-brand-700 hover:underline">Back to log in</Link>}>
       {m.email ? (
         <ApiForm action="/api/auth/forgot" className="space-y-4" resetOnSuccess>
           <div>

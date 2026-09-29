@@ -22,9 +22,9 @@ export default async function DevTools() {
         <h2 className="h2">Simulate an incoming USDT payment</h2>
         <p className="muted">Pretends the watcher saw a final transfer, then runs the normal matching. Use the exact amount from an order to confirm it.</p>
         <div className="grid gap-3 sm:grid-cols-3">
-          <select name="network" className="input"><option value="TRON">Tron (TRC-20)</option><option value="BSC">BNB Smart Chain (BEP-20)</option></select>
-          <input name="amount" required className="input" placeholder="e.g. 100.37" />
-          <input name="to" className="input" placeholder="To address (default: active)" />
+          <select name="network" aria-label="Network" className="input"><option value="TRON">Tron (TRC-20)</option><option value="BSC">BNB Smart Chain (BEP-20)</option></select>
+          <input aria-label="e.g. 100.37" name="amount" required className="input" placeholder="e.g. 100.37" />
+          <input aria-label="To address (default: active)" name="to" className="input" placeholder="To address (default: active)" />
         </div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="wrongToken" /> Send as a fake look-alike token</label>
         <button className="btn-primary">Simulate</button>

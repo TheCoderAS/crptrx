@@ -10,11 +10,11 @@ const PERKS = [
 ];
 
 /** Split-screen frame shared by every sign-in page. */
-export function AuthShell({ brand, title, subtitle, children, footer }: { brand: string; title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
+export function AuthShell({ brand, logo, title, subtitle, children, footer }: { brand: string; logo?: string | null; title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
   return (
     <div className="mx-auto grid max-w-5xl overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-[var(--shadow-float)] lg:grid-cols-2">
       <div className="bg-mesh-dark relative hidden flex-col justify-between p-10 text-white lg:flex">
-        <Logo name={brand} inverted size="lg" />
+        <Logo name={brand} src={logo} inverted size="lg" />
         <div>
           <h2 className="text-3xl leading-tight font-bold tracking-tight">Sell USDT.<br />Get rupees you can <span className="text-emerald-300">trace.</span></h2>
           <ul className="mt-8 space-y-4">

@@ -12,9 +12,24 @@ const USER_IDLE_MS = 7 * 24 * 3600_000;
 export const ADMIN_IDLE_MS = 30 * 60_000; // spec 10.4
 const ADMIN_MAX_MS = 12 * 3600_000;
 
+/**
+ * The visitor's IP, for rate limits and the admin allow-list. The leftmost
+ * X-Forwarded-For entry is whatever the browser sent, so we count from the
+ * right: TRUSTED_PROXY_HOPS proxies we run (default 1: one HTTPS proxy)
+ * each appended one entry.
+ */
 export async function clientIp(): Promise<string | null> {
   const h = await headers();
-  return h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip") || null;
+  const hops = Math.max(0, Number(process.env.TRUSTED_PROXY_HOPS ?? 1) || 0);
+  if (hops === 0) return null;
+  const list = (h.get("x-forwarded-for") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  return list[list.length - hops] ?? null;
+}
+
+/** sha256 id of the current session cookie, if any. */
+export async function currentSessionId(kind: "USER" | "ADMIN"): Promise<string | null> {
+  const token = (await cookies()).get(kind === "ADMIN" ? ADMIN_COOKIE : USER_COOKIE)?.value;
+  return token ? sha256(token) : null;
 }
 
 async function setCookie(name: string, token: string, maxAgeMs: number) {
@@ -60,7 +75,23 @@ export async function destroySession(kind: "USER" | "ADMIN") {
 
 export async function upgradeAdminSession() {
   const token = (await cookies()).get(ADMIN_COOKIE)?.value;
-  if (token) await prisma.session.update({ where: { id: sha256(token) }, data: { stage: "FULL", lastSeenAt: new Date() } });
+  // Logging in with a 2FA code counts as a fresh check for sensitive actions.
+  if (token) await prisma.session.update({ where: { id: sha256(token) }, data: { stage: "FULL", lastSeenAt: new Date(), stepUpAt: new Date() } });
+}
+
+/** Sensitive admin actions reuse a 2FA code entered in the last 15 minutes. */
+export const STEP_UP_MS = 15 * 60_000;
+
+export async function adminStepUpFresh(): Promise<boolean> {
+  const token = (await cookies()).get(ADMIN_COOKIE)?.value;
+  if (!token) return false;
+  const s = await prisma.session.findUnique({ where: { id: sha256(token) } });
+  return !!s?.stepUpAt && Date.now() - s.stepUpAt.getTime() < STEP_UP_MS;
+}
+
+export async function markAdminStepUp() {
+  const token = (await cookies()).get(ADMIN_COOKIE)?.value;
+  if (token) await prisma.session.update({ where: { id: sha256(token) }, data: { stepUpAt: new Date() } });
 }
 
 export async function currentUser(): Promise<User | null> {

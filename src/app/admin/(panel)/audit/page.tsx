@@ -17,7 +17,7 @@ export default async function Audit({ searchParams }: { searchParams: Promise<{ 
     <div className="space-y-4">
       <PageHeader title="Audit log" icon={<ScrollText className="size-6" />} tile="tile-slate" />
       <p className="muted">Permanent record of logins, document views, admin actions, settings changes and exports. Entries can&apos;t be edited or deleted.</p>
-      <form className="flex gap-2"><input name="action" defaultValue={action} className="input max-w-xs" placeholder="Filter by action, e.g. KYC_DOC" /><button className="btn-secondary">Filter</button></form>
+      <form className="flex gap-2"><input aria-label="Filter by action, e.g. KYC_DOC" name="action" defaultValue={action} className="input max-w-xs" placeholder="Filter by action, e.g. KYC_DOC" /><button className="btn-secondary">Filter</button></form>
       <div className="card overflow-x-auto">
         <table className="table">
           <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Target</th><th>Details</th><th>IP</th></tr></thead>

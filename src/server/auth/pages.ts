@@ -34,8 +34,10 @@ export async function signInMethods() {
   const { env } = await import("../env");
   const s = await getSettings();
   const fb = env.firebase.webConfig;
+  const { logoSrc } = await import("../brand");
   return {
     brand: s.brand_name,
+    logo: logoSrc(s),
     google: s.auth_google_enabled && fb ? fb : null,
     googleMisconfigured: s.auth_google_enabled && !fb,
     email: s.auth_email_enabled,

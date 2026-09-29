@@ -3,6 +3,8 @@ import { BadgeCheck, Clock3, ScanFace, ShieldX, TriangleAlert } from "lucide-rea
 import { userOrLogin } from "@/server/auth/pages";
 import { latestKyc } from "@/server/kyc";
 import { getSettings } from "@/server/settings";
+import { ContactLinks } from "@/components/ContactLinks";
+import { contactChannels } from "@/server/contact";
 import { ApiForm } from "@/components/ApiForm";
 import { FileTile } from "@/components/FileTile";
 import { Banner, PageHeader, Row, Section, StatusPill } from "@/components/ui";
@@ -18,7 +20,7 @@ export default async function Kyc() {
   const notNeeded = !s.kyc_required && user.kycStatus === "NOT_STARTED";
   const canSubmit = !notNeeded && (user.kycStatus === "NOT_STARTED" || user.kycStatus === "NEEDS_CHANGES");
   const state = {
-    SUBMITTED: { icon: Clock3, tone: "tile-blue", title: "Submitted, under review", body: "We usually review within 24 hours. We'll email you when it's done." },
+    SUBMITTED: { icon: Clock3, tone: "tile-blue", title: "Submitted, under review", body: `We usually review within ${s.review_hours} business hours. We'll email you when it's done.` },
     APPROVED: { icon: BadgeCheck, tone: "tile-emerald", title: "You're verified", body: "Next, add the bank account or UPI ID you want to be paid to." },
     NEEDS_CHANGES: { icon: TriangleAlert, tone: "tile-amber", title: "We need a small change", body: sub?.reason ?? "" },
     DECLINED: { icon: ShieldX, tone: "tile-rose", title: "Your identity check was declined", body: `${sub?.reason ?? ""} You can't place orders. Contact support if you think this is wrong.` },
@@ -49,6 +51,7 @@ export default async function Kyc() {
             <p className="font-semibold text-slate-900">{state.title}</p>
             <p className="mt-0.5 text-sm text-slate-600">{state.body}</p>
             {user.kycStatus === "APPROVED" && <Link href="/payout-methods" className="btn-primary mt-3">Add bank or UPI</Link>}
+            {user.kycStatus === "DECLINED" && <div className="mt-3"><ContactLinks channels={contactChannels(s)} /></div>}
           </div>
         </div>
       )}

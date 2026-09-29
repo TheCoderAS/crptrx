@@ -10,14 +10,15 @@ import { Banner } from "@/components/ui";
 
 export const metadata = { title: "Log in", description: "Log in to sell USDT and track your rupee payouts.", alternates: { canonical: "/login" } };
 
-export default async function Login({ searchParams }: { searchParams: Promise<{ reset?: string }> }) {
+export default async function Login({ searchParams }: { searchParams: Promise<{ reset?: string; verified?: string }> }) {
   if (await currentUser()) redirect("/dashboard");
-  const { reset } = await searchParams;
+  const { reset, verified } = await searchParams;
   const m = await signInMethods();
   const none = !m.google && !m.email && !m.dev;
   return (
     <AuthShell
       brand={m.brand}
+      logo={m.logo}
       title="Welcome back"
       subtitle="Log in to your account."
       footer={
@@ -28,6 +29,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
       }
     >
       {reset && <Banner tone="ok">Password changed. Log in with your new password.</Banner>}
+      {verified && <Banner tone="ok">Email confirmed. Log in to continue.</Banner>}
       {none && <Banner tone="warn">Sign-in is temporarily unavailable. Please try again later.</Banner>}
       {m.google && <GoogleSignIn config={m.google} />}
       {m.google && m.email && <OrDivider />}

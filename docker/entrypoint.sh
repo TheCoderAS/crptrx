@@ -21,6 +21,15 @@ if [ -z "$ENCRYPTION_KEY" ]; then
   echo "ENCRYPTION_KEY is not set. Set it (64 hex chars), or AUTO_GENERATE_SECRETS=true for test setups." >&2
   exit 1
 fi
+# Links in emails, share previews and search results are built from APP_URL.
+if [ -z "$APP_URL" ]; then
+  if [ "${AUTO_GENERATE_SECRETS:-false}" = "true" ]; then
+    echo "APP_URL is not set; using http://localhost:3000 (fine for local testing only)." >&2
+  else
+    echo "APP_URL is not set. Set it to the public https:// address of the site." >&2
+    exit 1
+  fi
+fi
 
 migrate() {
   # Retry while the database starts up. prisma migrate deploy is safe to run from several containers.

@@ -1,6 +1,5 @@
 import { ImageResponse } from "next/og";
-import { brandName } from "@/lib/brand";
-import { BrandMark } from "@/lib/brandMark";
+import { BrandMark, brandForImages } from "@/lib/brandMark";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -9,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 /** Share preview shown on WhatsApp, X, LinkedIn, Slack etc. */
 export default async function OgImage() {
-  const name = await brandName();
+  const b = await brandForImages();
+  const name = b.name;
   return new ImageResponse(
     <div
       style={{
@@ -21,11 +21,11 @@ export default async function OgImage() {
         padding: 72,
         color: "white",
         backgroundColor: "#0b1437",
-        backgroundImage: "radial-gradient(circle at 0% 0%, #3b7cf6 0%, transparent 55%), radial-gradient(circle at 100% 100%, #10b981 0%, transparent 50%), radial-gradient(circle at 90% 10%, #7c3aed 0%, transparent 45%)",
+        backgroundImage: `radial-gradient(circle at 0% 0%, ${b.primary} 0%, transparent 55%), radial-gradient(circle at 100% 100%, #10b981 0%, transparent 50%), radial-gradient(circle at 90% 10%, ${b.accent} 0%, transparent 45%)`,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-        <BrandMark size={72} />
+        <BrandMark size={72} logo={b.logo} primary={b.primary} accent={b.accent} />
         <div style={{ fontSize: 40, fontWeight: 700 }}>{name}</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column" }}>

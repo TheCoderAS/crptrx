@@ -70,6 +70,7 @@ export async function registerWithPassword(emailInput: unknown, passwordInput: u
   const password = checkUserPassword(passwordInput);
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
+    await bcrypt.hash(password, 12); // same timing as a real sign-up
     // Tell the real owner by email instead of revealing it on screen.
     await rateLimit(`signup-exists:${email}`, 3, 60 * 60);
     await sendEmail(
@@ -168,12 +169,14 @@ export async function resetPassword(token: unknown, passwordInput: unknown, ip: 
 }
 
 /** Set a first password (e.g. a Google user) or change the current one. */
-export async function setPassword(user: User, current: unknown, next: unknown, ip: string | null) {
+export async function setPassword(user: User, current: unknown, next: unknown, ip: string | null, keepSessionId?: string | null) {
   await assertEmailSignInOn();
   await rateLimit(`set-password:${user.id}`, 5, 15 * 60);
   if (user.passwordHash && !(await bcrypt.compare(String(current ?? ""), user.passwordHash))) throw new AppError("Your current password isn't right.");
   const password = checkUserPassword(next);
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(password, 12) } });
+  // Sign out every other device.
+  await prisma.session.deleteMany({ where: { subjectType: "USER", subjectId: user.id, ...(keepSessionId ? { id: { not: keepSessionId } } : {}) } });
   await audit({ type: "USER", id: user.id }, user.passwordHash ? "PASSWORD_CHANGED" : "PASSWORD_SET", { ip });
   await sendEmail(user.email, "Your password was changed", `The password for your account was just ${user.passwordHash ? "changed" : "set"}. If this wasn't you, reset it right away: ${env.appUrl}/forgot-password`);
 }

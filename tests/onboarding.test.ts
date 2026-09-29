@@ -6,7 +6,7 @@ import { onboardingState } from "@/server/onboarding";
 import { createQuote } from "@/server/orders/quote";
 import { addPayoutMethod } from "@/server/payouts";
 import { reviewKyc, submitKyc } from "@/server/kyc";
-import { setNetworkMode, updateSetting, writeSetting } from "@/server/settings";
+import { updateSetting, writeSetting } from "@/server/settings";
 import { addWallet } from "@/server/wallets";
 import {
   loginWithPassword,
@@ -121,12 +121,11 @@ describe("settings guard rails", () => {
     await expect(updateSetting("auth_email_enabled", false, ADMIN)).rejects.toThrow(/Firebase/);
   });
 
-  it("KYC can't be switched off in Live, and Live can't start with KYC off", async () => {
-    await updateSetting("kyc_required", false, ADMIN);
-    await expect(setNetworkMode("LIVE", "SWITCH TO LIVE", ADMIN)).rejects.toThrow(/KYC/);
-    await set("kyc_required", true);
+  it("the owner can switch KYC off, in Live too", async () => {
     await set("network_mode", "LIVE");
-    await expect(updateSetting("kyc_required", false, ADMIN)).rejects.toThrow(/Live/);
+    await updateSetting("kyc_required", false, ADMIN);
+    const { user } = await bareUser({ mobileVerifiedAt: new Date() });
+    expect((await onboardingState(user)).steps.map((s) => s.id)).toEqual(["mobile", "payout"]);
   });
 
   it("rejects an unknown wallet mode", async () => {

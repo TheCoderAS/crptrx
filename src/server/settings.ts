@@ -48,7 +48,7 @@ export const SETTING_DEFAULTS = {
   auth_email_enabled: true,
   auth_email_verification_required: true,
   onboarding_mobile_required: true,
-  kyc_required: true, // can be switched off in TEST mode only
+  kyc_required: true, // the owner may switch it off (the settings page warns about Live)
   kyc_auto_approve: false, // approve on submission; kept in a "review later" queue
   payout_auto_approve_on_name_match: false,
   wallet_registration: "OFF" as "OFF" | "OPTIONAL" | "REQUIRED",
@@ -56,7 +56,14 @@ export const SETTING_DEFAULTS = {
   company_address: "[Registered address]",
   company_fiu_reg: "[FIU registration number]",
   company_gstin: "[GSTIN]",
-  support_email: "support@example.com",
+  support_email: "[support@yourcompany.in]",
+  support_phone: "",
+  support_whatsapp: "",
+  brand_primary_color: "#2563eb", // buttons, links, highlights
+  brand_accent_color: "#7c3aed", // second colour in gradients
+  brand_logo_version: "", // set when a logo is uploaded; empty = built-in mark
+  terms_text: "", // legal text from the lawyer; plain text, "## " starts a heading
+  privacy_text: "",
   hold_reasons: [
     "Amount doesn't match the quote",
     "Payment sent on a different network than the order",
@@ -94,6 +101,31 @@ export async function getSettings(tx: Tx = prisma): Promise<Settings & { rateUpd
   if (out.rate_mode === "AUTO") out.rateUpdatedAt = feed?.lastOkAt ?? null;
   return out;
 }
+
+/** Names used in error messages instead of internal keys. */
+export const SETTING_LABELS: Partial<Record<string, string>> = {
+  rate: "Rate",
+  fee_percent: "Platform fee %",
+  gst_percent: "GST %",
+  tax_percent: "Tax held back %",
+  rate_margin_percent: "Margin %",
+  rate_floor: "Lowest rate",
+  rate_ceiling: "Highest rate",
+  rate_max_jump_percent: "Largest jump %",
+  limit_min_order_usdt: "Minimum per order",
+  limit_max_order_usdt: "Maximum per order",
+  limit_user_daily_usdt: "Per user per day",
+  limit_user_monthly_usdt: "Per user per month",
+  limit_platform_daily_usdt: "Whole platform per day",
+  rate_max_age_hours: "Rate valid for (hours)",
+  rate_feed_max_age_minutes: "Feed can be old for (minutes)",
+  rate_min_sources: "Sources that must agree",
+  review_hours: "Typical review time",
+  bsc_finality_fallback_blocks: "BSC blocks to wait",
+  bsc_scan_range: "BSC blocks per request",
+  bsc_initial_lookback_blocks: "BSC look-back blocks",
+  tron_initial_lookback_seconds: "Tron look-back seconds",
+};
 
 /** Keys an admin may edit through the generic settings screen (deposit address has its own flow). */
 export const EDITABLE_KEYS: SettingKey[] = [
@@ -134,6 +166,12 @@ export const EDITABLE_KEYS: SettingKey[] = [
   "company_fiu_reg",
   "company_gstin",
   "support_email",
+  "support_phone",
+  "support_whatsapp",
+  "brand_primary_color",
+  "brand_accent_color",
+  "terms_text",
+  "privacy_text",
   "hold_reasons",
   "bsc_finality_fallback_blocks",
   "bsc_scan_range",
@@ -161,8 +199,12 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
   ];
   if (decimalKeys.includes(key)) {
     const s = String(value).trim();
-    if (!/^\d+(\.\d+)?$/.test(s)) throw new AppError(`${key}: enter a plain number`);
-    if (key.endsWith("percent") && D(s).gt(100)) throw new AppError(`${key}: must be 100 or less`);
+    const name = SETTING_LABELS[key] ?? key;
+    // Matches the database columns: rates and percents keep 4 decimals, USDT limits 2.
+    const places = key.startsWith("limit_") ? 2 : 4;
+    if (!/^\d+(\.\d+)?$/.test(s)) throw new AppError(`${name}: enter a plain number, e.g. 12.5`);
+    if ((s.split(".")[1]?.length ?? 0) > places) throw new AppError(`${name}: use at most ${places} decimal places.`);
+    if (key.endsWith("percent") && D(s).gt(100)) throw new AppError(`${name}: must be 100 or less`);
     if (key === "rate" && D(s).lte(0)) throw new AppError("Rate must be above 0");
     return s;
   }
@@ -178,7 +220,7 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
   ];
   if (intKeys.includes(key)) {
     const n = Number(value);
-    if (!Number.isInteger(n) || n < 1) throw new AppError(`${key}: enter a whole number of 1 or more`);
+    if (!Number.isInteger(n) || n < 1) throw new AppError(`${SETTING_LABELS[key] ?? key}: enter a whole number of 1 or more`);
     if (key === "bsc_finality_fallback_blocks" && n < 15) throw new AppError("Wait at least 15 blocks");
     return n;
   }
@@ -206,6 +248,31 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
     "payout_auto_approve_on_name_match",
   ];
   if (boolKeys.includes(key)) return value === true || value === "true";
+  if (key === "brand_primary_color" || key === "brand_accent_color") {
+    const c = String(value).trim().toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(c)) throw new AppError("Colours must look like #2563eb.");
+    return c;
+  }
+  if (key === "support_phone" || key === "support_whatsapp") {
+    const p = String(value ?? "").trim();
+    if (p && !/^\+?[0-9 ()-]{8,20}$/.test(p)) throw new AppError("Enter a phone number like +91 98765 43210, or leave it empty.");
+    return p;
+  }
+  if (key === "support_email") {
+    const e = String(value ?? "").trim();
+    if (e && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw new AppError("Enter a valid support email.");
+    return e;
+  }
+  if (key === "terms_text" || key === "privacy_text") {
+    const t = String(value ?? "").replace(/\r\n/g, "\n").trim();
+    if (t.length > 100_000) throw new AppError("That text is too long (100,000 characters max).");
+    return t;
+  }
+  if (key === "brand_name") {
+    const n = String(value ?? "").trim().replace(/\s+/g, " ");
+    if (n.length < 2 || n.length > 40) throw new AppError("The app name should be 2 to 40 characters.");
+    return n;
+  }
   if (key === "wallet_registration") {
     if (!["OFF", "OPTIONAL", "REQUIRED"].includes(String(value))) throw new AppError("Wallet registration must be Off, Optional or Required.");
     return String(value);
@@ -259,8 +326,6 @@ export async function updateSetting(key: SettingKey, value: unknown, actor: Acto
     throw new AppError("Keep at least one sign-in method on (Google or email/password).");
   if (key === "auth_email_enabled" && clean === false && !(await import("./env")).env.firebase.webConfig)
     throw new AppError("Google sign-in isn't set up on the server yet (Firebase settings missing), so email sign-in must stay on.");
-  if (key === "kyc_required" && clean === false && current.network_mode === "LIVE")
-    throw new AppError("KYC can't be switched off in Live mode: without PAN there is no TDS reporting and no AML check. Use Test mode.");
   // Skip no-op saves so the history stays readable. Re-saving the rate is kept:
   // it confirms the rate is still current and resets its age.
   if (key !== "rate" && JSON.stringify(current[key]) === JSON.stringify(clean)) return;
@@ -288,8 +353,6 @@ export const isRealValue = (v: string | null | undefined) => !!v && !/^\s*\[.*\]
 export const LIVE_CONFIRM_PHRASE = "SWITCH TO LIVE";
 
 export async function setNetworkMode(mode: Mode, typedConfirmation: string, actor: Actor, ip?: string | null) {
-  if (mode === "LIVE" && !(await getSettings()).kyc_required)
-    throw new AppError("Turn KYC back on before switching to Live.");
   if (mode === "LIVE" && typedConfirmation !== LIVE_CONFIRM_PHRASE)
     throw new AppError(`Type ${LIVE_CONFIRM_PHRASE} exactly to switch to Live`);
   if (mode !== "LIVE" && mode !== "TEST") throw new AppError("Unknown mode");

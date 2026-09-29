@@ -18,6 +18,7 @@ export default async function Signup() {
   return (
     <AuthShell
       brand={m.brand}
+      logo={m.logo}
       title="Create your account"
       subtitle="Takes about a minute."
       footer={

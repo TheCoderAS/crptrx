@@ -7,16 +7,22 @@ import { fmtIST } from "@/lib/time";
 // Brand
 // ---------------------------------------------------------------------------
 
-export function Logo({ name, inverted, size = "md" }: { name: string; inverted?: boolean; size?: "md" | "lg" }) {
+/** The app's logo: the admin's uploaded image when there is one, else the built-in mark. */
+export function Logo({ name, inverted, size = "md", src }: { name: string; inverted?: boolean; size?: "md" | "lg"; src?: string | null }) {
   const box = size === "lg" ? "size-10" : "size-8";
   return (
-    <span className="inline-flex items-center gap-2.5">
-      <span className={`${box} grid place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 text-white shadow-sm`}>
+    <span className="inline-flex min-w-0 items-center gap-2.5">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className={`${box} shrink-0 rounded-xl object-contain`} />
+      ) : (
+      <span className={`${box} grid shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 text-white shadow-sm`}>
         <svg viewBox="0 0 24 24" className="size-[60%]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M7 7h11l-3-3" />
           <path d="M17 17H6l3 3" />
         </svg>
       </span>
+      )}
       <span className={`truncate font-semibold tracking-tight whitespace-nowrap ${size === "lg" ? "text-xl" : "text-[17px]"} ${inverted ? "text-white" : "text-slate-900"}`}>{name}</span>
     </span>
   );
@@ -201,16 +207,20 @@ export function EmptyState({ icon, title, children, action }: { icon?: ReactNode
 /** Horizontal progress tracker (e.g. Payment → Review → Paid). */
 export function Steps({ steps, current, failed }: { steps: string[]; current: number; failed?: boolean }) {
   return (
-    <ol className="flex items-center gap-1.5">
+    <ol className="flex items-center gap-1.5" aria-label="Order progress">
       {steps.map((s, i) => {
         const done = i < current;
         const active = i === current;
         return (
-          <li key={s} className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <li key={s} className="flex min-w-0 flex-1 flex-col gap-1.5" aria-current={active ? "step" : undefined}>
             <span
               className={`h-1.5 rounded-full ${done ? "bg-emerald-500" : active ? (failed ? "bg-amber-400" : "bg-brand-600") : "bg-slate-200"}`}
             />
-            <span className={`truncate text-xs ${done || active ? "font-medium text-slate-800" : "text-slate-400"}`}>{s}</span>
+            <span className={`truncate text-xs ${done || active ? "font-medium text-slate-800" : "text-slate-400"}`}>
+              {s}
+              {active && failed && <span className="text-amber-700"> · paused</span>}
+              {done && <span className="sr-only"> (done)</span>}
+            </span>
           </li>
         );
       })}

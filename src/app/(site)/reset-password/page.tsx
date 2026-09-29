@@ -12,7 +12,7 @@ export default async function Reset({ searchParams }: { searchParams: Promise<{ 
   const { token } = await searchParams;
   const m = await signInMethods();
   return (
-    <AuthShell brand={m.brand} title="Choose a new password" footer={<Link href="/login" className="font-semibold text-brand-700 hover:underline">Back to log in</Link>}>
+    <AuthShell brand={m.brand} logo={m.logo} title="Choose a new password" footer={<Link href="/login" className="font-semibold text-brand-700 hover:underline">Back to log in</Link>}>
       {!m.email ? (
         <Banner tone="warn">Password sign-in is turned off right now.</Banner>
       ) : !token ? (

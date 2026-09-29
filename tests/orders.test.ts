@@ -58,7 +58,9 @@ describe("quotes (spec 4.4, 7.1, 7.2)", () => {
 
   it("enforces per-order and per-day limits", async () => {
     await expect(makeOrder("TRON", "5")).rejects.toThrow(/minimum/);
-    await expect(makeOrder("TRON", "1000")).rejects.toThrow(/maximum/); // 1000 + suffix > 1000
+    await expect(makeOrder("TRON", "1000.01")).rejects.toThrow(/maximum/);
+    const atMax = await makeOrder("TRON", "1000"); // the unique suffix may go up to 0.99 above the maximum
+    expect(D(atMax.order.usdtAmount).gt(1000)).toBe(true);
     await writeSetting("limit_user_daily_usdt", "150", SYS);
     const u = await makeUser();
     const q = (amount: string) => createQuote({ userId: u.user.id, network: "TRON", amountType: "USDT", amount, payoutMethodId: u.pm.id }, u.actor);
@@ -157,6 +159,9 @@ describe("admin order workflow (spec 5.4, M7)", () => {
     await startReview(order.id, ADMIN);
     await expect(approveOrder(order.id, ADMIN)).rejects.toThrow(/wallet check/);
     await saveWalletCheck(order.id, { result: "CLEAN", note: "Checked on tool X: no flags" }, ADMIN);
+    // No payment linked yet: approval needs a written reason.
+    await expect(approveOrder(order.id, ADMIN)).rejects.toThrow(/No blockchain payment/);
+    await prisma.order.update({ where: { id: order.id }, data: { txid: randTxid("TRON"), receivedAmount: order.usdtAmount } });
     await approveOrder(order.id, ADMIN);
     const net = D(order.net).toFixed(2);
     await expect(markPaid(order.id, { utr: "SHORT", amount: net, paidAt: new Date().toISOString() }, ADMIN)).rejects.toThrow(/UTR/);

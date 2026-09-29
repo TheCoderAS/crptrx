@@ -1,18 +1,29 @@
 "use client";
 import { useState, type ReactNode } from "react";
+import { useStepUp } from "./StepUp";
 
-/** Posts a form and saves the response as a file (for CSV exports that need a 2FA code). */
+/** Posts a form and saves the response as a file (CSV exports; asks for a 2FA code if one is needed). */
 export function DownloadForm({ action, children, className }: { action: string; children: ReactNode; className?: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const stepUp = useStepUp();
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErr(null);
     setBusy(true);
     try {
-      const fd = new FormData(e.currentTarget);
-      const res = await fetch(action, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(fd.entries())) });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Export failed");
+      const fields = Object.fromEntries(new FormData(e.currentTarget).entries());
+      const send = (totp?: string) => fetch(action, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...fields, ...(totp ? { totp } : {}) }) });
+      let res = await send();
+      let prompted = false;
+      while (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (res.status !== 401 || !(data.code === "STEP_UP_REQUIRED" || (prompted && data.code === "BAD_2FA"))) throw new Error(data.error ?? "Export failed");
+        prompted = true;
+        const code = await stepUp.ask(data.code === "BAD_2FA" ? data.error : undefined);
+        if (!code) return;
+        res = await send(code);
+      }
       const name = res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ?? "export.csv";
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement("a");
@@ -29,6 +40,7 @@ export function DownloadForm({ action, children, className }: { action: string; 
   return (
     <form onSubmit={submit} className={className}>
       <fieldset disabled={busy} className="contents">{children}</fieldset>
+      {stepUp.prompt}
       {err && <p role="alert" className="mt-2 rounded bg-red-50 p-2 text-sm text-red-800">{err}</p>}
     </form>
   );

@@ -64,6 +64,11 @@ export async function checkAdminTotp(admin: Admin, code: string, purpose: string
     await audit({ type: "ADMIN", id: admin.id }, "ADMIN_2FA_FAILED", { details: { purpose }, ip });
     throw new AppError("That code isn't right, or was already used. Wait for the next code and try again.", 401, "BAD_2FA");
   }
-  await prisma.admin.update({ where: { id: admin.id }, data: { lastTotpStep: step, ...(fresh.totpEnabled ? {} : { totpEnabled: true }) } });
+  // Conditional update: two requests racing with the same code can't both win.
+  const { count } = await prisma.admin.updateMany({
+    where: { id: admin.id, OR: [{ lastTotpStep: null }, { lastTotpStep: { lt: step } }] },
+    data: { lastTotpStep: step, ...(fresh.totpEnabled ? {} : { totpEnabled: true }) },
+  });
+  if (count !== 1) throw new AppError("That code isn't right, or was already used. Wait for the next code and try again.", 401, "BAD_2FA");
   await audit({ type: "ADMIN", id: admin.id }, purpose === "login" ? "ADMIN_LOGIN" : "ADMIN_2FA_RECHECK", { details: { purpose }, ip });
 }

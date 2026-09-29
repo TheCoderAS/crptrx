@@ -43,7 +43,7 @@ export function SellForm(p: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amount, amountType]);
-  const outOfRange = estimate && (Number(estimate.usdt) < Number(p.min) || Number(estimate.usdt) > Number(p.max));
+  const outOfRange = !estimate ? null : Number(estimate.usdt) < Number(p.min) ? `The minimum is ${p.min} USDT.` : Number(estimate.usdt) > Number(p.max) ? `The maximum is ${p.max} USDT.` : null;
 
   return (
     <ApiForm action="/api/quotes" className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
@@ -57,7 +57,7 @@ export function SellForm(p: Props) {
               return (
                 <label
                   key={n}
-                  className={`relative flex cursor-pointer gap-3 rounded-xl p-4 ring-1 transition ${picked ? "bg-brand-50/60 ring-2 ring-brand-600" : "ring-slate-200 hover:ring-slate-300"} ${!on ? "cursor-not-allowed opacity-50" : ""}`}
+                  className={`relative flex cursor-pointer gap-3 rounded-xl p-4 ring-1 transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-600 ${picked ? "bg-brand-50/60 ring-2 ring-brand-600" : "ring-slate-200 hover:ring-slate-300"} ${!on ? "cursor-not-allowed opacity-50" : ""}`}
                 >
                   <input type="radio" name="network" value={n} required disabled={!on} checked={picked} onChange={() => setNetwork(n)} className="sr-only" />
                   <NetworkMark network={n} size={36} />
@@ -77,7 +77,7 @@ export function SellForm(p: Props) {
           <StepTitle n={2} title="How much?" done={!!estimate && !outOfRange} />
           <div className="mb-3 inline-grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
             {(["USDT", "INR"] as const).map((t) => (
-              <label key={t} className={`cursor-pointer rounded-lg px-4 py-1.5 text-sm font-medium transition ${amountType === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>
+              <label key={t} className={`cursor-pointer rounded-lg px-4 py-2 text-sm font-medium transition focus-within:outline-2 focus-within:outline-brand-600 ${amountType === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>
                 <input type="radio" name="amountType" value={t} checked={amountType === t} onChange={() => setAmountType(t)} className="sr-only" />
                 {t === "USDT" ? "USDT to sell" : "₹ to receive"}
               </label>
@@ -93,12 +93,14 @@ export function SellForm(p: Props) {
               placeholder={amountType === "USDT" ? "100" : "9,000"}
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/,/g, "").trim())}
+              aria-label={amountType === "USDT" ? "USDT to sell" : "Rupees to receive"}
               aria-describedby="amount-hint"
+              aria-invalid={!!outOfRange}
             />
             <span className="absolute inset-y-0 right-4 flex items-center text-sm font-semibold text-slate-500">{amountType === "USDT" ? "USDT" : "INR"}</span>
           </div>
-          <p id="amount-hint" className={`hint ${outOfRange ? "text-rose-600" : ""}`}>
-            Per order: {p.min}–{p.max} USDT · Rate {fmtInr(p.rate)} per USDT
+          <p id="amount-hint" className={`hint ${outOfRange ? "font-medium text-rose-600" : ""}`} aria-live="polite">
+            {outOfRange ? `${outOfRange} ` : ""}Per order: {p.min}–{p.max} USDT · Rate {fmtInr(p.rate)} per USDT
           </p>
         </section>
 

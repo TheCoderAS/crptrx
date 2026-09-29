@@ -28,7 +28,7 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
       </div>
       <ApiForm action={`/api/admin/users/${u.id}`} className="card flex flex-wrap gap-2" confirm={u.status === "ACTIVE" ? "Disable this account? They won't be able to log in or order." : "Re-enable this account?"}>
         <input type="hidden" name="action" value={u.status === "ACTIVE" ? "disable" : "enable"} />
-        <input name="reason" required className="input flex-1" placeholder="Reason (logged)" />
+        <input aria-label="Reason (logged)" name="reason" required className="input flex-1" placeholder="Reason (logged)" />
         <button className={u.status === "ACTIVE" ? "btn-danger" : "btn-secondary"}>{u.status === "ACTIVE" ? "Disable account" : "Enable account"}</button>
       </ApiForm>
       <div className="card">

@@ -21,6 +21,8 @@ fs.writeFileSync(OUT + "/doc.png", png());
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const admin = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+// Accept the confirmation dialogs on admin actions (decline, mismatched names, mark paid).
+admin.on("dialog", (d) => d.accept());
 const user = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
 const shot = (p, n) => p.screenshot({ path: `${OUT}/${n}.png`, fullPage: true });
 const expectText = async (p, t) => { await p.getByText(t, { exact: false }).first().waitFor({ timeout: 15000 }); };
@@ -76,8 +78,8 @@ const [doc] = await Promise.all([admin.waitForEvent("popup"), admin.click("text=
 await doc.waitForLoadState();
 console.log("doc view opened:", doc.url().includes("/api/files?") ? "signed link" : doc.url());
 await doc.close();
-await admin.fill("input[name=reason]", "Selfie is blurry");
-await admin.click("button:has-text('Send')");
+await admin.fill("#reason-changes", "Selfie is blurry");
+await admin.click("button:has-text('Ask for changes')");
 await admin.waitForURL("**/admin/kyc");
 await user.reload();
 await expectText(user, "Selfie is blurry");
@@ -137,7 +139,6 @@ await expectText(user, "Payment received");
 await admin.goto(`${BASE}/admin/orders/${orderId}`);
 await admin.click("button:has-text('Start review')");
 await expectText(admin, "In review");
-admin.on("dialog", (d) => d.accept());
 await admin.fill("textarea[name=note]", "Checked sender on scam tool: no flags");
 await admin.check("input[value=CLEAN]");
 await admin.click("text=Save wallet check");
@@ -147,13 +148,16 @@ await expectText(admin, "Mark as paid");
 const net = (await admin.getByText(/Amount paid \(must be/).innerText()).match(/must be ([\d.]+)/)[1];
 await admin.fill("input[name=utr]", "HDFCN52026092812");
 await admin.fill("input[name=amount]", (Number(net) + 1).toFixed(2));
-await admin.fill("input[name=totp]", await freshCode(secret));
 await admin.click("button:has-text('Mark as paid')");
 await expectText(admin, "must equal");
 console.log("wrong paid amount blocked");
 await admin.fill("input[name=amount]", net);
-await admin.fill("input[name=totp]", await freshCode(secret));
 await admin.click("button:has-text('Mark as paid')");
+// The 2FA code from login covers 15 minutes; after that the app asks for a code once.
+if (await admin.getByText("Confirm it's you").isVisible({ timeout: 2000 }).catch(() => false)) {
+  await admin.fill("input[aria-label='2FA code']", await freshCode(secret));
+  await admin.click("[role=dialog] button:has-text('Confirm')");
+}
 await expectText(admin, "Receipt PDF");
 await shot(admin, "08-admin-order-paid");
 console.log("marked paid");

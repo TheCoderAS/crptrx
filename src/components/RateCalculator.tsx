@@ -26,7 +26,7 @@ export function RateCalculator(p: Props) {
 
   return (
     <div className="ring-gradient relative rounded-3xl shadow-[var(--shadow-float)]">
-      <div className="rounded-t-3xl border-b border-slate-100 bg-gradient-to-br from-brand-50 via-white to-violet-50 p-5 sm:p-6">
+      <div className="rounded-t-3xl border-b border-slate-100 bg-gradient-to-br from-brand-50 via-white to-accent/5 p-5 sm:p-6">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-slate-500">Today&apos;s rate</p>
           {p.live && !p.stale && <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
@@ -55,7 +55,7 @@ export function RateCalculator(p: Props) {
             </div>
           </dl>
         )}
-        <Link href="/login" className="btn btn-lg bg-brand-gradient w-full text-white shadow-md hover:opacity-95">
+        <Link href="/signup" className="btn btn-lg bg-brand-gradient w-full text-white shadow-md hover:opacity-95">
           Get started <ArrowRight className="size-4" aria-hidden />
         </Link>
         <p className="text-center text-xs text-slate-500">Estimate. Your exact amount is locked for 15 minutes when you place an order.</p>

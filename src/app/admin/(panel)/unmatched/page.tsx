@@ -32,14 +32,14 @@ export default async function Unmatched({ searchParams }: { searchParams: Promis
             <div className="grid gap-2 md:grid-cols-2">
               <ApiForm action={`/api/admin/transfers/${t.id}`} className="space-y-2 rounded-lg bg-slate-50 p-2">
                 <input type="hidden" name="action" value="link" />
-                <input name="orderId" required className="input" placeholder="Order ID, e.g. ORD-2026-000123" />
-                <input name="note" required className="input" placeholder="Why this belongs to that order (required)" />
+                <input aria-label="Order ID, e.g. ORD-2026-000123" name="orderId" required className="input" placeholder="Order ID, e.g. ORD-2026-000123" />
+                <input aria-label="Why this belongs to that order (required)" name="note" required className="input" placeholder="Why this belongs to that order (required)" />
                 <button className="btn-secondary">Link to order</button>
               </ApiForm>
               {t.status === "UNMATCHED" && (
                 <ApiForm action={`/api/admin/transfers/${t.id}`} className="space-y-2 rounded-lg bg-slate-50 p-2">
                   <input type="hidden" name="action" value="manual" />
-                  <input name="note" required className="input" placeholder="Note (required)" />
+                  <input aria-label="Note (required)" name="note" required className="input" placeholder="Note (required)" />
                   <button className="btn-secondary">Mark for manual handling</button>
                 </ApiForm>
               )}

@@ -38,7 +38,7 @@ export default async function Home() {
     { icon: Lock, tile: "tile-violet", title: "Own-name payouts only", body: "Money never goes to a third party." },
     { icon: LineChart, tile: "tile-emerald", title: "Live order tracking", body: "Every step, time-stamped." },
     { icon: ReceiptText, tile: "tile-amber", title: "PDF receipt", body: "With UTR, TDS and fees itemised." },
-    { icon: FileCheck2, tile: "tile-rose", title: `${s.tax_percent}% TDS handled`, body: "Reported against your PAN." },
+    { icon: FileCheck2, tile: "tile-rose", title: `${s.tax_percent}% TDS handled`, body: s.kyc_required ? "Reported against your PAN." : "Shown on every receipt." },
     { icon: Fingerprint, tile: "tile-slate", title: "Human safety check", body: "Every order reviewed before payout." },
   ];
 
@@ -129,7 +129,7 @@ export default async function Home() {
           <h2 id="how" className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Four steps. <span className="text-gradient">Zero guesswork.</span></h2>
         </div>
         <ol className="relative mt-12 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-4">
-          <span className="absolute top-7 right-[12%] left-[12%] hidden h-0.5 bg-gradient-to-r from-sky-300 via-violet-300 to-emerald-300 sm:block" aria-hidden />
+          <span className="absolute top-7 right-[12%] left-[12%] hidden h-0.5 bg-gradient-to-r from-brand-200 via-accent/40 to-emerald-300 sm:block" aria-hidden />
           {steps.map(({ icon: Icon, tile, title, body }, i) => (
             <li key={title} className="relative flex flex-col items-center text-center">
               <span className={`icon-tile ${tile} size-14 rounded-2xl ring-4 ring-slate-50`}><Icon className="size-6" aria-hidden /></span>

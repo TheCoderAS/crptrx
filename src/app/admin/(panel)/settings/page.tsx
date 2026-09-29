@@ -1,13 +1,14 @@
 import { adminOrLogin } from "@/server/auth/pages";
+import { logoSrc } from "@/server/brand";
+import { ColorField } from "@/components/ColorField";
 import { env } from "@/server/env";
 import { prisma } from "@/server/db";
 import { RATE_SOURCE_IDS, rateFeedState } from "@/server/rateFeed";
-import { getSettings, LIVE_CONFIRM_PHRASE, rateIsStale, tokenContractFor } from "@/server/settings";
+import { getSettings, isRealValue, LIVE_CONFIRM_PHRASE, rateIsStale, tokenContractFor } from "@/server/settings";
 import { NETWORK_CODES, NETWORK_INFO } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { TotpField } from "@/components/Totp";
-import { Banner, PageHeader } from "@/components/ui";
+import { Banner, Logo, PageHeader } from "@/components/ui";
 import { Tabs } from "@/components/Tabs";
 import { Settings2 } from "lucide-react";
 
@@ -56,12 +57,12 @@ export default async function SettingsPage() {
       <h2 className="h2">{title}</h2>
       {extra}
       <div className="grid gap-3 sm:grid-cols-2">{children}</div>
-      <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+      <div className="flex items-end gap-3"><button className="btn-primary">Save</button></div>
     </ApiForm>
   );
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Changes need your 2FA code and are logged." icon={<Settings2 className="size-6" />} tile="tile-slate" />
+      <PageHeader title="Settings" subtitle="Every change is logged. Risky ones ask for your 2FA code." icon={<Settings2 className="size-6" />} tile="tile-slate" />
       <Tabs
         tabs={[
           { id: "rate", label: "Rate", alert: rateIsStale(s), content: <>
@@ -94,7 +95,7 @@ export default async function SettingsPage() {
               <textarea id="rate_sources" name="rate_sources" rows={3} className="input font-mono" defaultValue={s.rate_sources.join("\n")} />
             </div>
           </div>
-          <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+          <div className="flex items-end gap-3"><button className="btn-primary">Save</button></div>
         </ApiForm>
 
         <div className="rounded-lg bg-slate-50 p-3 text-sm">
@@ -116,7 +117,6 @@ export default async function SettingsPage() {
             <ApiForm action="/api/admin/rate/refresh"><button className="btn-secondary">Fetch now</button></ApiForm>
             {feed?.lastError?.includes("above your") && (
               <ApiForm action="/api/admin/rate/accept" className="flex items-end gap-2">
-                <TotpField />
                 <button className="btn-danger">Accept new market price</button>
               </ApiForm>
             )}
@@ -169,9 +169,9 @@ export default async function SettingsPage() {
         {mode === "LIVE" ? <p className="muted">Live mode uses the official mainnet contracts. They can&apos;t be edited.</p> : (
           <ApiForm action="/api/admin/settings" className="space-y-2">
             <p className="muted">Test-mode tokens (Nile / BSC Testnet). Confirm these are the test USDT tokens you&apos;ll use. Mainnet contracts are refused here.</p>
-            <input name="test_token_contract.TRON" defaultValue={s.test_token_contract.TRON} className="input font-mono" />
-            <input name="test_token_contract.BSC" defaultValue={s.test_token_contract.BSC} className="input font-mono" />
-            <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+            <input name="test_token_contract.TRON" aria-label="Tron test USDT contract" defaultValue={s.test_token_contract.TRON} className="input font-mono" />
+            <input name="test_token_contract.BSC" aria-label="BSC test USDT contract" defaultValue={s.test_token_contract.BSC} className="input font-mono" />
+            <div className="flex items-end gap-3"><button className="btn-primary">Save</button></div>
           </ApiForm>
         )}
       </div>
@@ -182,17 +182,17 @@ export default async function SettingsPage() {
         {mode === "TEST" ? (
           <>
             <Banner tone="danger">Switching to Live means real USDT and real payouts. Set the Live deposit addresses first (they also take 1 hour).</Banner>
-            <input name="confirm" required className="input" placeholder={`Type ${LIVE_CONFIRM_PHRASE}`} />
+            <input name="confirm" aria-label="Type the confirmation phrase" required className="input" placeholder={`Type ${LIVE_CONFIRM_PHRASE}`} />
           </>
         ) : <input type="hidden" name="confirm" value="" />}
-        <div className="flex items-end gap-3"><TotpField /><button className={mode === "TEST" ? "btn-danger" : "btn-secondary"}>{mode === "TEST" ? "Switch to Live" : "Switch back to Test"}</button></div>
+        <div className="flex items-end gap-3"><button className={mode === "TEST" ? "btn-danger" : "btn-secondary"}>{mode === "TEST" ? "Switch to Live" : "Switch back to Test"}</button></div>
       </ApiForm>
 
           </> },
           { id: "address", label: "Deposit addresses", alert: pending.length > 0, content: <>
       <div id="address" className="card space-y-4 ring-2 ring-red-300">
         <h2 className="h2">Deposit addresses ({mode} mode)</h2>
-        <Banner tone="danger">If this address is wrong, every payment on that network goes to someone else. Changes need your 2FA code, take effect after 1 hour, and every admin is emailed a cancel link.</Banner>
+        <Banner tone="danger">If this address is wrong, every payment on that network goes to someone else. Changes ask for your 2FA code, take effect after 1 hour, and every admin is emailed a cancel link.</Banner>
         {NETWORK_CODES.map((n) => (
           <div key={n} className="rounded-lg p-3 ring-1 ring-slate-200">
             <p className="text-xl font-bold">{NETWORK_INFO[n].name}</p>
@@ -208,9 +208,8 @@ export default async function SettingsPage() {
               <summary className="cursor-pointer text-sm font-semibold text-red-700">Change the {NETWORK_INFO[n].name} address</summary>
               <ApiForm action="/api/admin/deposit-address" className="mt-2 space-y-2" confirm={`Change the ${NETWORK_INFO[n].name} deposit address? It takes effect in 1 hour.`}>
                 <input type="hidden" name="network" value={n} />
-                <input name="address" required className="input font-mono" placeholder={n === "TRON" ? "T…" : "0x… (checksummed)"} />
-                <input name="confirmNetwork" required className="input" placeholder={`Type ${n} to confirm the network`} />
-                <TotpField />
+                <input name="address" aria-label={`New ${n} deposit address`} required className="input font-mono" placeholder={n === "TRON" ? "T…" : "0x… (checksummed)"} />
+                <input name="confirmNetwork" aria-label="Type the network to confirm" required className="input" placeholder={`Type ${n} to confirm the network`} />
                 <button className="btn-danger">Request change</button>
               </ApiForm>
             </details>
@@ -228,7 +227,7 @@ export default async function SettingsPage() {
           <Toggle name="auth_email_enabled" label="Email and password" hint="Sign-up, login, forgot-password and change-password." checked={s.auth_email_enabled} />
           <Toggle name="auth_email_verification_required" label="Require a confirmed email" hint="New email sign-ups must click the link we email before they can continue. Google accounts are already confirmed." checked={s.auth_email_verification_required} />
         </div>
-        <div className="flex items-end gap-3 pt-2"><TotpField /><button className="btn-primary">Save</button></div>
+        <div className="flex items-end gap-3 pt-2"><button className="btn-primary">Save</button></div>
       </ApiForm>
 
       <ApiForm action="/api/admin/settings" className="card mt-5 space-y-2">
@@ -261,34 +260,94 @@ export default async function SettingsPage() {
           </select>
           <p className="muted">&quot;Required&quot; also blocks new orders until the customer adds a wallet. Exchange withdrawals come from the exchange&apos;s wallet and will be held.</p>
         </div>
-        <div className="flex items-end gap-3 pt-2"><TotpField /><button className="btn-primary">Save</button></div>
+        <div className="flex items-end gap-3 pt-2"><button className="btn-primary">Save</button></div>
       </ApiForm>
           </> },
-          { id: "company", label: "Company & text", content: <>
+          { id: "brand", label: "Brand & contact", content: <>
+      <div className="card space-y-4">
+        <div>
+          <h2 className="h2">Logo</h2>
+          <p className="muted">Square PNG or SVG, up to 300 KB. Used in the header, sign-in pages, browser tab and share previews.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-4 rounded-xl bg-slate-50 p-4">
+          <Logo name={s.brand_name} src={logoSrc(s)} size="lg" />
+          <span className="rounded-xl bg-slate-900 p-3"><Logo name={s.brand_name} src={logoSrc(s)} inverted /></span>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <ApiForm action="/api/admin/brand/logo" className="flex flex-wrap items-end gap-3" resetOnSuccess>
+            <div>
+              <label className="label" htmlFor="logo">New logo</label>
+              <input id="logo" name="logo" type="file" required accept="image/png,image/jpeg,image/svg+xml" className="block text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:font-medium file:text-brand-700" />
+            </div>
+            <button className="btn-primary">Upload</button>
+          </ApiForm>
+          {s.brand_logo_version && (
+            <ApiForm action="/api/admin/brand/logo" confirm="Remove the logo and go back to the built-in mark?">
+              <input type="hidden" name="remove" value="1" />
+              <button className="btn-ghost text-rose-600 hover:bg-rose-50">Remove logo</button>
+            </ApiForm>
+          )}
+        </div>
+      </div>
+
       {group(
-        "Text shown to users and on receipts",
+        "Name and colours",
         <>
-          <Field name="brand_name" label="App name shown to users" value={s.brand_name} />
+          <Field name="brand_name" label="App name" value={s.brand_name} hint="Shown in the header, emails, receipts and search results." />
+          <div className="hidden sm:block" />
+          <ColorField name="brand_primary_color" label="Main colour" value={s.brand_primary_color} hint="Buttons, links and highlights. Pick a dark enough colour for white text." />
+          <ColorField name="brand_accent_color" label="Second colour" value={s.brand_accent_color} hint="Blended into gradients." />
+        </>,
+      )}
+
+      {group(
+        "Contact details shown to customers",
+        <>
+          <Field name="support_email" label="Support email" value={isRealValue(s.support_email) ? s.support_email : ""} />
+          <Field name="support_phone" label="Support phone (optional)" value={s.support_phone} />
+          <Field name="support_whatsapp" label="WhatsApp number (optional)" value={s.support_whatsapp} hint="With country code, e.g. +91 98765 43210." />
           <Field name="business_hours_text" label="Business hours" value={s.business_hours_text} />
-          <Field name="review_hours" label="Typical review time (hours)" value={s.review_hours} type="number" />
-          <Field name="company_name" label="Company legal name" value={s.company_name} />
-          <Field name="company_address" label="Company address" value={s.company_address} />
-          <Field name="company_fiu_reg" label="FIU registration number" value={s.company_fiu_reg} />
-          <Field name="company_gstin" label="GSTIN" value={s.company_gstin} />
-          <Field name="support_email" label="Support email" value={s.support_email} />
+          <Field name="company_name" label="Company legal name" value={isRealValue(s.company_name) ? s.company_name : ""} />
+          <Field name="company_address" label="Company address" value={isRealValue(s.company_address) ? s.company_address : ""} />
+          <Field name="company_gstin" label="GSTIN" value={isRealValue(s.company_gstin) ? s.company_gstin : ""} />
+          <Field name="company_fiu_reg" label="FIU registration number" value={isRealValue(s.company_fiu_reg) ? s.company_fiu_reg : ""} />
+        </>,
+      )}
+          </> },
+          { id: "company", label: "Messages", content: <>
+      {group(
+        "Messages and notifications",
+        <>
+          <Field name="review_hours" label="Typical review time (hours)" value={s.review_hours} type="number" hint="Shown to customers while an order is being reviewed." />
           <div className="flex items-center gap-2 pt-6"><input type="checkbox" id="sms" name="sms_notifications_enabled" value="true" defaultChecked={s.sms_notifications_enabled} /><label htmlFor="sms">Also send SMS notifications</label></div>
         </>,
       )}
+
+      <ApiForm action="/api/admin/settings" className="card space-y-4">
+        <div>
+          <h2 className="h2">Terms and privacy text</h2>
+          <p className="muted">Paste the text from your lawyer. Leave a blank line between paragraphs; start a line with &quot;## &quot; for a heading. The pages stay out of Google until they have text.</p>
+        </div>
+        <div>
+          <label className="label" htmlFor="terms_text">Terms of service</label>
+          <textarea id="terms_text" name="terms_text" rows={8} className="input font-mono text-sm" defaultValue={s.terms_text} />
+        </div>
+        <div>
+          <label className="label" htmlFor="privacy_text">Privacy policy</label>
+          <textarea id="privacy_text" name="privacy_text" rows={8} className="input font-mono text-sm" defaultValue={s.privacy_text} />
+        </div>
+        <button className="btn-primary">Save</button>
+      </ApiForm>
 
           </> },
           { id: "security", label: "Holds & access", content: <>
       <ApiForm action="/api/admin/settings" className="card space-y-3">
         <h2 className="h2">Hold reasons and admin IP allow-list</h2>
         <label className="label">Hold reasons (one per line)</label>
-        <textarea name="hold_reasons" rows={8} className="input" defaultValue={s.hold_reasons.join("\n")} />
+        <textarea aria-label="Hold reasons (one per line)" name="hold_reasons" rows={8} className="input" defaultValue={s.hold_reasons.join("\n")} />
         <label className="label">Allowed admin IP addresses (one per line; empty = any)</label>
-        <textarea name="admin_ip_allowlist" rows={3} className="input font-mono" defaultValue={s.admin_ip_allowlist.join("\n")} />
-        <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+        <textarea aria-label="Allowed admin IP addresses (one per line; empty = any)" name="admin_ip_allowlist" rows={3} className="input font-mono" defaultValue={s.admin_ip_allowlist.join("\n")} />
+        <div className="flex items-end gap-3"><button className="btn-primary">Save</button></div>
       </ApiForm>
 
           </> },

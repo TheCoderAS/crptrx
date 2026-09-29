@@ -386,6 +386,7 @@ model Session {
   createdAt   DateTime  @default(now())
   lastSeenAt  DateTime  @default(now())
   expiresAt   DateTime
+  stepUpAt    DateTime? // ADMIN: last time a 2FA code was entered (login or re-check)
 
   @@index([subjectType, subjectId])
   @@map("sessions")
@@ -474,4 +475,15 @@ model UserWallet {
 
   @@index([userId, network])
   @@map("user_wallets")
+}
+
+/// Brand files uploaded by the admin (e.g. the logo), stored in the database as base64.
+model BrandAsset {
+  key       String   @id // "logo"
+  mime      String
+  data      String // base64
+  size      Int
+  updatedAt DateTime @updatedAt
+
+  @@map("brand_assets")
 }

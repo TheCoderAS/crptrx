@@ -2,16 +2,19 @@ import type { Metadata } from "next";
 import { ChevronDown, Clock3, Mail, Network, PauseCircle, Percent, TimerReset, UserCheck, Wallet } from "lucide-react";
 import { getSettings } from "@/server/settings";
 import { JsonLd } from "@/components/JsonLd";
+import { ContactLinks } from "@/components/ContactLinks";
+import { contactChannels } from "@/server/contact";
 import { NetworkBadge } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "Help & FAQ: networks, timing, fees and tax",
-  description: "Which USDT network to use (TRC-20 or BEP-20), how long payouts take, fees, 1% TDS, what 'on hold' means, and what to do if you sent on the wrong network.",
+  description: "Which USDT network to use (TRC-20 or BEP-20), how long payouts take, fees, TDS, what 'on hold' means, and what to do if you sent on the wrong network.",
   alternates: { canonical: "/help" },
 };
 
 export default async function Help() {
   const s = await getSettings();
+  const channels = contactChannels(s);
   const faqs: { icon: typeof Network; tile: string; q: string; a: string; extra?: React.ReactNode }[] = [
     {
       icon: Network, tile: "tile-blue", q: "Which network should I use?",
@@ -54,10 +57,10 @@ export default async function Help() {
           <span className="grid size-11 place-items-center rounded-2xl bg-white/15"><Mail className="size-5" aria-hidden /></span>
           <div>
             <p className="font-semibold">Still need help?</p>
-            <p className="text-sm text-white/80">{s.support_email}</p>
+            <p className="text-sm text-white/80">{channels.length ? `We reply ${s.business_hours_text}.` : "Open your order and use “Contact support” at the bottom."}</p>
           </div>
         </div>
-        <a href={`mailto:${s.support_email}`} className="btn bg-white text-brand-800 hover:bg-brand-50">Email support</a>
+        <ContactLinks channels={channels} tone="dark" />
       </div>
     </div>
   );

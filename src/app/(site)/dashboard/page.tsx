@@ -1,3 +1,5 @@
+import { contactChannels } from "@/server/contact";
+import { ContactLinks } from "@/components/ContactLinks";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, Banknote, CheckCircle2, Clock3, Inbox, Landmark, Lock, Smartphone, Wallet } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
@@ -28,7 +30,7 @@ export default async function Dashboard() {
       icon: BadgeCheck,
       tile: "tile-violet",
       label: "Verify your identity",
-      detail: kycWaiting ? "Submitted. We usually review within 24 hours." : user.kycStatus === "NEEDS_CHANGES" ? "We need a small change. Tap to see what." : "PAN, masked Aadhaar and a selfie.",
+      detail: kycWaiting ? `Submitted. We usually review within ${s.review_hours} business hours.` : user.kycStatus === "NEEDS_CHANGES" ? "We need a small change. Tap to see what." : "PAN, masked Aadhaar and a selfie.",
       href: "/kyc",
       cta: user.kycStatus === "NEEDS_CHANGES" ? "Fix now" : "Start",
     },
@@ -65,12 +67,17 @@ export default async function Dashboard() {
         </div>
       </section>
 
-      {o.blockedReason && <Banner tone="danger">{o.blockedReason}</Banner>}
+      {o.blockedReason && (
+        <div className="space-y-3">
+          <Banner tone="danger">{o.blockedReason}</Banner>
+          <ContactLinks channels={contactChannels(s)} />
+        </div>
+      )}
 
       {!ready && !o.blockedReason && (
         <Section title="Get set up" description={`${doneCount} of ${required.length} done`}>
           <div className="mb-5 h-2 overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-gradient-to-r from-brand-500 via-violet-500 to-emerald-500 transition-all" style={{ width: `${(doneCount / Math.max(required.length, 1)) * 100}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-brand-500 via-accent to-emerald-500 transition-all" style={{ width: `${(doneCount / Math.max(required.length, 1)) * 100}%` }} />
           </div>
           <ol className="space-y-2">
             {steps.map(({ id, done, waiting, locked, icon: Icon, tile, label, detail, href, cta }) => (

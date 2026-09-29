@@ -1,3 +1,4 @@
+import { logoSrc } from "@/server/brand";
 import { redirect } from "next/navigation";
 import { currentAdmin, pendingAdmin } from "@/server/auth/session";
 import { getSettings } from "@/server/settings";
@@ -13,7 +14,7 @@ export default async function Admin2fa() {
   return (
     <div className="grid min-h-screen place-items-center bg-slate-950 px-4 py-12">
       <div className="w-full max-w-sm space-y-4">
-        <div className="mb-4 flex justify-center"><Logo name={s.brand_name} inverted size="lg" /></div>
+        <div className="mb-4 flex justify-center"><Logo name={s.brand_name} src={logoSrc(s)} inverted size="lg" /></div>
         {!admin.totpEnabled && <TotpSetup />}
         <ApiForm action="/api/admin/auth/totp" className="card space-y-4 p-6 sm:p-8">
           <div>

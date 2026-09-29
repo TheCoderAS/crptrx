@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { brandName } from "@/lib/brand";
+import { themeCss } from "@/server/brand";
+import { getSettings, SETTING_DEFAULTS } from "@/server/settings";
 import { siteUrl } from "@/lib/seo";
 import "./globals.css";
 
@@ -19,15 +21,27 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  themeColor: [{ color: "#1d4fd8" }],
-};
+async function brandSettings() {
+  try {
+    return await getSettings();
+  } catch {
+    return SETTING_DEFAULTS; // database not reachable (e.g. at build time)
+  }
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export async function generateViewport(): Promise<Viewport> {
+  const s = await brandSettings();
+  return { width: "device-width", initialScale: 1, themeColor: [{ color: s.brand_primary_color }] };
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const s = await brandSettings();
   return (
     <html lang="en-IN">
+      <head>
+        {/* Admin-chosen colours (Settings → Brand) */}
+        <style dangerouslySetInnerHTML={{ __html: themeCss(s) }} />
+      </head>
       <body className="min-h-screen">{children}</body>
     </html>
   );

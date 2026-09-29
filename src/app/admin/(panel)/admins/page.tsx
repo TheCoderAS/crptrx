@@ -3,7 +3,6 @@ import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { TotpField } from "@/components/Totp";
 import { PageHeader, StatusPill } from "@/components/ui";
 
 export default async function Admins() {
@@ -25,12 +24,10 @@ export default async function Admins() {
                     <div className="flex flex-col gap-2">
                       <ApiForm action={`/api/admin/admins/${a.id}`} className="flex items-end gap-2">
                         <input type="hidden" name="action" value={a.status === "ACTIVE" ? "disable" : "enable"} />
-                        <input name="totp" required maxLength={6} className="input w-24" placeholder="2FA" />
                         <button className="btn-secondary px-3 py-1.5">{a.status === "ACTIVE" ? "Disable" : "Enable"}</button>
                       </ApiForm>
                       <ApiForm action={`/api/admin/admins/${a.id}`} className="flex items-end gap-2" confirm="Reset this admin's 2FA? They'll set it up again at next sign-in.">
                         <input type="hidden" name="action" value="reset_2fa" />
-                        <input name="totp" required maxLength={6} className="input w-24" placeholder="2FA" />
                         <button className="btn-secondary px-3 py-1.5">Reset 2FA</button>
                       </ApiForm>
                     </div>
@@ -45,12 +42,11 @@ export default async function Admins() {
       <ApiForm action="/api/admin/admins" className="card space-y-3" resetOnSuccess>
         <h2 className="h2">Add an admin</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div><label className="label">Name</label><input name="name" required className="input" /></div>
-          <div><label className="label">Email</label><input name="email" type="email" required className="input" /></div>
-          <div><label className="label">Temporary password (10+ characters)</label><input name="password" type="password" minLength={10} required className="input" autoComplete="new-password" /></div>
-          <div><label className="label">Role</label><select name="role" className="input"><option value="ADMIN">Admin</option><option value="SUPER_ADMIN">Super admin</option></select></div>
+          <div><label className="label">Name</label><input aria-label="Name" name="name" required className="input" /></div>
+          <div><label className="label">Email</label><input aria-label="Email" name="email" type="email" required className="input" /></div>
+          <div><label className="label">Temporary password (10+ characters)</label><input aria-label="Temporary password (10+ characters)" name="password" type="password" minLength={10} required className="input" autoComplete="new-password" /></div>
+          <div><label className="label">Role</label><select aria-label="Role" name="role" className="input"><option value="ADMIN">Admin</option><option value="SUPER_ADMIN">Super admin</option></select></div>
         </div>
-        <TotpField label="Your 2FA code" />
         <button className="btn-primary">Create admin</button>
       </ApiForm>
     </div>

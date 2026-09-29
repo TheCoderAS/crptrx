@@ -12,6 +12,8 @@ import { getSettings, rateIsStale, tokenContractFor, type Settings } from "../se
 import { OPEN_QUOTE_STATUSES, transition } from "./stateMachine";
 
 export const QUOTE_TTL_MS = 15 * 60 * 1000;
+/** Payments up to 24 h after a quote expires are still matched to it (and held as late). */
+export const LATE_PAYMENT_WINDOW_MS = 24 * 3600_000;
 export const HIGH_DEMAND = "High demand, please try again in a few minutes.";
 
 export interface QuoteRequest {
@@ -38,8 +40,10 @@ export async function usedTotals(tx: Tx, userId: string, now = new Date(), exclu
 
 /** Returns a user-facing reason when `amount` would break a limit, else null. */
 export async function limitProblem(tx: Tx, s: Settings, userId: string, amount: Decimal, excludeOrderId?: string): Promise<string | null> {
+  // Per-order min/max apply to the amount asked for; the unique 0.01–0.99 suffix
+  // added on top may take the exact amount up to 0.99 above the maximum.
   if (amount.lt(D(s.limit_min_order_usdt))) return `The minimum order is ${s.limit_min_order_usdt} USDT.`;
-  if (amount.gt(D(s.limit_max_order_usdt))) return `The maximum order is ${s.limit_max_order_usdt} USDT.`;
+  if (amount.gt(D(s.limit_max_order_usdt).plus("0.99"))) return `The maximum order is ${s.limit_max_order_usdt} USDT.`;
   const t = await usedTotals(tx, userId, new Date(), excludeOrderId);
   if (t.userDay.plus(amount).gt(D(s.limit_user_daily_usdt)))
     return `This would take you over your daily limit of ${s.limit_user_daily_usdt} USDT.`;
@@ -55,7 +59,13 @@ export async function pickUniqueAmount(tx: Tx, network: NetworkCode, depositAddr
   const lo = base.plus("0.01");
   const hi = base.plus("0.99");
   const taken = await tx.order.findMany({
-    where: { network, depositAddress, status: { in: OPEN_QUOTE_STATUSES }, usdtAmount: { gte: lo.toString(), lte: hi.toString() } },
+    where: {
+      network,
+      depositAddress,
+      usdtAmount: { gte: lo.toString(), lte: hi.toString() },
+      // Expired quotes keep their amount for 24 h: a late payment must never land on someone else's new order.
+      OR: [{ status: { in: OPEN_QUOTE_STATUSES } }, { status: "EXPIRED", quoteExpiresAt: { gte: new Date(Date.now() - LATE_PAYMENT_WINDOW_MS) } }],
+    },
     select: { usdtAmount: true },
   });
   const takenSet = new Set(taken.map((o) => D(o.usdtAmount).toFixed(2)));
@@ -105,12 +115,16 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
   const tokenContract = tokenContractFor(s, req.network);
   if (!depositAddress || !tokenContract) throw new AppError(`${info.name} isn't available yet.`);
   const base = baseAmountFor(req, s);
+  if (base.lt(D(s.limit_min_order_usdt))) throw new AppError(`The minimum order is ${s.limit_min_order_usdt} USDT.`, 422, "LIMIT");
+  if (base.gt(D(s.limit_max_order_usdt))) throw new AppError(`The maximum order is ${s.limit_max_order_usdt} USDT.`, 422, "LIMIT");
 
   return prisma.$transaction(
     async (tx) => {
       // One quote at a time platform-wide: keeps unique amounts and limits race-free.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('create-quote'))`;
       await assertCanCreateOrders(tx, req.userId);
+      if (s.wallet_registration === "REQUIRED" && (await tx.userWallet.count({ where: { userId: req.userId, network: req.network, deletedAt: null } })) === 0)
+        throw new AppError(`Add the ${info.name} wallet you'll send from (Account → Your wallets) before selling on this network.`, 403, "WALLET_REQUIRED");
       const pm = await tx.payoutMethod.findFirst({ where: { id: req.payoutMethodId, userId: req.userId, status: "APPROVED", deletedAt: null } });
       if (!pm) throw new AppError("Choose an approved payout method.");
 
@@ -157,8 +171,33 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
   );
 }
 
-/** Spec 8.4: move QUOTE_READY orders past expiry to EXPIRED. Returns the expired order ids. */
+/** How long after the quote expires we keep looking for a submitted TxID before holding the order. */
+export const TXID_GRACE_MS = 2 * 3600_000;
+
+/**
+ * Spec 8.4: move QUOTE_READY orders past expiry to EXPIRED. Orders whose
+ * submitted TxID still can't be found 2 hours after expiry go on hold, so
+ * they don't sit open forever and keep their amount reserved.
+ * Returns the ids that changed.
+ */
 export async function expireQuotes(now = new Date()): Promise<string[]> {
+  const { HOLD } = await import("../matching");
+  const stuck = await prisma.order.findMany({ where: { status: "PAYMENT_SUBMITTED", quoteExpiresAt: { lt: new Date(now.getTime() - TXID_GRACE_MS) } }, select: { id: true } });
+  const changed: string[] = [];
+  for (const o of stuck) {
+    try {
+      await prisma.$transaction((tx) =>
+        transition(tx, o.id, "ON_HOLD", { type: "SYSTEM", id: null }, { from: "PAYMENT_SUBMITTED", publicMessage: HOLD.TXID_NOT_FOUND, data: { holdReason: HOLD.TXID_NOT_FOUND } }),
+      );
+      changed.push(o.id);
+    } catch {
+      /* matched in the meantime */
+    }
+  }
+  return [...changed, ...(await expireOpenQuotes(now))];
+}
+
+async function expireOpenQuotes(now: Date): Promise<string[]> {
   const due = await prisma.order.findMany({ where: { status: "QUOTE_READY", quoteExpiresAt: { lt: now } }, select: { id: true } });
   const done: string[] = [];
   for (const o of due) {
