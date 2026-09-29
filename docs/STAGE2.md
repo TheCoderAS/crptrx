@@ -24,7 +24,7 @@ Use test wallets only. Never put real funds in them, and never share the recover
 4. Get free test TRX (pays network fees) and test USDT from the Nile faucet: https://nileex.io/join/getJoinPage
 
 **BNB Smart Chain Testnet**
-1. In **MetaMask**, add the network: BNB Smart Chain Testnet, chain ID `97`, RPC `https://data-seed-prebsc-1-s1.bnbchain.org:8545`, symbol `tBNB`, explorer `https://testnet.bscscan.com`.
+1. In **MetaMask**, add the network: BNB Smart Chain Testnet, chain ID `97`, RPC `https://bsc-testnet-rpc.publicnode.com`, symbol `tBNB`, explorer `https://testnet.bscscan.com`.
 2. Copy your address (starts with `0x`).
 3. Get free test BNB from https://www.bnbchain.org/en/testnet-faucet. It also offers test USDT (BEP-20 "USDT" peg token).
 
