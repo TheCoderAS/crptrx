@@ -1,6 +1,6 @@
 import { Banner, PageHeader } from "@/components/ui";
 
-export const metadata = { title: "Terms of service" };
+export const metadata = { title: "Terms of service", description: "Terms for using the service to sell USDT for INR.", alternates: { canonical: "/terms" } };
 
 export default function Page() {
   return (

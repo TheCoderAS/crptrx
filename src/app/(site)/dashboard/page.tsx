@@ -4,10 +4,10 @@ import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fmtInr } from "@/server/money";
 import { getSettings, rateIsStale } from "@/server/settings";
-import { EmptyState, PageHeader, Section } from "@/components/ui";
+import { EmptyState, Section } from "@/components/ui";
 import { OrderList } from "@/components/OrderList";
 
-export const metadata = { title: "Home" };
+export const metadata = { title: "Home", robots: { index: false, follow: false } };
 
 export default async function Dashboard() {
   const user = await userOrLogin();
@@ -19,11 +19,12 @@ export default async function Dashboard() {
   ]);
   const kycWaiting = user.kycStatus === "SUBMITTED";
   const steps = [
-    { done: !!user.mobileVerifiedAt, waiting: false, icon: Smartphone, label: "Confirm your mobile number", detail: "We send a one-time code by SMS.", href: "/account", cta: "Confirm" },
+    { done: !!user.mobileVerifiedAt, waiting: false, icon: Smartphone, tile: "tile-blue", label: "Confirm your mobile number", detail: "We send a one-time code by SMS.", href: "/account", cta: "Confirm" },
     {
       done: user.kycStatus === "APPROVED",
       waiting: kycWaiting,
       icon: BadgeCheck,
+      tile: "tile-violet",
       label: "Verify your identity",
       detail: kycWaiting ? "Submitted. We usually review within 24 hours." : user.kycStatus === "NEEDS_CHANGES" ? "We need a small change. Tap to see what." : "PAN, masked Aadhaar and a selfie.",
       href: "/kyc",
@@ -33,6 +34,7 @@ export default async function Dashboard() {
       done: approvedPm > 0,
       waiting: approvedPm === 0 && pendingPm > 0,
       icon: Landmark,
+      tile: "tile-emerald",
       label: "Add your bank account or UPI",
       detail: pendingPm > 0 && approvedPm === 0 ? "Added. We're checking the name matches your ID." : "In your own name. Payouts go only here.",
       href: "/payout-methods",
@@ -45,17 +47,32 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={firstName ? `Hello, ${firstName}` : "Welcome"} subtitle={ready ? "You're all set to sell USDT." : "A few quick steps before your first sale."} />
+      <section className="bg-mesh-dark relative overflow-hidden rounded-3xl p-6 text-white sm:p-8">
+        <div className="pointer-events-none absolute -right-10 -bottom-16 size-56 rounded-full bg-emerald-400/20 blur-3xl" aria-hidden />
+        <p className="text-sm text-white/70">{ready ? "You're all set" : `${doneCount} of ${steps.length} setup steps done`}</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{firstName ? `Hello, ${firstName}` : "Welcome"}</h1>
+        <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium tracking-wide text-white/60 uppercase">{rateIsStale(s) ? "Rate updating" : "Today's rate"}</p>
+            <p className="money mt-1 text-3xl">{rateIsStale(s) ? "—" : fmtInr(s.rate)} <span className="text-base font-medium text-white/60">/ USDT</span></p>
+          </div>
+          {ready && (
+            <Link href="/sell" className="btn btn-lg bg-white text-brand-800 shadow-lg hover:bg-brand-50">
+              Sell USDT <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          )}
+        </div>
+      </section>
 
       {!ready && (
         <Section title="Get set up" description={`${doneCount} of ${steps.length} done`}>
           <div className="mb-5 h-2 overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-brand-500 via-violet-500 to-emerald-500 transition-all" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
           </div>
           <ol className="space-y-2">
-            {steps.map(({ done, waiting, icon: Icon, label, detail, href, cta }) => (
+            {steps.map(({ done, waiting, icon: Icon, tile, label, detail, href, cta }) => (
               <li key={label} className={`flex items-center gap-4 rounded-xl p-3 ${done ? "" : "bg-slate-50"}`}>
-                <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${done ? "bg-emerald-50 text-emerald-600" : waiting ? "bg-amber-50 text-amber-600" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}>
+                <span className={`icon-tile size-10 rounded-xl ${done ? "tile-emerald" : waiting ? "tile-amber" : tile}`}>
                   {done ? <CheckCircle2 className="size-5" aria-hidden /> : waiting ? <Clock3 className="size-5" aria-hidden /> : <Icon className="size-5" aria-hidden />}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -68,20 +85,6 @@ export default async function Dashboard() {
             ))}
           </ol>
         </Section>
-      )}
-
-      {ready && (
-        <Link href="/sell" className="group block overflow-hidden rounded-2xl bg-gradient-to-br from-brand-600 to-brand-900 p-6 text-white shadow-[var(--shadow-raised)] sm:p-7">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm text-brand-100">{rateIsStale(s) ? "Rate is updating" : "Today's rate"}</p>
-              <p className="money mt-1 text-3xl">{rateIsStale(s) ? "—" : fmtInr(s.rate)} <span className="text-base font-medium text-brand-100">/ USDT</span></p>
-            </div>
-            <span className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-brand-800 transition group-hover:gap-3">
-              Sell USDT <ArrowRight className="size-4" aria-hidden />
-            </span>
-          </div>
-        </Link>
       )}
 
       <Section title="Recent orders" action={orders.length > 0 ? <Link href="/orders" className="text-sm font-medium text-brand-700 hover:text-brand-800">View all</Link> : undefined}>

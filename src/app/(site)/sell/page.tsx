@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeftRight } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { maskedPayout } from "@/server/payouts";
@@ -7,7 +8,7 @@ import { Banner, PageHeader } from "@/components/ui";
 import { SellForm } from "@/components/SellForm";
 import { NETWORK_CODES } from "@/lib/networks";
 
-export const metadata = { title: "Sell USDT" };
+export const metadata = { title: "Sell USDT", robots: { index: false, follow: false } };
 
 export default async function Sell() {
   const user = await userOrLogin();
@@ -26,7 +27,7 @@ export default async function Sell() {
   const available = Object.fromEntries(NETWORK_CODES.map((n) => [n, s.network_enabled[n] && !!s.deposit_address[s.network_mode][n]])) as Record<"TRON" | "BSC", boolean>;
   return (
     <div>
-      <PageHeader title="Sell USDT" subtitle="Three quick choices. You'll see the exact amount before sending anything." />
+      <PageHeader title="Sell USDT" subtitle="Three choices. Exact amount before you send." icon={<ArrowLeftRight className="size-6" />} />
       {stale ? (
         <Banner tone="warn">Our rate is being updated. Please try again shortly.</Banner>
       ) : (

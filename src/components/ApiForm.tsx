@@ -17,6 +17,7 @@ export function ApiForm({
   successMessage,
   onSuccess,
   resetOnSuccess,
+  outerClassName,
 }: {
   action: string;
   method?: string;
@@ -26,6 +27,8 @@ export function ApiForm({
   successMessage?: string;
   onSuccess?: (data: Record<string, unknown>) => void;
   resetOnSuccess?: boolean;
+  /** Classes for the <form> itself (e.g. flex-1 inside a row). */
+  outerClassName?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -63,8 +66,9 @@ export function ApiForm({
       }
       if (resetOnSuccess) form.reset();
       onSuccess?.(data);
+      // Refresh after navigating too, so shared layout (header, tab bar) reflects a login or logout.
       if (data.redirect) router.push(data.redirect);
-      else router.refresh();
+      router.refresh();
       if (successMessage || data.message) setOk(data.message ?? successMessage);
     } catch {
       setError("Network problem. Check your connection and try again.");
@@ -74,22 +78,24 @@ export function ApiForm({
   }
 
   return (
-    <form onSubmit={submit} className={className} aria-busy={busy}>
-      <fieldset disabled={busy} className="contents">
+    <form onSubmit={submit} aria-busy={busy} className={outerClassName}>
+      {/* The fieldset carries the layout classes so spacing and grids apply to the fields
+          (a display:contents wrapper would silently break space-y-*). */}
+      <fieldset disabled={busy} className={`m-0 min-w-0 border-0 p-0 ${className ?? ""}`}>
         {children}
+        {error && (
+          <p role="alert" className="flex gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200 ring-inset">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>{error}</span>
+          </p>
+        )}
+        {ok && (
+          <p role="status" className="flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 ring-1 ring-emerald-200 ring-inset">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>{ok}</span>
+          </p>
+        )}
       </fieldset>
-      {error && (
-        <p role="alert" className="mt-3 flex gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200 ring-inset">
-          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>{error}</span>
-        </p>
-      )}
-      {ok && (
-        <p role="status" className="mt-3 flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 ring-1 ring-emerald-200 ring-inset">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>{ok}</span>
-        </p>
-      )}
     </form>
   );
 }

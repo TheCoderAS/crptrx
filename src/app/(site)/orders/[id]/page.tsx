@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
-import { ArrowLeft, CheckCircle2, Download, Hourglass, LifeBuoy, PauseCircle, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, Hourglass, PauseCircle, XCircle } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { D, fmtInr, fmtUsdt } from "@/server/money";
@@ -12,10 +12,11 @@ import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { CopyButton } from "@/components/CopyButton";
+import { SupportPanel } from "@/components/SupportPanel";
 import { AutoRefresh, Countdown } from "@/components/Countdown";
 import { Banner, NetworkBadge, Row, Section, StatusPill, Steps, Timeline } from "@/components/ui";
 
-export const metadata = { title: "Order" };
+export const metadata = { title: "Order", robots: { index: false, follow: false } };
 
 const PROGRESS = ["Send USDT", "Received", "Safety check", "Paid"];
 const progressIndex: Record<string, number> = {
@@ -73,7 +74,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         </div>
         <Banner tone="danger">Send only USDT on the <b>{nw}</b> network. Sending on any other network, or any other coin, may permanently lose your funds.</Banner>
         {breakdown}
-        <Link href={`/orders/${o.id}`} className="btn-primary btn-lg w-full">Confirm and get deposit address</Link>
+        <Link href={`/orders/${o.id}`} className="btn btn-lg bg-brand-gradient w-full text-white shadow-lg shadow-brand-600/20 hover:opacity-95">Confirm and get deposit address</Link>
         <p className="text-center text-sm text-slate-500">Changed your mind? Do nothing. The quote expires on its own and nothing is charged.</p>
       </div>
     );
@@ -82,7 +83,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const qr = waiting ? await QRCode.toDataURL(o.depositAddress, { margin: 1, width: 240, color: { dark: "#0f172a" } }) : null;
   const pIdx = progressIndex[o.status];
   const HeroIcon = o.status === "PAID" ? CheckCircle2 : o.status === "ON_HOLD" ? PauseCircle : ["EXPIRED", "CLOSED_MANUAL"].includes(o.status) ? XCircle : Hourglass;
-  const heroTone = o.status === "PAID" ? "bg-emerald-50 text-emerald-600" : o.status === "ON_HOLD" ? "bg-amber-50 text-amber-600" : ["EXPIRED", "CLOSED_MANUAL"].includes(o.status) ? "bg-slate-100 text-slate-500" : "bg-brand-50 text-brand-600";
+  const heroTone = o.status === "PAID" ? "tile-emerald" : o.status === "ON_HOLD" ? "tile-amber" : ["EXPIRED", "CLOSED_MANUAL"].includes(o.status) ? "tile-slate" : "tile-blue";
 
   return (
     <div className="space-y-5">
@@ -94,7 +95,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
 
       <section className="card">
         <div className="flex gap-4">
-          <span className={`grid size-12 shrink-0 place-items-center rounded-2xl ${heroTone}`}><HeroIcon className="size-6" aria-hidden /></span>
+          <span className={`icon-tile ${heroTone} size-12 shadow-lg`}><HeroIcon className="size-6" aria-hidden /></span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2"><StatusPill status={o.status} /><NetworkBadge network={n} /></div>
             <h1 className="mt-2 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{text.title}</h1>
@@ -178,24 +179,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           <Section title="Timeline" description="All times in IST.">
             <Timeline events={events} />
           </Section>
-          <details className="card group" open={o.status === "ON_HOLD"}>
-            <summary className="flex cursor-pointer list-none items-center gap-3">
-              <span className="grid size-9 place-items-center rounded-xl bg-slate-100 text-slate-600"><LifeBuoy className="size-4" aria-hidden /></span>
-              <span className="flex-1">
-                <span className="block font-semibold text-slate-900">Contact support about this order</span>
-                <span className="block text-xs text-slate-500">We reply by email. {s.business_hours_text}.</span>
-              </span>
-            </summary>
-            <ApiForm action="/api/support" className="mt-4 space-y-3" resetOnSuccess>
-              <input type="hidden" name="orderId" value={o.id} />
-              <textarea name="message" required rows={4} className="input" placeholder="Tell us what happened" />
-              <div>
-                <label className="label" htmlFor="screenshot">Screenshot <span className="font-normal text-slate-500">(optional)</span></label>
-                <input id="screenshot" name="screenshot" type="file" accept="image/jpeg,image/png,application/pdf" className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium" />
-              </div>
-              <button className="btn-secondary">Send message</button>
-            </ApiForm>
-          </details>
+          <SupportPanel orderId={o.id} defaultOpen={o.status === "ON_HOLD"} hours={s.business_hours_text} />
         </div>
       </div>
     </div>

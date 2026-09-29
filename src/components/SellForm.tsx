@@ -21,7 +21,7 @@ interface Props {
 function StepTitle({ n, title, done }: { n: number; title: string; done: boolean }) {
   return (
     <div className="mb-4 flex items-center gap-3">
-      <span className={`grid size-7 place-items-center rounded-full text-xs font-bold ${done ? "bg-emerald-500 text-white" : "bg-slate-900 text-white"}`}>{done ? <Check className="size-4" aria-hidden /> : n}</span>
+      <span className={`grid size-8 place-items-center rounded-xl text-sm font-bold text-white shadow-sm ${done ? "tile-emerald" : "bg-brand-gradient"}`}>{done ? <Check className="size-4" aria-hidden /> : n}</span>
       <h2 className="h2">{title}</h2>
     </div>
   );
@@ -123,7 +123,7 @@ export function SellForm(p: Props) {
         </section>
       </div>
 
-      <aside className="card lg:sticky lg:top-24">
+      <aside className="ring-gradient rounded-3xl p-5 shadow-[var(--shadow-raised)] sm:p-6 lg:sticky lg:top-24">
         <p className="eyebrow">Summary</p>
         <dl className="mt-3 space-y-2 text-sm">
           <div className="flex justify-between"><dt className="text-slate-500">Network</dt><dd className="font-medium">{network ? NETWORK_INFO[network].name : "—"}</dd></div>
@@ -136,7 +136,7 @@ export function SellForm(p: Props) {
           <span className="font-semibold text-slate-900">You receive</span>
           <span className="money text-2xl text-emerald-700">{estimate ? `≈ ${fmtInr(estimate.net)}` : "—"}</span>
         </div>
-        <button className="btn-primary btn-lg mt-5 w-full" disabled={!network || !estimate || !!outOfRange}>
+        <button className="btn btn-lg bg-brand-gradient mt-5 w-full text-white shadow-lg shadow-brand-600/20 hover:opacity-95" disabled={!network || !estimate || !!outOfRange}>
           Get my quote <ArrowRight className="size-4" aria-hidden />
         </button>
         <p className="mt-3 flex items-start gap-1.5 text-xs text-slate-500">

@@ -38,7 +38,7 @@ export default async function PayoutQueue() {
             </div>
             <div className="flex flex-wrap gap-3">
               <ApiForm action={`/api/admin/payout-methods/${p.id}`}><input type="hidden" name="decision" value="APPROVED" /><button className="btn-primary">Approve</button></ApiForm>
-              <ApiForm action={`/api/admin/payout-methods/${p.id}`} className="flex flex-1 gap-2">
+              <ApiForm action={`/api/admin/payout-methods/${p.id}`} className="flex gap-2" outerClassName="flex-1">
                 <input type="hidden" name="decision" value="DECLINED" />
                 <input name="reason" required className="input" placeholder="Reason, e.g. Name doesn't match your PAN" />
                 <button className="btn-danger">Decline</button>

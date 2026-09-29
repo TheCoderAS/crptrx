@@ -1,6 +1,6 @@
 import { Banner, PageHeader } from "@/components/ui";
 
-export const metadata = { title: "Privacy policy" };
+export const metadata = { title: "Privacy policy", description: "How we collect, store and protect your identity documents and personal data.", alternates: { canonical: "/privacy" } };
 
 export default function Page() {
   return (

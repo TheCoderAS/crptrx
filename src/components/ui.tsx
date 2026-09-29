@@ -108,13 +108,16 @@ export function StatusPill({ status, label }: { status: string; label?: string }
 // Layout helpers
 // ---------------------------------------------------------------------------
 
-export function PageHeader({ title, subtitle, action, eyebrow }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode; eyebrow?: ReactNode }) {
+export function PageHeader({ title, subtitle, action, eyebrow, icon, tile = "tile-blue" }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode; eyebrow?: ReactNode; icon?: ReactNode; tile?: string }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-4">
+      {icon && <span className={`icon-tile ${tile} size-12 rounded-2xl shadow-lg`}>{icon}</span>}
       <div className="min-w-0">
         {eyebrow && <p className="eyebrow mb-1">{eyebrow}</p>}
         <h1 className="h1">{title}</h1>
-        {subtitle && <p className="mt-1.5 text-[15px] text-slate-500">{subtitle}</p>}
+        {subtitle && <p className="mt-1 text-[15px] text-slate-500">{subtitle}</p>}
+      </div>
       </div>
       {action}
     </div>
@@ -166,13 +169,16 @@ export function Row({ k, v, strong }: { k: ReactNode; v: ReactNode; strong?: boo
   );
 }
 
-export function Stat({ label, value, sub, href }: { label: string; value: ReactNode; sub?: ReactNode; href?: string }) {
+export function Stat({ label, value, sub, href, icon, tile = "tile-blue" }: { label: string; value: ReactNode; sub?: ReactNode; href?: string; icon?: ReactNode; tile?: string }) {
   const inner = (
-    <>
-      <p className="text-sm font-medium text-slate-500">{label}</p>
-      <p className="money mt-1 text-2xl text-slate-900">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
-    </>
+    <div className="flex items-start gap-4">
+      {icon && <span className={`icon-tile ${tile}`}>{icon}</span>}
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-slate-500">{label}</p>
+        <p className="money mt-1 text-2xl text-slate-900">{value}</p>
+        {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
+      </div>
+    </div>
   );
   return href ? (
     <a href={href} className="card block transition hover:border-brand-200 hover:shadow-[var(--shadow-raised)]">{inner}</a>
@@ -184,7 +190,7 @@ export function Stat({ label, value, sub, href }: { label: string; value: ReactN
 export function EmptyState({ icon, title, children, action }: { icon?: ReactNode; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center px-4 py-10 text-center">
-      {icon && <div className="mb-3 grid size-12 place-items-center rounded-2xl bg-slate-100 text-slate-400">{icon}</div>}
+      {icon && <div className="icon-tile tile-blue mb-4 size-14 rounded-2xl shadow-lg shadow-blue-500/20">{icon}</div>}
       <p className="font-medium text-slate-900">{title}</p>
       {children && <p className="mt-1 max-w-sm text-sm text-slate-500">{children}</p>}
       {action && <div className="mt-4">{action}</div>}

@@ -1,0 +1,43 @@
+import { ImageResponse } from "next/og";
+import { brandName } from "@/lib/brand";
+import { BrandMark } from "@/lib/brandMark";
+
+export const size = { width: 1200, height: 630 };
+export const contentType = "image/png";
+export const alt = "Sell USDT for INR to your own bank or UPI";
+export const dynamic = "force-dynamic";
+
+/** Share preview shown on WhatsApp, X, LinkedIn, Slack etc. */
+export default async function OgImage() {
+  const name = await brandName();
+  return new ImageResponse(
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: 72,
+        color: "white",
+        backgroundColor: "#0b1437",
+        backgroundImage: "radial-gradient(circle at 0% 0%, #3b7cf6 0%, transparent 55%), radial-gradient(circle at 100% 100%, #10b981 0%, transparent 50%), radial-gradient(circle at 90% 10%, #7c3aed 0%, transparent 45%)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+        <BrandMark size={72} />
+        <div style={{ fontSize: 40, fontWeight: 700 }}>{name}</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ fontSize: 76, fontWeight: 800, lineHeight: 1.05, letterSpacing: -2 }}>USDT to rupees,</div>
+        <div style={{ fontSize: 76, fontWeight: 800, lineHeight: 1.05, letterSpacing: -2, color: "#6ee7b7" }}>straight to your bank.</div>
+      </div>
+      <div style={{ display: "flex", gap: 16, fontSize: 28 }}>
+        {["Bank & UPI payout", "15-min price lock", "TDS handled", "TRC-20 · BEP-20"].map((t) => (
+          <div key={t} style={{ display: "flex", padding: "10px 20px", borderRadius: 999, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)" }}>{t}</div>
+        ))}
+      </div>
+    </div>,
+    size,
+  );
+}

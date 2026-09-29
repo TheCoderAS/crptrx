@@ -1,21 +1,21 @@
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, UserRound } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { ApiForm } from "@/components/ApiForm";
 import { Banner, PageHeader, Row, Section, StatusPill } from "@/components/ui";
 import { fmtIST } from "@/lib/time";
 
-export const metadata = { title: "Account" };
+export const metadata = { title: "Account", robots: { index: false, follow: false } };
 
 export default async function Account() {
   const user = await userOrLogin();
   const verified = !!(user.mobile && user.mobileVerifiedAt);
   return (
     <div className="space-y-6">
-      <PageHeader title="Account" subtitle="Your details and security." />
+      <PageHeader title="Account" subtitle="Your details and security." icon={<UserRound className="size-6" />} />
 
       <Section>
         <div className="mb-3 flex items-center gap-4">
-          <span className="grid size-12 place-items-center rounded-full bg-brand-50 text-lg font-semibold text-brand-700">{(user.displayName ?? user.email)[0].toUpperCase()}</span>
+          <span className="bg-brand-gradient grid size-14 place-items-center rounded-2xl text-xl font-bold text-white shadow-lg shadow-brand-600/25">{(user.displayName ?? user.email)[0].toUpperCase()}</span>
           <div className="min-w-0">
             <p className="truncate font-semibold text-slate-900">{user.displayName ?? user.email}</p>
             <p className="truncate text-sm text-slate-500">{user.email}</p>

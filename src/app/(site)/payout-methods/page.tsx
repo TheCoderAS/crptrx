@@ -7,21 +7,21 @@ import { ApiForm } from "@/components/ApiForm";
 import { Banner, PageHeader, StatusPill } from "@/components/ui";
 import { PayoutMethodForm } from "@/components/PayoutMethodForm";
 
-export const metadata = { title: "Bank & UPI" };
+export const metadata = { title: "Bank & UPI", robots: { index: false, follow: false } };
 
 export default async function PayoutMethods() {
   const user = await userOrLogin();
   const methods = await prisma.payoutMethod.findMany({ where: { userId: user.id, deletedAt: null }, orderBy: { createdAt: "asc" } });
   return (
     <div className="space-y-6">
-      <PageHeader title="Bank & UPI" subtitle="Where we send your rupees. Payouts go only to accounts in your own name." />
+      <PageHeader title="Bank & UPI" subtitle="Payouts go only to accounts in your own name." icon={<Landmark className="size-6" />} tile="tile-emerald" />
       {user.kycStatus !== "APPROVED" && <Banner tone="warn">Finish your <Link className="font-medium underline" href="/kyc">identity check</Link> first.</Banner>}
 
       {methods.length > 0 && (
         <ul className="space-y-3">
           {methods.map((m) => (
             <li key={m.id} className="card flex flex-wrap items-center gap-4 p-4 sm:p-5">
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600">
+              <span className={`icon-tile ${m.type === "BANK" ? "tile-emerald" : "tile-violet"}`}>
                 {m.type === "BANK" ? <Landmark className="size-5" aria-hidden /> : <Smartphone className="size-5" aria-hidden />}
               </span>
               <div className="min-w-0 flex-1">

@@ -1,13 +1,13 @@
 import Link from "next/link";
 import type { OrderStatus } from "@prisma/client";
-import { Inbox } from "lucide-react";
+import { Inbox, ListOrdered } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
 import { EmptyState, PageHeader, Section, statusLabel } from "@/components/ui";
 import { OrderList } from "@/components/OrderList";
 
-export const metadata = { title: "My orders" };
+export const metadata = { title: "My orders", robots: { index: false, follow: false } };
 
 export default async function Orders({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const user = await userOrLogin();
@@ -17,7 +17,7 @@ export default async function Orders({ searchParams }: { searchParams: Promise<{
   const orders = await prisma.order.findMany({ where: { userId: user.id, ...(filter ? { status: filter } : {}) }, orderBy: { createdAt: "desc" }, take: 200 });
   return (
     <div>
-      <PageHeader title="My orders" action={<Link href="/sell" className="btn-primary">New sale</Link>} />
+      <PageHeader title="My orders" icon={<ListOrdered className="size-6" />} action={<Link href="/sell" className="btn bg-brand-gradient text-white hover:opacity-95">New sale</Link>} />
       <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
         <Link href="/orders" className={`chip shrink-0 ${!filter ? "chip-active" : "bg-white"}`}>All</Link>
         {statuses.map((s) => (

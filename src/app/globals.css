@@ -76,3 +76,54 @@ form[aria-busy="true"] .btn-ghost::after { color: var(--color-slate-600); }
 html { -webkit-tap-highlight-color: transparent; }
 body { @apply bg-slate-50 text-slate-900 antialiased; font-feature-settings: "cv11", "ss01"; }
 ::selection { @apply bg-brand-100 text-brand-900; }
+
+/* ---------------------------------------------------------------------------
+   Gradients and colour accents
+--------------------------------------------------------------------------- */
+@utility text-gradient {
+  background-image: linear-gradient(100deg, var(--color-brand-600) 0%, #7c3aed 55%, #059669 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@utility bg-mesh {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(40rem 28rem at 10% -10%, rgb(59 124 246 / 0.22), transparent 60%),
+    radial-gradient(34rem 24rem at 95% 0%, rgb(124 58 237 / 0.16), transparent 60%),
+    radial-gradient(30rem 22rem at 70% 110%, rgb(16 185 129 / 0.14), transparent 60%);
+}
+@utility bg-mesh-dark {
+  background-color: #0b1437;
+  background-image:
+    radial-gradient(36rem 26rem at 0% 0%, rgb(59 124 246 / 0.45), transparent 60%),
+    radial-gradient(30rem 22rem at 100% 100%, rgb(16 185 129 / 0.28), transparent 60%),
+    radial-gradient(24rem 20rem at 80% 10%, rgb(124 58 237 / 0.35), transparent 60%);
+}
+@utility bg-brand-gradient {
+  background-image: linear-gradient(135deg, var(--color-brand-500) 0%, var(--color-brand-700) 50%, #5b21b6 100%);
+}
+@utility ring-gradient {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(white, white) padding-box,
+    linear-gradient(135deg, rgb(59 124 246 / 0.55), rgb(124 58 237 / 0.35), rgb(16 185 129 / 0.45)) border-box;
+}
+@utility bg-grid {
+  background-image: linear-gradient(rgb(15 23 42 / 0.05) 1px, transparent 1px), linear-gradient(90deg, rgb(15 23 42 / 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@layer components {
+  .icon-tile { @apply grid size-11 shrink-0 place-items-center rounded-2xl text-white shadow-sm; }
+  .tile-blue { @apply bg-gradient-to-br from-sky-400 to-blue-600; }
+  .tile-violet { @apply bg-gradient-to-br from-fuchsia-400 to-violet-600; }
+  .tile-emerald { @apply bg-gradient-to-br from-emerald-400 to-teal-600; }
+  .tile-amber { @apply bg-gradient-to-br from-amber-300 to-orange-500; }
+  .tile-rose { @apply bg-gradient-to-br from-rose-400 to-pink-600; }
+  .tile-slate { @apply bg-gradient-to-br from-slate-400 to-slate-600; }
+}
+
+@keyframes float-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.animate-float { animation: float-y 6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .animate-float { animation: none; } }

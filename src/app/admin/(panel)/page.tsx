@@ -1,3 +1,4 @@
+import { AlertOctagon, BadgeCheck, Banknote, Gauge, Landmark, LifeBuoy, Percent, Wallet } from "lucide-react";
 import Link from "next/link";
 import type { OrderStatus } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -22,19 +23,19 @@ export default async function Dashboard() {
   const count = (s: OrderStatus) => byStatus.find((b) => b.status === s)?._count ?? 0;
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" subtitle="What needs attention today." />
+      <PageHeader title="Dashboard" subtitle="What needs attention today." icon={<Gauge className="size-6" />} />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="KYC waiting" value={kyc} href="/admin/kyc" />
-        <Stat label="Payout methods waiting" value={pms} href="/admin/payout-methods" />
-        <Stat label="Unmatched payments" value={unmatched} href="/admin/unmatched" />
-        <Stat label="Open support messages" value={support} href="/admin/support" />
+        <Stat label="KYC waiting" value={kyc} href="/admin/kyc" icon={<BadgeCheck className="size-5" />} tile="tile-violet" />
+        <Stat label="Payout methods waiting" value={pms} href="/admin/payout-methods" icon={<Landmark className="size-5" />} tile="tile-emerald" />
+        <Stat label="Unmatched payments" value={unmatched} href="/admin/unmatched" icon={<AlertOctagon className="size-5" />} tile="tile-amber" />
+        <Stat label="Open support messages" value={support} href="/admin/support" icon={<LifeBuoy className="size-5" />} tile="tile-rose" />
       </div>
       <div>
         <p className="eyebrow mb-3">Today (IST)</p>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Stat label="USDT received" value={fmtUsdt(D(received._sum.receivedAmount ?? 0))} />
-          <Stat label="Rupees paid" value={fmtInr(D(paid._sum.paidAmount ?? 0))} />
-          <Stat label="Tax held back (paid orders)" value={fmtInr(D(paid._sum.taxHeld ?? 0))} />
+          <Stat label="USDT received" value={fmtUsdt(D(received._sum.receivedAmount ?? 0))} icon={<Wallet className="size-5" />} />
+          <Stat label="Rupees paid" value={fmtInr(D(paid._sum.paidAmount ?? 0))} icon={<Banknote className="size-5" />} tile="tile-emerald" />
+          <Stat label="Tax held back (paid orders)" value={fmtInr(D(paid._sum.taxHeld ?? 0))} icon={<Percent className="size-5" />} tile="tile-violet" />
         </div>
       </div>
       <Section title="Orders by status">
