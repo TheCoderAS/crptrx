@@ -12,7 +12,16 @@ import { D } from "./money";
  */
 export const SETTING_DEFAULTS = {
   rate: "0", // INR per USDT. 0 = not set yet, quotes blocked.
-  rate_max_age_hours: 12,
+  rate_max_age_hours: 12, // MANUAL mode: block quotes if the rate wasn't re-saved within this time
+  // AUTO mode: rate = live market price x (1 - margin%), refreshed by the worker (rateFeed.ts).
+  rate_mode: "MANUAL" as "MANUAL" | "AUTO",
+  rate_margin_percent: "2", // OWNER
+  rate_floor: "70", // OWNER: never offer less than this (INR per USDT)
+  rate_ceiling: "120", // OWNER: never offer more than this
+  rate_max_jump_percent: "3", // refuse a market move bigger than this between two updates
+  rate_feed_max_age_minutes: 30, // block quotes if the feed hasn't succeeded for this long
+  rate_min_sources: 2, // price sources that must agree
+  rate_sources: ["coindcx", "wazirx", "coingecko"] as string[],
   fee_percent: "1", // OWNER
   gst_enabled: true, // OWNER
   gst_percent: "18", // OWNER
@@ -57,23 +66,36 @@ export const SETTING_DEFAULTS = {
 };
 
 export type Settings = typeof SETTING_DEFAULTS;
+
+/** Kept here (not imported from rateFeed.ts) to avoid a circular import. */
+export const RATE_SOURCES_REF = { RATE_SOURCE_IDS: ["coindcx", "wazirx", "coingecko"] };
 export type SettingKey = keyof Settings;
 
 export async function getSettings(tx: Tx = prisma): Promise<Settings & { rateUpdatedAt: Date | null }> {
-  const rows = await tx.setting.findMany();
+  const [rows, feed] = await Promise.all([tx.setting.findMany(), tx.rateFeedState.findUnique({ where: { id: 1 } })]);
   const out = structuredClone(SETTING_DEFAULTS) as Settings & { rateUpdatedAt: Date | null };
   out.rateUpdatedAt = null;
   for (const r of rows) {
     if (r.key in SETTING_DEFAULTS) (out as Record<string, unknown>)[r.key] = r.value;
     if (r.key === "rate") out.rateUpdatedAt = r.updatedAt;
   }
+  // In Auto mode the rate is "fresh" when the live feed last succeeded, even if the value didn't change.
+  if (out.rate_mode === "AUTO") out.rateUpdatedAt = feed?.lastOkAt ?? null;
   return out;
 }
 
 /** Keys an admin may edit through the generic settings screen (deposit address has its own flow). */
 export const EDITABLE_KEYS: SettingKey[] = [
+  "rate_mode",
   "rate",
   "rate_max_age_hours",
+  "rate_margin_percent",
+  "rate_floor",
+  "rate_ceiling",
+  "rate_max_jump_percent",
+  "rate_feed_max_age_minutes",
+  "rate_min_sources",
+  "rate_sources",
   "fee_percent",
   "gst_enabled",
   "gst_percent",
@@ -107,6 +129,10 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
     "fee_percent",
     "gst_percent",
     "tax_percent",
+    "rate_margin_percent",
+    "rate_floor",
+    "rate_ceiling",
+    "rate_max_jump_percent",
     "limit_min_order_usdt",
     "limit_max_order_usdt",
     "limit_user_daily_usdt",
@@ -122,6 +148,8 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
   }
   const intKeys: SettingKey[] = [
     "rate_max_age_hours",
+    "rate_feed_max_age_minutes",
+    "rate_min_sources",
     "review_hours",
     "bsc_finality_fallback_blocks",
     "bsc_scan_range",
@@ -133,6 +161,18 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
     if (!Number.isInteger(n) || n < 1) throw new AppError(`${key}: enter a whole number of 1 or more`);
     if (key === "bsc_finality_fallback_blocks" && n < 15) throw new AppError("Wait at least 15 blocks");
     return n;
+  }
+  if (key === "rate_mode") {
+    if (value !== "MANUAL" && value !== "AUTO") throw new AppError("Rate mode must be Manual or Auto.");
+    return value;
+  }
+  if (key === "rate_sources") {
+    const { RATE_SOURCE_IDS } = RATE_SOURCES_REF;
+    const arr = (Array.isArray(value) ? value : String(value).split(/[\n,]/)).map((x) => String(x).trim().toLowerCase()).filter(Boolean);
+    const bad = arr.filter((x) => !RATE_SOURCE_IDS.includes(x));
+    if (bad.length) throw new AppError(`Unknown price source: ${bad.join(", ")}. Use: ${RATE_SOURCE_IDS.join(", ")}`);
+    if (arr.length === 0) throw new AppError("Choose at least one price source.");
+    return [...new Set(arr)];
   }
   if (key === "gst_enabled" || key === "sms_notifications_enabled") return value === true || value === "true";
   if (key === "network_enabled") {
@@ -168,6 +208,16 @@ export async function updateSetting(key: SettingKey, value: unknown, actor: Acto
     }
     clean = v;
   }
+  if (key === "rate" && current.rate_mode === "AUTO") {
+    if (D(String(clean)).eq(D(current.rate))) return; // unchanged field from the form
+    throw new AppError("The rate is set automatically in Auto mode. Switch to Manual to type a rate.");
+  }
+  if (key === "rate_floor" || key === "rate_ceiling") {
+    const floor = D(key === "rate_floor" ? String(clean) : current.rate_floor);
+    const ceiling = D(key === "rate_ceiling" ? String(clean) : current.rate_ceiling);
+    if (floor.gte(ceiling)) throw new AppError("The rate floor must be below the ceiling.");
+  }
+  if (key === "rate_margin_percent" && D(String(clean)).gte(50)) throw new AppError("Margin must be below 50%.");
   // Skip no-op saves so the history stays readable. Re-saving the rate is kept:
   // it confirms the rate is still current and resets its age.
   if (key !== "rate" && JSON.stringify(current[key]) === JSON.stringify(clean)) return;
@@ -205,5 +255,6 @@ export function tokenContractFor(s: Settings, n: NetworkCode, mode: Mode = s.net
 
 export function rateIsStale(s: Settings & { rateUpdatedAt: Date | null }, now = new Date()): boolean {
   if (!s.rateUpdatedAt || D(s.rate).lte(0)) return true;
-  return now.getTime() - s.rateUpdatedAt.getTime() > s.rate_max_age_hours * 3600_000;
+  const maxAgeMs = s.rate_mode === "AUTO" ? s.rate_feed_max_age_minutes * 60_000 : s.rate_max_age_hours * 3600_000;
+  return now.getTime() - s.rateUpdatedAt.getTime() > maxAgeMs;
 }

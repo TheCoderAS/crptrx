@@ -418,3 +418,19 @@ model OutboundMessage {
   @@index([createdAt])
   @@map("outbound_messages")
 }
+
+/// Live USDT/INR price feed status (one row). Operational state, not configuration.
+model RateFeedState {
+  id             Int       @id @default(1)
+  lastOkAt       DateTime?
+  lastMarket     Decimal?  @db.Decimal(14, 4)
+  baselineMarket Decimal?  @db.Decimal(14, 4) // last accepted market price, for the jump guard
+  sources        Json? // latest per-source prices and errors
+  lastError      String?
+  lastErrorAt    DateTime?
+  failingSince   DateTime?
+  alertSentAt    DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@map("rate_feed_state")
+}

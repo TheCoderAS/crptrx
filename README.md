@@ -99,6 +99,14 @@ Every required test case in spec section 13 is covered in `tests/`: unique amoun
 
 ---
 
+### Rate: manual or automatic
+Admin → Settings → Rate. **Manual:** you type the rate; quotes stop if it isn't re-saved within 12 hours. **Auto:** the worker reads the live USDT/INR price every 2 minutes from CoinDCX, WazirX and CoinGecko, takes the price they agree on, and offers `market × (1 − your margin%)`, rounded down to the paisa. Tax and fee still apply after that. Safety guards:
+- at least 2 sources must agree within 2%; a source that disagrees is ignored;
+- the rate must stay between your floor and ceiling;
+- a market move above your jump limit (default 3%) between two updates is refused until you press **Accept new market price** (needs your 2FA code);
+- if the feed fails, the last rate stays but quotes stop after 30 minutes, and super admins get one email;
+- every rate change is recorded in the settings history.
+
 ## CI/CD (`.github/workflows`)
 
 | Workflow | When | What |
