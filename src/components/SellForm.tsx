@@ -136,7 +136,7 @@ export function SellForm(p: Props) {
           <span className="font-semibold text-slate-900">You receive</span>
           <span className="money text-2xl text-emerald-700">{estimate ? `≈ ${fmtInr(estimate.net)}` : "—"}</span>
         </div>
-        <button className="btn btn-lg bg-brand-gradient mt-5 w-full text-white shadow-lg shadow-brand-600/20 hover:opacity-95" disabled={!network || !estimate || !!outOfRange}>
+        <button className="btn btn-lg bg-brand-gradient mt-5 hidden w-full text-white shadow-lg shadow-brand-600/20 hover:opacity-95 lg:flex" disabled={!network || !estimate || !!outOfRange}>
           Get my quote <ArrowRight className="size-4" aria-hidden />
         </button>
         <p className="mt-3 flex items-start gap-1.5 text-xs text-slate-500">
@@ -144,6 +144,20 @@ export function SellForm(p: Props) {
           Next you&apos;ll see the exact amount, locked for 15 minutes. Nothing is charged until you send USDT.
         </p>
       </aside>
+
+      {/* Phones: the total and the action stay in view above the tab bar. */}
+      <div className="h-16 lg:hidden" aria-hidden />
+      <div data-sticky-bar className="fixed inset-x-0 bottom-[calc(58px+env(safe-area-inset-bottom))] z-20 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_24px_-12px_rgb(15_23_42/0.15)] backdrop-blur md:bottom-0 lg:hidden">
+        <div className="mx-auto flex max-w-3xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-slate-500">You receive</p>
+            <p className="money truncate text-lg text-emerald-700">{estimate ? `≈ ${fmtInr(estimate.net)}` : "—"}</p>
+          </div>
+          <button className="btn bg-brand-gradient px-5 py-3 text-white shadow-md hover:opacity-95" disabled={!network || !estimate || !!outOfRange}>
+            Get my quote <ArrowRight className="size-4" aria-hidden />
+          </button>
+        </div>
+      </div>
     </ApiForm>
   );
 }

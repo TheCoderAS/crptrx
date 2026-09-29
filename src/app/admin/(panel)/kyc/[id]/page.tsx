@@ -1,3 +1,4 @@
+import { ScanFace } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -5,7 +6,7 @@ import { prisma } from "@/server/db";
 import { fullPan } from "@/server/kyc";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { Banner, Row, StatusPill } from "@/components/ui";
+import { BackLink, Banner, PageHeader, Row, StatusPill } from "@/components/ui";
 
 export default async function KycDetail({ params }: { params: Promise<{ id: string }> }) {
   await adminOrLogin();
@@ -16,8 +17,8 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
   const docs = [["panDoc", "PAN card"], ["aadhaarFront", "Masked Aadhaar front"], ["aadhaarBack", "Masked Aadhaar back"], ["selfie", "Selfie with PAN"]];
   return (
     <div className="space-y-4">
-      <Link href="/admin/kyc" className="text-sm underline">← KYC queue</Link>
-      <div className="flex items-center gap-3"><h1 className="h1">{s.fullName}</h1><StatusPill status={s.status} /></div>
+      <BackLink href="/admin/kyc">KYC queue</BackLink>
+      <PageHeader title={s.fullName} icon={<ScanFace className="size-6" />} tile="tile-violet" action={<StatusPill status={s.status} />} />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="card">
           <Row k="Email" v={s.user.email} />
@@ -40,17 +41,19 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
         </div>
       </div>
       {s.status === "SUBMITTED" && (
-        <div className="card space-y-3">
+        <div className="card">
           <h2 className="h2">Decision</h2>
-          <ApiForm action={`/api/admin/kyc/${s.id}`} className="space-y-3">
-            <input type="hidden" name="decision" value="APPROVED" />
-            <button className="btn-primary">Approve</button>
-          </ApiForm>
-          <ApiForm action={`/api/admin/kyc/${s.id}`} className="space-y-2">
-            <select name="decision" className="input w-auto"><option value="NEEDS_CHANGES">Needs changes</option><option value="DECLINED">Decline</option></select>
-            <input name="reason" required className="input" placeholder="Reason shown to the user, e.g. Selfie is blurry" />
-            <button className="btn-danger">Send</button>
-          </ApiForm>
+          <div className="mt-4 grid gap-4 lg:grid-cols-[auto_1fr] lg:items-start">
+            <ApiForm action={`/api/admin/kyc/${s.id}`}>
+              <input type="hidden" name="decision" value="APPROVED" />
+              <button className="btn w-full bg-emerald-600 px-6 text-white hover:bg-emerald-700 lg:w-auto">Approve</button>
+            </ApiForm>
+            <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row">
+              <select name="decision" className="input sm:w-44"><option value="NEEDS_CHANGES">Needs changes</option><option value="DECLINED">Decline</option></select>
+              <input name="reason" required className="input flex-1" placeholder="Reason shown to the user, e.g. Selfie is blurry" />
+              <button className="btn-danger">Send</button>
+            </ApiForm>
+          </div>
         </div>
       )}
       {history.length > 0 && (

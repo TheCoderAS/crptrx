@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, CheckCircle2, Clock3, Inbox, Landmark, Smartphone } from "lucide-react";
+import { ArrowRight, BadgeCheck, Banknote, CheckCircle2, Clock3, Inbox, Landmark, Smartphone } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fmtInr } from "@/server/money";
@@ -11,11 +11,13 @@ export const metadata = { title: "Home", robots: { index: false, follow: false }
 
 export default async function Dashboard() {
   const user = await userOrLogin();
-  const [pendingPm, approvedPm, orders, s] = await Promise.all([
+  const [pendingPm, approvedPm, orders, s, paidAgg, active] = await Promise.all([
     prisma.payoutMethod.count({ where: { userId: user.id, status: "PENDING", deletedAt: null } }),
     prisma.payoutMethod.count({ where: { userId: user.id, status: "APPROVED", deletedAt: null } }),
     prisma.order.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 5 }),
     getSettings(),
+    prisma.order.aggregate({ where: { userId: user.id, status: "PAID" }, _sum: { net: true }, _count: true }),
+    prisma.order.count({ where: { userId: user.id, status: { in: ["QUOTE_READY", "PAYMENT_SUBMITTED", "PAYMENT_CONFIRMED", "UNDER_REVIEW", "ON_HOLD", "APPROVED"] } } }),
   ]);
   const kycWaiting = user.kycStatus === "SUBMITTED";
   const steps = [
@@ -85,6 +87,22 @@ export default async function Dashboard() {
             ))}
           </ol>
         </Section>
+      )}
+
+      {ready && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { icon: Banknote, tile: "tile-emerald", label: "Received", value: fmtInr(paidAgg._sum.net ?? 0) },
+            { icon: CheckCircle2, tile: "tile-blue", label: "Completed", value: String(paidAgg._count) },
+            { icon: Clock3, tile: "tile-amber", label: "In progress", value: String(active) },
+          ].map(({ icon: Icon, tile, label, value }) => (
+            <div key={label} className="card p-4 sm:p-5">
+              <span className={`icon-tile ${tile} size-9 rounded-xl`}><Icon className="size-4" aria-hidden /></span>
+              <p className="mt-3 text-xs text-slate-500">{label}</p>
+              <p className="money truncate text-lg text-slate-900 sm:text-xl">{value}</p>
+            </div>
+          ))}
+        </div>
       )}
 
       <Section title="Recent orders" action={orders.length > 0 ? <Link href="/orders" className="text-sm font-medium text-brand-700 hover:text-brand-800">View all</Link> : undefined}>

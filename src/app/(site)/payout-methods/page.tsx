@@ -20,21 +20,23 @@ export default async function PayoutMethods() {
       {methods.length > 0 && (
         <ul className="space-y-3">
           {methods.map((m) => (
-            <li key={m.id} className="card flex flex-wrap items-center gap-4 p-4 sm:p-5">
-              <span className={`icon-tile ${m.type === "BANK" ? "tile-emerald" : "tile-violet"}`}>
-                {m.type === "BANK" ? <Landmark className="size-5" aria-hidden /> : <Smartphone className="size-5" aria-hidden />}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium text-slate-900">{maskedPayout(m)}</p>
-                  {m.isDefault && <span className="rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] font-semibold text-brand-700">Default</span>}
+            <li key={m.id} className="card p-4 sm:p-5">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <span className={`icon-tile ${m.type === "BANK" ? "tile-emerald" : "tile-violet"}`}>
+                  {m.type === "BANK" ? <Landmark className="size-5" aria-hidden /> : <Smartphone className="size-5" aria-hidden />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-slate-900">{maskedPayout(m)}</p>
+                    {m.isDefault && <span className="rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] font-semibold text-brand-700">Default</span>}
+                  </div>
+                  <p className="text-sm text-slate-500">{m.holderName}</p>
                 </div>
-                <p className="text-sm text-slate-500">{m.holderName}</p>
-                {m.status === "PENDING" && <p className="mt-1 text-xs text-slate-500">We&apos;re checking the name matches your ID. Usually within a few hours.</p>}
-                {m.status === "DECLINED" && m.reason && <p className="mt-1 text-xs text-rose-700">Declined: {m.reason}</p>}
-              </div>
-              <div className="flex items-center gap-1">
                 <StatusPill status={m.status} />
+              </div>
+              {m.status === "PENDING" && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">We&apos;re checking the name matches your ID. Usually within a few hours.</p>}
+              {m.status === "DECLINED" && m.reason && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">Declined: {m.reason}</p>}
+              <div className="mt-3 flex justify-end gap-1 border-t border-slate-100 pt-3">
                 {!m.isDefault && m.status === "APPROVED" && (
                   <ApiForm action={`/api/payout-methods/${m.id}`}><input type="hidden" name="action" value="default" /><button className="btn-ghost px-3 py-1.5 text-xs">Make default</button></ApiForm>
                 )}

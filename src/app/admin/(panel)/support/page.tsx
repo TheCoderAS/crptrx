@@ -1,3 +1,5 @@
+import { LifeBuoy } from "lucide-react";
+import { FilterChips, PageHeader } from "@/components/ui";
 import Link from "next/link";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
@@ -10,7 +12,8 @@ export default async function Support({ searchParams }: { searchParams: Promise<
   const msgs = await prisma.supportMessage.findMany({ where: all ? {} : { handled: false }, orderBy: { createdAt: "asc" }, include: { user: true }, take: 200 });
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between"><h1 className="h1">Support messages</h1><Link className="text-sm underline" href={all ? "/admin/support" : "/admin/support?all=1"}>{all ? "Open only" : "Show all"}</Link></div>
+      <PageHeader title="Support" icon={<LifeBuoy className="size-6" />} tile="tile-rose" />
+      <FilterChips items={[{ href: "/admin/support", label: "Open", active: !all }, { href: "/admin/support?all=1", label: "All", active: !!all }]} />
       {msgs.length === 0 && <p className="muted">No messages.</p>}
       {msgs.map((m) => (
         <div key={m.id} id={m.id} className="card space-y-2">

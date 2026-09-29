@@ -37,7 +37,6 @@ export default async function Login() {
         <p className="flex items-center gap-2 text-xs text-white/60"><Lock className="size-3.5" aria-hidden /> Secure sign-in. We never see your Google password.</p>
       </div>
       <div className="flex flex-col justify-center p-6 sm:p-10">
-        <div className="mb-8 lg:hidden"><Logo name={s.brand_name} size="lg" /></div>
         <h1 className="text-2xl font-bold tracking-tight">Welcome</h1>
         <p className="mt-1 text-slate-500">Log in or create your account.</p>
         <div className="mt-8 space-y-4">

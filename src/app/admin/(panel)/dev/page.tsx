@@ -1,3 +1,4 @@
+import { FlaskConical } from "lucide-react";
 import { redirect } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
 import { env } from "@/server/env";
@@ -5,7 +6,7 @@ import { prisma } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { Banner } from "@/components/ui";
+import { Banner, PageHeader } from "@/components/ui";
 
 /** Test-phase helpers. Hidden unless DEV_TOOLS_ENABLED=true and the app is in Test mode. */
 export default async function DevTools() {
@@ -15,7 +16,7 @@ export default async function DevTools() {
   const mail = await prisma.outboundMessage.findMany({ orderBy: { createdAt: "desc" }, take: 30 });
   return (
     <div className="space-y-4">
-      <h1 className="h1">Test tools</h1>
+      <PageHeader title="Test tools" icon={<FlaskConical className="size-6" />} tile="tile-amber" />
       <Banner tone="warn">Only available in Test mode with DEV_TOOLS_ENABLED=true. Turn it off before launch.</Banner>
       <ApiForm action="/api/dev/simulate-transfer" className="card space-y-3">
         <h2 className="h2">Simulate an incoming USDT payment</h2>

@@ -81,7 +81,7 @@ export function ApiForm({
     <form onSubmit={submit} aria-busy={busy} className={outerClassName}>
       {/* The fieldset carries the layout classes so spacing and grids apply to the fields
           (a display:contents wrapper would silently break space-y-*). */}
-      <fieldset disabled={busy} className={`m-0 min-w-0 border-0 p-0 ${className ?? ""}`}>
+      <fieldset disabled={busy} className={className}>
         {children}
         {error && (
           <p role="alert" className="flex gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200 ring-inset">

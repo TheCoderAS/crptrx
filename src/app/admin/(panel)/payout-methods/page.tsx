@@ -1,3 +1,4 @@
+import { Landmark } from "lucide-react";
 import Link from "next/link";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
@@ -5,7 +6,7 @@ import { decrypt } from "@/server/crypto";
 import { namesMatch } from "@/server/payouts";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { StatusPill } from "@/components/ui";
+import { PageHeader, StatusPill } from "@/components/ui";
 
 export default async function PayoutQueue() {
   await adminOrLogin();
@@ -14,7 +15,7 @@ export default async function PayoutQueue() {
   const kycName = (uid: string) => kycs.find((k) => k.userId === uid)?.fullName ?? null;
   return (
     <div className="space-y-4">
-      <h1 className="h1">Payout methods waiting</h1>
+      <PageHeader title="Payout methods" subtitle="Check the holder name matches the KYC name." icon={<Landmark className="size-6" />} tile="tile-emerald" />
       {pms.length === 0 && <p className="muted">Nothing waiting.</p>}
       {pms.map((p) => {
         const kn = kycName(p.userId);

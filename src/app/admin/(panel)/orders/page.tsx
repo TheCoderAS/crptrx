@@ -1,3 +1,4 @@
+import { ListOrdered } from "lucide-react";
 import Link from "next/link";
 import type { OrderStatus } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -5,7 +6,7 @@ import { prisma } from "@/server/db";
 import { fmtInr, fmtUsdt } from "@/server/money";
 import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
 import { fmtIST } from "@/lib/time";
-import { NetworkBadge, StatusPill, statusLabel } from "@/components/ui";
+import { NetworkBadge, PageHeader, StatusPill, statusLabel } from "@/components/ui";
 
 const WORK: OrderStatus[] = ["PAYMENT_CONFIRMED", "UNDER_REVIEW"];
 
@@ -25,7 +26,7 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
   );
   return (
     <div className="space-y-4">
-      <h1 className="h1">Orders</h1>
+      <PageHeader title="Orders" icon={<ListOrdered className="size-6" />} />
       <div className="flex flex-wrap gap-2">
         <Link href="/admin/orders" className={`rounded-full px-3 py-1 text-sm ring-1 ${!status ? "bg-slate-900 text-white" : "bg-white ring-slate-300"}`}>Work waiting</Link>
         {all.map((s) => tab(s, statusLabel(s), status === s))}

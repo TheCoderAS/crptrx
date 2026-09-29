@@ -6,7 +6,9 @@ import { NETWORK_CODES, NETWORK_INFO } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { TotpField } from "@/components/Totp";
-import { Banner } from "@/components/ui";
+import { Banner, PageHeader } from "@/components/ui";
+import { Tabs } from "@/components/Tabs";
+import { Settings2 } from "lucide-react";
 
 function Field({ name, label, value, hint, type = "text" }: { name: string; label: string; value: string | number; hint?: string; type?: string }) {
   return (
@@ -34,9 +36,11 @@ export default async function SettingsPage() {
     </ApiForm>
   );
   return (
-    <div className="space-y-6">
-      <h1 className="h1">Settings</h1>
-
+    <div>
+      <PageHeader title="Settings" subtitle="Changes need your 2FA code and are logged." icon={<Settings2 className="size-6" />} tile="tile-slate" />
+      <Tabs
+        tabs={[
+          { id: "rate", label: "Rate", alert: rateIsStale(s), content: <>
       <div className="card space-y-4">
         <ApiForm action="/api/admin/settings" className="space-y-3">
           <h2 className="h2">Rate (₹ per USDT)</h2>
@@ -96,6 +100,8 @@ export default async function SettingsPage() {
         </div>
       </div>
 
+          </> },
+          { id: "fees", label: "Fees & limits", content: <>
       {group(
         "Fees and tax",
         <>
@@ -117,6 +123,8 @@ export default async function SettingsPage() {
         </>,
       )}
 
+          </> },
+          { id: "networks", label: "Networks", content: <>
       {group(
         "Networks on/off",
         <>
@@ -131,6 +139,33 @@ export default async function SettingsPage() {
         <p className="muted">Switching a network off blocks new quotes only. Open orders keep being watched.</p>,
       )}
 
+      <div className="card space-y-3">
+        <h2 className="h2">USDT token contracts</h2>
+        {NETWORK_CODES.map((n) => <p key={n} className="text-sm"><b>{NETWORK_INFO[n].name}:</b> <code className="break-all">{tokenContractFor(s, n) || "(not set)"}</code></p>)}
+        {mode === "LIVE" ? <p className="muted">Live mode uses the official mainnet contracts. They can&apos;t be edited.</p> : (
+          <ApiForm action="/api/admin/settings" className="space-y-2">
+            <p className="muted">Test-mode tokens (Nile / BSC Testnet). Confirm these are the test USDT tokens you&apos;ll use. Mainnet contracts are refused here.</p>
+            <input name="test_token_contract.TRON" defaultValue={s.test_token_contract.TRON} className="input font-mono" />
+            <input name="test_token_contract.BSC" defaultValue={s.test_token_contract.BSC} className="input font-mono" />
+            <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+          </ApiForm>
+        )}
+      </div>
+
+      <ApiForm action="/api/admin/settings/mode" className="card space-y-3">
+        <h2 className="h2">Network mode: {mode === "LIVE" ? "LIVE (mainnets)" : "TEST (Tron Nile + BSC Testnet)"}</h2>
+        <input type="hidden" name="mode" value={mode === "LIVE" ? "TEST" : "LIVE"} />
+        {mode === "TEST" ? (
+          <>
+            <Banner tone="danger">Switching to Live means real USDT and real payouts. Set the Live deposit addresses first (they also take 1 hour).</Banner>
+            <input name="confirm" required className="input" placeholder={`Type ${LIVE_CONFIRM_PHRASE}`} />
+          </>
+        ) : <input type="hidden" name="confirm" value="" />}
+        <div className="flex items-end gap-3"><TotpField /><button className={mode === "TEST" ? "btn-danger" : "btn-secondary"}>{mode === "TEST" ? "Switch to Live" : "Switch back to Test"}</button></div>
+      </ApiForm>
+
+          </> },
+          { id: "address", label: "Deposit addresses", alert: pending.length > 0, content: <>
       <div id="address" className="card space-y-4 ring-2 ring-red-300">
         <h2 className="h2">Deposit addresses ({mode} mode)</h2>
         <Banner tone="danger">If this address is wrong, every payment on that network goes to someone else. Changes need your 2FA code, take effect after 1 hour, and every admin is emailed a cancel link.</Banner>
@@ -159,31 +194,8 @@ export default async function SettingsPage() {
         ))}
       </div>
 
-      <div className="card space-y-3">
-        <h2 className="h2">USDT token contracts</h2>
-        {NETWORK_CODES.map((n) => <p key={n} className="text-sm"><b>{NETWORK_INFO[n].name}:</b> <code className="break-all">{tokenContractFor(s, n) || "(not set)"}</code></p>)}
-        {mode === "LIVE" ? <p className="muted">Live mode uses the official mainnet contracts. They can&apos;t be edited.</p> : (
-          <ApiForm action="/api/admin/settings" className="space-y-2">
-            <p className="muted">Test-mode tokens (Nile / BSC Testnet). Confirm these are the test USDT tokens you&apos;ll use. Mainnet contracts are refused here.</p>
-            <input name="test_token_contract.TRON" defaultValue={s.test_token_contract.TRON} className="input font-mono" />
-            <input name="test_token_contract.BSC" defaultValue={s.test_token_contract.BSC} className="input font-mono" />
-            <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
-          </ApiForm>
-        )}
-      </div>
-
-      <ApiForm action="/api/admin/settings/mode" className="card space-y-3">
-        <h2 className="h2">Network mode: {mode === "LIVE" ? "LIVE (mainnets)" : "TEST (Tron Nile + BSC Testnet)"}</h2>
-        <input type="hidden" name="mode" value={mode === "LIVE" ? "TEST" : "LIVE"} />
-        {mode === "TEST" ? (
-          <>
-            <Banner tone="danger">Switching to Live means real USDT and real payouts. Set the Live deposit addresses first (they also take 1 hour).</Banner>
-            <input name="confirm" required className="input" placeholder={`Type ${LIVE_CONFIRM_PHRASE}`} />
-          </>
-        ) : <input type="hidden" name="confirm" value="" />}
-        <div className="flex items-end gap-3"><TotpField /><button className={mode === "TEST" ? "btn-danger" : "btn-secondary"}>{mode === "TEST" ? "Switch to Live" : "Switch back to Test"}</button></div>
-      </ApiForm>
-
+          </> },
+          { id: "company", label: "Company & text", content: <>
       {group(
         "Text shown to users and on receipts",
         <>
@@ -199,6 +211,8 @@ export default async function SettingsPage() {
         </>,
       )}
 
+          </> },
+          { id: "security", label: "Holds & access", content: <>
       <ApiForm action="/api/admin/settings" className="card space-y-3">
         <h2 className="h2">Hold reasons and admin IP allow-list</h2>
         <label className="label">Hold reasons (one per line)</label>
@@ -208,6 +222,8 @@ export default async function SettingsPage() {
         <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
       </ApiForm>
 
+          </> },
+          { id: "advanced", label: "Advanced", content: <>
       {group(
         "Blockchain reading (advanced)",
         <>
@@ -218,6 +234,8 @@ export default async function SettingsPage() {
         </>,
       )}
 
+          </> },
+          { id: "history", label: "History", content: <>
       <div className="card overflow-x-auto">
         <h2 className="h2 mb-2">Recent setting changes</h2>
         <table className="table">
@@ -227,6 +245,9 @@ export default async function SettingsPage() {
           </tbody>
         </table>
       </div>
+          </> },
+        ]}
+      />
     </div>
   );
 }

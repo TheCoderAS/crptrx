@@ -10,7 +10,7 @@ import { explorerAddressUrl, explorerTxUrl, NETWORK_INFO, type Mode, type Networ
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { TotpField } from "@/components/Totp";
-import { Banner, NetworkBadge, Row, StatusPill, Timeline } from "@/components/ui";
+import { BackLink, Banner, NetworkBadge, Row, StatusPill, Timeline } from "@/components/ui";
 
 export default async function AdminOrder({ params }: { params: Promise<{ id: string }> }) {
   await adminOrLogin();
@@ -37,7 +37,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-4">
-      <Link href="/admin/orders" className="text-sm underline">← Orders</Link>
+      <BackLink href="/admin/orders">Orders</BackLink>
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="h1">{o.id}</h1>
         <StatusPill status={o.status} />

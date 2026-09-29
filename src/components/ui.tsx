@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Info, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Info, ShieldAlert } from "lucide-react";
 import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 
@@ -169,21 +169,21 @@ export function Row({ k, v, strong }: { k: ReactNode; v: ReactNode; strong?: boo
   );
 }
 
-export function Stat({ label, value, sub, href, icon, tile = "tile-blue" }: { label: string; value: ReactNode; sub?: ReactNode; href?: string; icon?: ReactNode; tile?: string }) {
+export function Stat({ label, value, sub, href, icon, tile = "tile-blue", className = "" }: { label: string; value: ReactNode; sub?: ReactNode; href?: string; icon?: ReactNode; tile?: string; className?: string }) {
   const inner = (
-    <div className="flex items-start gap-4">
-      {icon && <span className={`icon-tile ${tile}`}>{icon}</span>}
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+      {icon && <span className={`icon-tile ${tile} size-10 sm:size-11`}>{icon}</span>}
       <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-500">{label}</p>
-        <p className="money mt-1 text-2xl text-slate-900">{value}</p>
+        <p className="text-xs font-medium text-slate-500 sm:text-sm">{label}</p>
+        <p className="money mt-1 truncate text-xl text-slate-900 sm:text-2xl">{value}</p>
         {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
       </div>
     </div>
   );
   return href ? (
-    <a href={href} className="card block transition hover:border-brand-200 hover:shadow-[var(--shadow-raised)]">{inner}</a>
+    <a href={href} className={`card block transition hover:border-brand-200 hover:shadow-[var(--shadow-raised)] ${className}`}>{inner}</a>
   ) : (
-    <div className="card">{inner}</div>
+    <div className={`card ${className}`}>{inner}</div>
   );
 }
 
@@ -234,5 +234,24 @@ export function Timeline({ events }: { events: { id: string; toStatus: string; c
         </li>
       ))}
     </ol>
+  );
+}
+
+export function BackLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a href={href} className="mb-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
+      <ArrowLeft className="size-4" aria-hidden /> {children}
+    </a>
+  );
+}
+
+/** A row of filter chips (scrolls sideways on small screens). */
+export function FilterChips({ items }: { items: { href: string; label: string; active: boolean }[] }) {
+  return (
+    <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+      {items.map((i) => (
+        <a key={i.href} href={i.href} className={`chip shrink-0 ${i.active ? "chip-active" : "bg-white"}`}>{i.label}</a>
+      ))}
+    </div>
   );
 }

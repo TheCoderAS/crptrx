@@ -18,7 +18,7 @@ import { Banner, NetworkBadge, Row, Section, StatusPill, Steps, Timeline } from 
 
 export const metadata = { title: "Order", robots: { index: false, follow: false } };
 
-const PROGRESS = ["Send USDT", "Received", "Safety check", "Paid"];
+const PROGRESS = ["Send", "Received", "Review", "Paid"];
 const progressIndex: Record<string, number> = {
   QUOTE_READY: 0, PAYMENT_SUBMITTED: 0, PAYMENT_CONFIRMED: 1, UNDER_REVIEW: 2, ON_HOLD: 2, APPROVED: 3, PAID: 4,
 };
@@ -83,6 +83,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const qr = waiting ? await QRCode.toDataURL(o.depositAddress, { margin: 1, width: 240, color: { dark: "#0f172a" } }) : null;
   const pIdx = progressIndex[o.status];
   const HeroIcon = o.status === "PAID" ? CheckCircle2 : o.status === "ON_HOLD" ? PauseCircle : ["EXPIRED", "CLOSED_MANUAL"].includes(o.status) ? XCircle : Hourglass;
+  // Short hero text; the details live in the panels below.
+  const heroBody =
+    o.status === "QUOTE_READY" && waiting ? `Send ${amount} USDT before the timer ends. You'll receive ${fmtInr(o.net)}.`
+    : o.status === "PAID" ? `${fmtInr(o.net)} sent to ${maskedPayout(snap)}.`
+    : text.body;
   const heroTone = o.status === "PAID" ? "tile-emerald" : o.status === "ON_HOLD" ? "tile-amber" : ["EXPIRED", "CLOSED_MANUAL"].includes(o.status) ? "tile-slate" : "tile-blue";
 
   return (
@@ -94,14 +99,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       </div>
 
       <section className="card">
-        <div className="flex gap-4">
-          <span className={`icon-tile ${heroTone} size-12 shadow-lg`}><HeroIcon className="size-6" aria-hidden /></span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2"><StatusPill status={o.status} /><NetworkBadge network={n} /></div>
-            <h1 className="mt-2 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{text.title}</h1>
-            <p className="mt-1 text-slate-600">{text.body}</p>
-          </div>
+        <div className="flex items-center gap-3">
+          <span className={`icon-tile ${heroTone} size-11 shadow-lg`}><HeroIcon className="size-5" aria-hidden /></span>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5"><StatusPill status={o.status} /><NetworkBadge network={n} /></div>
         </div>
+        <h1 className="mt-4 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{text.title}</h1>
+        <p className="mt-1 text-slate-600">{heroBody}</p>
         {pIdx !== undefined && <div className="mt-6"><Steps steps={PROGRESS} current={pIdx} failed={o.status === "ON_HOLD"} /></div>}
         {o.status === "PAID" && (
           <div className="mt-6 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center">

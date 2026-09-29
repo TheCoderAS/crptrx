@@ -24,7 +24,7 @@ export default async function Dashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="What needs attention today." icon={<Gauge className="size-6" />} />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label="KYC waiting" value={kyc} href="/admin/kyc" icon={<BadgeCheck className="size-5" />} tile="tile-violet" />
         <Stat label="Payout methods waiting" value={pms} href="/admin/payout-methods" icon={<Landmark className="size-5" />} tile="tile-emerald" />
         <Stat label="Unmatched payments" value={unmatched} href="/admin/unmatched" icon={<AlertOctagon className="size-5" />} tile="tile-amber" />
@@ -32,10 +32,10 @@ export default async function Dashboard() {
       </div>
       <div>
         <p className="eyebrow mb-3">Today (IST)</p>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
           <Stat label="USDT received" value={fmtUsdt(D(received._sum.receivedAmount ?? 0))} icon={<Wallet className="size-5" />} />
           <Stat label="Rupees paid" value={fmtInr(D(paid._sum.paidAmount ?? 0))} icon={<Banknote className="size-5" />} tile="tile-emerald" />
-          <Stat label="Tax held back (paid orders)" value={fmtInr(D(paid._sum.taxHeld ?? 0))} icon={<Percent className="size-5" />} tile="tile-violet" />
+          <Stat label="Tax held back (paid orders)" value={fmtInr(D(paid._sum.taxHeld ?? 0))} icon={<Percent className="size-5" />} tile="tile-violet" className="col-span-2 sm:col-span-1" />
         </div>
       </div>
       <Section title="Orders by status">

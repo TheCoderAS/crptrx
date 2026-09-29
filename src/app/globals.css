@@ -73,6 +73,11 @@ form[aria-busy="true"] button:not([type="button"])::after {
 form[aria-busy="true"] .btn-secondary::after,
 form[aria-busy="true"] .btn-ghost::after { color: var(--color-slate-600); }
 
+/* Reset in the base layer so a fieldset can still take card/padding classes. */
+@layer base {
+  fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+}
+
 html { -webkit-tap-highlight-color: transparent; }
 body { @apply bg-slate-50 text-slate-900 antialiased; font-feature-settings: "cv11", "ss01"; }
 ::selection { @apply bg-brand-100 text-brand-900; }

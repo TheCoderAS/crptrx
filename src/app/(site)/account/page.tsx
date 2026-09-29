@@ -18,7 +18,7 @@ export default async function Account() {
           <span className="bg-brand-gradient grid size-14 place-items-center rounded-2xl text-xl font-bold text-white shadow-lg shadow-brand-600/25">{(user.displayName ?? user.email)[0].toUpperCase()}</span>
           <div className="min-w-0">
             <p className="truncate font-semibold text-slate-900">{user.displayName ?? user.email}</p>
-            <p className="truncate text-sm text-slate-500">{user.email}</p>
+            {user.displayName && <p className="truncate text-sm text-slate-500">{user.email}</p>}
           </div>
         </div>
         <div className="divide-y divide-slate-100">

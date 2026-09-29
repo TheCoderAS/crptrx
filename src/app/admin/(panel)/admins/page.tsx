@@ -1,16 +1,17 @@
+import { Users } from "lucide-react";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { TotpField } from "@/components/Totp";
-import { StatusPill } from "@/components/ui";
+import { PageHeader, StatusPill } from "@/components/ui";
 
 export default async function Admins() {
   const me = await adminOrLogin("SUPER_ADMIN");
   const admins = await prisma.admin.findMany({ orderBy: { createdAt: "asc" } });
   return (
     <div className="space-y-4">
-      <h1 className="h1">Admin accounts</h1>
+      <PageHeader title="Admin accounts" icon={<Users className="size-6" />} tile="tile-violet" />
       <div className="card overflow-x-auto">
         <table className="table">
           <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>2FA</th><th>Status</th><th>Created</th><th></th></tr></thead>
