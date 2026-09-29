@@ -20,7 +20,7 @@ open http://localhost:3000/admin     # admin panel
 |---|---|
 | Admin login | `owner@example.com` / `change-me-now-please` |
 | Admin 2FA | Required. First sign-in shows a QR code for Google Authenticator or a similar app. |
-| User login | "Test sign-in": type any email. Google sign-in appears when the Firebase settings are filled in. |
+| User login | Email + password sign-up (the confirmation link is in **Admin → Test tools → Outbox**), or "Test sign-in" (any email, no password). Google sign-in appears when the Firebase settings are filled in. |
 | Mobile OTP | Shown on screen in Test mode (no SMS account needed) |
 | Emails | Not sent. Listed in **Admin → Test tools → Outbox** |
 | Test USDT payment | **Admin → Test tools → Simulate an incoming USDT payment**: enter the exact order amount |
@@ -94,7 +94,7 @@ Key files:
 - `src/server/deposit.ts`: protected deposit-address changes (spec 10.3)
 - `prisma/migrations/*/migration.sql`: append-only triggers on history tables, and the unique-amount and TxID indexes
 
-### Tests (77, all passing)
+### Tests (115, all passing)
 Every required test case in spec section 13 is covered in `tests/`: unique amounts, 100.02-vs-100.03 hold, duplicate TxID, fake token on both networks, the same amount open on both networks, BSC TxID on a Tron order, 6- vs 18-decimal conversion, one BSC transaction paying two orders, watcher restart mid-range, late payment, rate change after a quote, address change with open orders, the PAYMENT_CONFIRMED→PAID jump, and a wrong paid amount. There are also tests for every disallowed status move, append-only history, 2FA replay, admin lockout, Live-mode switch confirmation and a Tron outage not stopping BSC.
 
 ---
@@ -106,6 +106,21 @@ Admin → Settings → Rate. **Manual:** you type the rate; quotes stop if it is
 - a market move above your jump limit (default 3%) between two updates is refused until you press **Accept new market price** (needs your 2FA code);
 - if the feed fails, the last rate stays but quotes stop after 30 minutes, and super admins get one email;
 - every rate change is recorded in the settings history.
+
+### Sign-in and onboarding: admin switches
+Admin → Settings → **Sign-in & onboarding**. Every switch applies on the next page load for every user, including people halfway through; orders already placed are never changed.
+
+| Switch | Notes |
+|---|---|
+| Google sign-in / Email and password | At least one stays on. Email can't be turned off while Firebase isn't configured. |
+| Require a confirmed email | Unconfirmed users only see the "check your inbox" page. |
+| Mobile number required | |
+| KYC required | Can be turned off in **Test mode only**; Live can't be switched on while it's off. A declined KYC keeps blocking the user either way. |
+| Approve KYC automatically | Approves after basic checks (PAN format, 18+, all four files). No document check exists yet, so each one lands in **KYC → Auto-approved, to check** for a person. |
+| Approve bank/UPI when the name matches | Only against an approved KYC name. |
+| Customer sending wallets | Off / Optional / Required. Required blocks new orders until a wallet is added, and holds payments sent from any other wallet. |
+
+The rules live in one place, `src/server/onboarding.ts`, which the pages and the server-side order check both use.
 
 ## CI/CD (`.github/workflows`)
 
@@ -138,7 +153,7 @@ To turn on deploys: in GitHub → Settings → Environments, create `staging` (a
 
 ## Decisions and deviations to review
 
-1. **User sign-in is Google (Firebase), not email + password.** You asked for this; it replaces spec 4.1's password, lockout, email-link and forgot-password flows, because Google handles those. Mobile OTP is still required. Optional user 2FA is delegated to Google 2-Step Verification. **Risk:** users without a Google account can't sign up. If that matters, Firebase email/password can be added as a second option.
+1. **User sign-in: Google (Firebase) and/or email + password**, switchable by the admin. Email/password follows spec 4.1: 5 wrong tries = 15-minute lock, single-use hashed email links, forgot/reset, and sign-up that never reveals whether an email exists. If a password was set on an email that was never confirmed and the real owner later signs in with Google, that password is removed. Optional user 2FA is not built yet.
 2. **No Redis/BullMQ.** A single worker with per-network loops, Postgres advisory locks and unique constraints is enough at R1 volume and has fewer moving parts. Run exactly one worker.
 3. **Append-only history** is enforced with database triggers that reject UPDATE, DELETE and TRUNCATE, whatever the database user. Also giving the app its own non-owner database role is still recommended in production.
 4. **A wrong amount without a TxID goes to Unmatched payments**, not an automatic hold, because it can't safely be tied to an order. With a TxID, it is matched and held (spec 7.3).
@@ -153,7 +168,7 @@ To turn on deploys: in GitHub → Settings → Environments, create `staging` (a
 Spec section 16 (all still open): app name/domain; CA confirmation of the tax/fee/GST formula; fee %; limits; business hours; hold reasons; company details and FIU number; legal text; ID data retention period; which wallet-check tool; who holds the BSC wallet recovery phrase; which BSC provider.
 
 New ones from this build:
-- Is Google-only sign-in acceptable for launch (see decision 1)?
+- Should automatic KYC approval be allowed in Live at all before a PAN/DigiLocker check provider is connected? It's allowed now, with a review-later queue.
 - Confirm the test USDT token contracts for Nile and BSC Testnet (Settings → USDT token contracts).
 - Monthly and platform-daily limits were not in the spec; placeholder values are 20,000 and 50,000 USDT.
 - Where will it be hosted (AWS Mumbai VM, ECS, etc.)? The deploy workflow assumes a single Docker host over SSH.

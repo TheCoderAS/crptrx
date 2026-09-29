@@ -1,3 +1,4 @@
+import { logoSrc } from "@/server/brand";
 import Link from "next/link";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
@@ -17,9 +18,9 @@ export default async function Panel({ children }: { children: React.ReactNode })
     getSettings(),
     recentAddressChanges(),
     delayedNetworks(),
-    prisma.kycSubmission.count({ where: { status: "SUBMITTED" } }),
+    prisma.kycSubmission.count({ where: { OR: [{ status: "SUBMITTED" }, { autoApproved: true, postReviewedAt: null, status: "APPROVED" }] } }),
     prisma.payoutMethod.count({ where: { status: "PENDING", deletedAt: null } }),
-    prisma.order.count({ where: { status: { in: ["PAYMENT_CONFIRMED", "UNDER_REVIEW", "APPROVED"] } } }),
+    prisma.order.count({ where: { status: { in: ["PAYMENT_CONFIRMED", "UNDER_REVIEW", "ON_HOLD", "APPROVED"] } } }),
     prisma.incomingTransfer.count({ where: { status: "UNMATCHED" } }),
     prisma.supportMessage.count({ where: { handled: false } }),
   ]);
@@ -27,6 +28,7 @@ export default async function Panel({ children }: { children: React.ReactNode })
   const items: AdminNavItem[] = [
     { href: "/admin", label: "Dashboard", icon: "Gauge" },
     { href: "/admin/orders", label: "Orders", icon: "ListOrdered", count: work },
+    { href: "/admin/users", label: "Customers", icon: "UserRound" },
     { href: "/admin/kyc", label: "KYC", icon: "BadgeCheck", count: kyc },
     { href: "/admin/payout-methods", label: "Payout methods", icon: "Landmark", count: pms },
     { href: "/admin/unmatched", label: "Unmatched payments", icon: "AlertOctagon", count: unmatched },
@@ -45,7 +47,7 @@ export default async function Panel({ children }: { children: React.ReactNode })
     <div className="lg:flex">
       <aside className="bg-slate-950 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col">
         <div className="flex items-center justify-between gap-3 px-4 py-4">
-          <Link href="/admin"><Logo name={s.brand_name} inverted /></Link>
+          <Link href="/admin"><Logo name={s.brand_name} src={logoSrc(s)} inverted /></Link>
           <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold tracking-wide ${s.network_mode === "LIVE" ? "bg-rose-500 text-white" : "bg-amber-400 text-amber-950"}`}>{s.network_mode}</span>
         </div>
         <div className="px-3 pb-3 lg:flex-1 lg:overflow-y-auto">

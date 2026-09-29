@@ -8,33 +8,38 @@ import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
 import { fmtIST } from "@/lib/time";
 import { NetworkBadge, PageHeader, StatusPill, statusLabel } from "@/components/ui";
 
-const WORK: OrderStatus[] = ["PAYMENT_CONFIRMED", "UNDER_REVIEW"];
+// Everything waiting on an admin: new payments, reviews, holds and approved orders still to be paid.
+const WORK: OrderStatus[] = ["PAYMENT_CONFIRMED", "UNDER_REVIEW", "ON_HOLD", "APPROVED"];
+const PER_PAGE = 50;
 
-export default async function AdminOrders({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
+export default async function AdminOrders({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; page?: string }> }) {
   await adminOrLogin();
-  const { status, q } = await searchParams;
+  const { status, q, page } = await searchParams;
   const all = Object.keys(ALLOWED_NEXT) as OrderStatus[];
   const chosen = all.includes(status as OrderStatus) ? [status as OrderStatus] : status === "ALL" ? all : WORK;
-  const orders = await prisma.order.findMany({
-    where: { status: { in: chosen }, ...(q ? { OR: [{ id: { contains: q.trim(), mode: "insensitive" } }, { txid: q.trim().toLowerCase() }, { submittedTxid: q.trim().toLowerCase() }, { utr: q.trim().toUpperCase() }, { user: { email: { contains: q.trim(), mode: "insensitive" } } }] } : {}) },
-    orderBy: { createdAt: "asc" },
-    include: { user: true },
-    take: 300,
-  });
+  const queue = !status; // the work queue is oldest first; every other list newest first
+  const where = { status: { in: chosen }, ...(q ? { OR: [{ id: { contains: q.trim(), mode: "insensitive" as const } }, { txid: q.trim().toLowerCase() }, { submittedTxid: q.trim().toLowerCase() }, { utr: q.trim().toUpperCase() }, { user: { email: { contains: q.trim(), mode: "insensitive" as const } } }] } : {}) };
+  const pageNo = Math.max(1, Number(page) || 1);
+  const [orders, total] = await Promise.all([
+    prisma.order.findMany({ where, orderBy: { createdAt: queue ? "asc" : "desc" }, include: { user: true }, skip: (pageNo - 1) * PER_PAGE, take: PER_PAGE }),
+    prisma.order.count({ where }),
+  ]);
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const pageHref = (n: number) => `/admin/orders?${new URLSearchParams({ ...(status ? { status } : {}), ...(q ? { q } : {}), page: String(n) })}`;
   const tab = (key: string, label: string, active: boolean) => (
-    <Link key={key} href={`/admin/orders?status=${key}`} className={`rounded-full px-3 py-1 text-sm ring-1 ${active ? "bg-slate-900 text-white" : "bg-white ring-slate-300"}`}>{label}</Link>
+    <Link key={key} href={`/admin/orders?status=${key}`} className={`chip ${active ? "chip-active" : "bg-white"}`}>{label}</Link>
   );
   return (
     <div className="space-y-4">
-      <PageHeader title="Orders" icon={<ListOrdered className="size-6" />} />
+      <PageHeader title="Orders" subtitle={queue ? "Waiting on you, oldest first." : `${total} order${total === 1 ? "" : "s"}, newest first.`} icon={<ListOrdered className="size-6" />} />
       <div className="flex flex-wrap gap-2">
-        <Link href="/admin/orders" className={`rounded-full px-3 py-1 text-sm ring-1 ${!status ? "bg-slate-900 text-white" : "bg-white ring-slate-300"}`}>Work waiting</Link>
+        <Link href="/admin/orders" className={`chip ${!status ? "chip-active" : "bg-white"}`}>Work waiting</Link>
         {all.map((s) => tab(s, statusLabel(s), status === s))}
         {tab("ALL", "All", status === "ALL")}
       </div>
       <form className="flex gap-2">
         <input type="hidden" name="status" value={status ?? "ALL"} />
-        <input name="q" defaultValue={q} className="input max-w-md" placeholder="Order ID, TxID, UTR or email" />
+        <input name="q" defaultValue={q} aria-label="Search orders" className="input max-w-md" placeholder="Order ID, TxID, UTR or email" />
         <button className="btn-secondary">Search</button>
       </form>
       <div className="card overflow-x-auto">
@@ -56,6 +61,13 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
           </table>
         )}
       </div>
+      {pages > 1 && (
+        <nav className="flex items-center justify-between gap-3" aria-label="Pages">
+          {pageNo > 1 ? <Link href={pageHref(pageNo - 1)} className="btn-secondary">Previous</Link> : <span />}
+          <span className="muted">Page {pageNo} of {pages}</span>
+          {pageNo < pages ? <Link href={pageHref(pageNo + 1)} className="btn-secondary">Next</Link> : <span />}
+        </nav>
+      )}
     </div>
   );
 }

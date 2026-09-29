@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { useStepUp } from "./StepUp";
 
 /**
  * Posts the form to an API route (multipart when it has files, else JSON).
@@ -34,6 +35,7 @@ export function ApiForm({
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const stepUp = useStepUp();
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -42,11 +44,11 @@ export function ApiForm({
     setError(null);
     setOk(null);
     const form = e.currentTarget;
-    const fd = new FormData(form);
-    const hasFile = [...fd.values()].some((v) => v instanceof File);
-    const init: RequestInit = { method };
-    if (hasFile) init.body = fd;
-    else {
+    const build = (totp?: string): RequestInit => {
+      const fd = new FormData(form);
+      if (totp) fd.set("totp", totp);
+      const hasFile = [...fd.values()].some((v) => v instanceof File);
+      if (hasFile) return { method, body: fd };
       const obj: Record<string, unknown> = {};
       for (const [k, v] of fd.entries()) {
         const el = form.elements.namedItem(k);
@@ -54,12 +56,21 @@ export function ApiForm({
         else obj[k] = v;
       }
       for (const el of Array.from(form.elements)) if (el instanceof HTMLInputElement && el.type === "checkbox" && !(el.name in obj)) obj[el.name] = false;
-      init.body = JSON.stringify(obj);
-      init.headers = { "content-type": "application/json" };
-    }
+      return { method, body: JSON.stringify(obj), headers: { "content-type": "application/json" } };
+    };
     try {
-      const res = await fetch(action, init);
-      const data = await res.json().catch(() => ({}));
+      let res = await fetch(action, build());
+      let data = await res.json().catch(() => ({}));
+      // Sensitive admin action without a recent 2FA code: ask once, then retry.
+      // (A wrong code from the dialog re-opens it; a wrong code typed on the 2FA login page doesn't.)
+      let prompted = false;
+      while (res.status === 401 && (data.code === "STEP_UP_REQUIRED" || (prompted && data.code === "BAD_2FA"))) {
+        prompted = true;
+        const code = await stepUp.ask(data.code === "BAD_2FA" ? data.error : undefined);
+        if (!code) return;
+        res = await fetch(action, build(code));
+        data = await res.json().catch(() => ({}));
+      }
       if (!res.ok) {
         setError(data.error ?? `Something went wrong (${res.status}).`);
         return;
@@ -96,6 +107,7 @@ export function ApiForm({
           </p>
         )}
       </fieldset>
+      {stepUp.prompt}
     </form>
   );
 }

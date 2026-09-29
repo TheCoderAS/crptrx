@@ -1,3 +1,5 @@
+import { paymentProblem } from "@/server/orders/actions";
+import { isRegisteredWallet } from "@/server/matching";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -9,7 +11,6 @@ import { getSettings } from "@/server/settings";
 import { explorerAddressUrl, explorerTxUrl, NETWORK_INFO, type Mode, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { TotpField } from "@/components/Totp";
 import { BackLink, Banner, NetworkBadge, Row, StatusPill, Timeline } from "@/components/ui";
 
 export default async function AdminOrder({ params }: { params: Promise<{ id: string }> }) {
@@ -20,11 +21,13 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
     include: { user: true, events: { orderBy: { createdAt: "asc" } }, notes: { include: { admin: true }, orderBy: { createdAt: "asc" } }, transfers: true, support: { orderBy: { createdAt: "desc" } } },
   });
   if (!o) notFound();
-  const [s, kyc, admins] = await Promise.all([
+  const [s, kyc, admins, senderKnown] = await Promise.all([
     getSettings(),
     prisma.kycSubmission.findFirst({ where: { userId: o.userId }, orderBy: { submittedAt: "desc" } }),
     prisma.admin.findMany({ select: { id: true, name: true } }),
+    o.senderAddress ? isRegisteredWallet(prisma, o.userId, o.network as NetworkCode, o.senderAddress) : Promise.resolve(false),
   ]);
+  const payProblem = paymentProblem(o);
   const adminName = (aid: string | null) => admins.find((a) => a.id === aid)?.name ?? aid ?? "";
   const n = o.network as NetworkCode;
   const mode = o.networkMode as Mode;
@@ -56,7 +59,17 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           {o.submittedTxid && <Row k="TxID submitted by user" v={txLink(o.submittedTxid, (o.submittedTxid.startsWith("0x") ? "BSC" : "TRON") as NetworkCode)} />}
           {o.txid && <Row k="Matched TxID" v={<>{txLink(o.txid)} <span className="text-xs text-slate-500">#{o.transferPosition}</span></>} />}
           {o.receivedAmount && <Row k="Amount received" v={<span className={D(o.receivedAmount).eq(D(o.usdtAmount)) ? "" : "text-red-700"}>{fmtUsdt(o.receivedAmount)} USDT</span>} />}
-          {o.senderAddress && <Row k="Sender wallet" v={<a className="font-mono text-xs underline" target="_blank" rel="noreferrer" href={explorerAddressUrl(n, mode, o.senderAddress)}>{o.senderAddress}</a>} />}
+          {o.senderAddress && (
+            <Row
+              k="Sender wallet"
+              v={
+                <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                  <a className="font-mono text-xs break-all underline" target="_blank" rel="noreferrer" href={explorerAddressUrl(n, mode, o.senderAddress)}>{o.senderAddress}</a>
+                  <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ${senderKnown ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>{senderKnown ? "Registered by user" : "Not registered"}</span>
+                </span>
+              }
+            />
+          )}
           {o.confirmedAt && <Row k="Confirmed" v={fmtIST(o.confirmedAt)} />}
         </div>
         <div className="card">
@@ -97,7 +110,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           <ApiForm action={act} className="space-y-2">
             <input type="hidden" name="action" value="wallet_check" />
             <p className="muted">Check the sender wallet {o.senderAddress ? <code>{o.senderAddress}</code> : ""} in your scam-check tool and paste the result.</p>
-            <textarea name="note" required rows={3} className="input" defaultValue={o.walletCheckNote ?? ""} placeholder="Paste the check result" />
+            <textarea aria-label="Paste the check result" name="note" required rows={3} className="input" defaultValue={o.walletCheckNote ?? ""} placeholder="Paste the check result" />
             <div className="flex gap-4 text-sm">
               <label className="flex items-center gap-1"><input type="radio" name="result" value="CLEAN" required defaultChecked={o.walletCheckResult === "CLEAN"} /> Clean</label>
               <label className="flex items-center gap-1"><input type="radio" name="result" value="SUSPICIOUS" defaultChecked={o.walletCheckResult === "SUSPICIOUS"} /> Suspicious</label>
@@ -112,20 +125,29 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
         <h2 className="h2">Actions</h2>
         <div className="flex flex-wrap gap-3">
           {o.status === "PAYMENT_CONFIRMED" && <ApiForm action={act}><input type="hidden" name="action" value="start_review" /><button className="btn-primary">Start review</button></ApiForm>}
-          {o.status === "UNDER_REVIEW" && <ApiForm action={act} confirm={`Approve ${o.id} for ${fmtInr(o.net)}?`}><input type="hidden" name="action" value="approve" /><button className="btn-primary" disabled={!o.walletCheckResult}>Approve</button></ApiForm>}
+          {o.status === "UNDER_REVIEW" && !payProblem && <ApiForm action={act} confirm={`Approve ${o.id} for ${fmtInr(o.net)}?`}><input type="hidden" name="action" value="approve" /><button className="btn-primary" disabled={!o.walletCheckResult}>Approve</button></ApiForm>}
           {o.status === "ON_HOLD" && <ApiForm action={act}><input type="hidden" name="action" value="release" /><button className="btn-secondary">Release from hold</button></ApiForm>}
         </div>
+        {o.status === "UNDER_REVIEW" && payProblem && (
+          <ApiForm action={act} className="mt-3 space-y-2 rounded-xl bg-rose-50 p-4 ring-1 ring-rose-200" confirm={`Approve ${o.id} for ${fmtInr(o.net)} even though the payment doesn't match?`}>
+            <input type="hidden" name="action" value="approve" />
+            <p className="text-sm font-semibold text-rose-800">{payProblem}</p>
+            <p className="text-sm text-rose-800">The payout is fixed at {fmtInr(o.net)}. Usually you should put this on hold and resolve it with the customer instead.</p>
+            <label className="label" htmlFor="overrideNote">Approve anyway: why? (logged)</label>
+            <textarea id="overrideNote" name="overrideNote" required minLength={10} rows={2} className="input" placeholder="e.g. Customer sent the missing 0.37 USDT in tx 0x…, checked on explorer" />
+            <button className="btn-danger" disabled={!o.walletCheckResult}>Approve anyway</button>
+          </ApiForm>
+        )}
         {o.status === "APPROVED" && (
-          <ApiForm action={act} className="space-y-2 rounded-lg bg-green-50 p-3">
+          <ApiForm action={act} className="space-y-2 rounded-lg bg-green-50 p-3" confirm={`Record ${fmtInr(o.net)} as paid for ${o.id}? The customer is told at once.`}>
             <h3 className="font-semibold">Mark as paid</h3>
             <p className="muted">Pay {fmtInr(o.net)} from the company bank account first, then record it here.</p>
             <input type="hidden" name="action" value="mark_paid" />
             <div className="grid gap-2 sm:grid-cols-3">
-              <div><label className="label">UTR (12–22 letters/numbers)</label><input name="utr" required pattern="[A-Za-z0-9]{12,22}" className="input" /></div>
-              <div><label className="label">Amount paid (must be {D(o.net).toFixed(2)})</label><input name="amount" required inputMode="decimal" className="input" /></div>
-              <div><label className="label">Paid at (IST)</label><input name="paidAt" type="datetime-local" required defaultValue={nowIst} className="input" /></div>
+              <div><label className="label" htmlFor="utr">UTR (12–22 letters/numbers)</label><input id="utr" name="utr" required pattern="[A-Za-z0-9]{12,22}" className="input" /></div>
+              <div><label className="label" htmlFor="paid-amount">Amount paid (must be {D(o.net).toFixed(2)})</label><input id="paid-amount" name="amount" required inputMode="decimal" className="input" /></div>
+              <div><label className="label" htmlFor="paidAt">Paid at (IST)</label><input id="paidAt" name="paidAt" type="datetime-local" required defaultValue={nowIst} className="input" /></div>
             </div>
-            <TotpField />
             <button className="btn-primary">Mark as paid</button>
           </ApiForm>
         )}
@@ -133,9 +155,9 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           <ApiForm action={act} className="space-y-2 rounded-lg bg-orange-50 p-3">
             <h3 className="font-semibold">Put on hold</h3>
             <input type="hidden" name="action" value="hold" />
-            <select name="reason" required className="input">{s.hold_reasons.map((r) => <option key={r}>{r}</option>)}</select>
-            <input name="message" className="input" placeholder="Message shown to the user (optional)" />
-            <input name="note" className="input" placeholder="Private note (admins only)" />
+            <select name="reason" required aria-label="Hold reason" className="input">{s.hold_reasons.map((r) => <option key={r}>{r}</option>)}</select>
+            <input name="message" aria-label="Message shown to the user" className="input" placeholder="Message shown to the user (optional)" />
+            <input name="note" aria-label="Private note" className="input" placeholder="Private note (admins only)" />
             <button className="btn-secondary">Put on hold</button>
           </ApiForm>
         )}
@@ -143,8 +165,8 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           <ApiForm action={act} className="space-y-2 rounded-lg bg-slate-50 p-3" confirm="Close this order? This is final.">
             <h3 className="font-semibold">Close hold (resolved outside the app)</h3>
             <input type="hidden" name="action" value="close_manual" />
-            <textarea name="resolutionNote" required rows={2} className="input" placeholder="How it was resolved (required)" />
-            <input name="returnTxid" className="input font-mono" placeholder="Return TxID, if USDT was sent back" />
+            <textarea name="resolutionNote" required rows={2} aria-label="How it was resolved" className="input" placeholder="How it was resolved (required)" />
+            <input name="returnTxid" aria-label="Return TxID" className="input font-mono" placeholder="Return TxID, if USDT was sent back" />
             <button className="btn-danger">Close order</button>
           </ApiForm>
         )}
@@ -161,7 +183,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           {o.notes.map((nt) => <p key={nt.id} className="text-sm"><b>{nt.admin.name}</b> <span className="text-xs text-slate-500">{fmtIST(nt.createdAt)}</span><br />{nt.note}</p>)}
           <ApiForm action={act} className="space-y-2" resetOnSuccess>
             <input type="hidden" name="action" value="note" />
-            <textarea name="note" required rows={2} className="input" placeholder="Add a private note" />
+            <textarea aria-label="Add a private note" name="note" required rows={2} className="input" placeholder="Add a private note" />
             <button className="btn-secondary">Add note</button>
           </ApiForm>
           {o.support.length > 0 && <>

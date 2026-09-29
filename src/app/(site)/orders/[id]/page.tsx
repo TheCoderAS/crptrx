@@ -92,7 +92,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
 
   return (
     <div className="space-y-5">
-      {(o.status === "QUOTE_READY" || o.status === "PAYMENT_SUBMITTED") && <AutoRefresh />}
+      {/* Refresh on its own while something is still happening: every 15 s while waiting for the payment, every minute during review. */}
+      {["QUOTE_READY", "PAYMENT_SUBMITTED"].includes(o.status) && <AutoRefresh />}
+      {["PAYMENT_CONFIRMED", "UNDER_REVIEW", "APPROVED"].includes(o.status) && <AutoRefresh everyMs={60_000} />}
       <div className="flex items-center justify-between gap-3">
         <Link href="/orders" className="btn-ghost -ml-3 px-3"><ArrowLeft className="size-4" aria-hidden /> Orders</Link>
         <span className="text-xs text-slate-500">{o.id}</span>
@@ -106,6 +108,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <h1 className="mt-4 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{text.title}</h1>
         <p className="mt-1 text-slate-600">{heroBody}</p>
         {pIdx !== undefined && <div className="mt-6"><Steps steps={PROGRESS} current={pIdx} failed={o.status === "ON_HOLD"} /></div>}
+        {(o.status === "EXPIRED" || (o.status === "QUOTE_READY" && !waiting)) && (
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Link href="/sell" className="btn-primary">Start a new order</Link>
+            <p className="text-sm text-slate-500">Already sent USDT for this order? Don&apos;t worry: we still match it for 24 hours.</p>
+          </div>
+        )}
         {o.status === "PAID" && (
           <div className="mt-6 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
             <div className="text-sm">
@@ -128,6 +136,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             <Countdown until={o.quoteExpiresAt.toISOString()} variant="ring" />
           </div>
           <Banner tone="danger" title={`${nw} only`}>Send only USDT on the {nw} network. Sending on any other network, or any other coin, may permanently lose your funds.</Banner>
+          {s.wallet_registration === "REQUIRED" && <Banner tone="warn">Send from a wallet listed in <Link href="/wallets" className="font-medium underline">Your wallets</Link>. Payments from other wallets are held for a check.</Banner>}
           {n === "BSC" && <Banner tone="warn">This is <b>not</b> an Ethereum (ERC-20) address, even though it looks similar.</Banner>}
 
           <div>

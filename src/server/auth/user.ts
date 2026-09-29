@@ -17,7 +17,17 @@ export async function upsertUserFromIdentity(id: FirebaseIdentity, ip: string | 
     user = await prisma.user.create({ data: { email: id.email, emailVerified: true, firebaseUid: id.uid, displayName: id.name } });
     await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: id.provider ?? "google" }, ip });
   } else if (!user.firebaseUid) {
-    user = await prisma.user.update({ where: { id: user.id }, data: { firebaseUid: id.uid, emailVerified: true } });
+    // Linking Google to an email account. If that email was never confirmed,
+    // whoever set the password didn't prove they own the inbox: drop it.
+    const dropPassword = !user.emailVerified && !!user.passwordHash;
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { firebaseUid: id.uid, emailVerified: true, ...(dropPassword ? { passwordHash: null } : {}) },
+    });
+    if (dropPassword) {
+      await prisma.session.deleteMany({ where: { subjectType: "USER", subjectId: user.id } });
+      await audit({ type: "USER", id: user.id }, "UNVERIFIED_PASSWORD_REMOVED", { details: { reason: "Google sign-in proved email ownership" }, ip });
+    }
   }
   if (user.status !== "ACTIVE") {
     await audit({ type: "USER", id: user.id }, "USER_LOGIN_FAILED", { details: { reason: "disabled" }, ip });

@@ -38,10 +38,16 @@ export default async function Home() {
     { icon: Lock, tile: "tile-violet", title: "Own-name payouts only", body: "Money never goes to a third party." },
     { icon: LineChart, tile: "tile-emerald", title: "Live order tracking", body: "Every step, time-stamped." },
     { icon: ReceiptText, tile: "tile-amber", title: "PDF receipt", body: "With UTR, TDS and fees itemised." },
-    { icon: FileCheck2, tile: "tile-rose", title: `${s.tax_percent}% TDS handled`, body: "Reported against your PAN." },
+    { icon: FileCheck2, tile: "tile-rose", title: `${s.tax_percent}% TDS handled`, body: s.kyc_required ? "Reported against your PAN." : "Shown on every receipt." },
     { icon: Fingerprint, tile: "tile-slate", title: "Human safety check", body: "Every order reviewed before payout." },
   ];
 
+  const trust = [
+    ...(fiu ? [{ icon: ShieldCheck, title: "FIU-IND registered", body: `Reg. no. ${s.company_fiu_reg}` }] : []),
+    s.kyc_required ? { icon: BadgeCheck, title: "Verified users only", body: "ID-checked accounts" } : { icon: BadgeCheck, title: "Own-name payouts", body: "Paid only to your account" },
+    { icon: Lock, title: "Private documents", body: "Every view logged" },
+    { icon: Clock3, title: "Clear timelines", body: s.business_hours_text },
+  ];
   return (
     <div className="space-y-20 sm:space-y-28">
       <JsonLd
@@ -64,14 +70,14 @@ export default async function Home() {
         <div className="relative grid items-center gap-12 lg:grid-cols-[1.1fr_1fr]">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 backdrop-blur">
-              <ShieldCheck className="size-3.5 text-emerald-600" aria-hidden /> KYC-verified · India only
+              <ShieldCheck className="size-3.5 text-emerald-600" aria-hidden /> {s.kyc_required ? "KYC-verified · India only" : "India only"}
             </span>
             <h1 className="mt-5 text-4xl leading-[1.05] font-bold tracking-tight text-slate-900 sm:text-6xl">
               USDT to <span className="text-gradient">rupees</span>,<br /> straight to your bank.
             </h1>
             <p className="mt-5 max-w-md text-lg text-slate-600">Exact quote. Own-name payout. Receipt with every rupee.</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/login" className="btn btn-lg bg-brand-gradient text-white shadow-lg shadow-brand-600/25 hover:opacity-95">
+              <Link href="/signup" className="btn btn-lg bg-brand-gradient text-white shadow-lg shadow-brand-600/25 hover:opacity-95">
                 Start selling <ArrowRight className="size-4" aria-hidden />
               </Link>
               <Link href="/help" className="btn-secondary btn-lg bg-white/80 backdrop-blur">How it works</Link>
@@ -123,7 +129,7 @@ export default async function Home() {
           <h2 id="how" className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Four steps. <span className="text-gradient">Zero guesswork.</span></h2>
         </div>
         <ol className="relative mt-12 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-4">
-          <span className="absolute top-7 right-[12%] left-[12%] hidden h-0.5 bg-gradient-to-r from-sky-300 via-violet-300 to-emerald-300 sm:block" aria-hidden />
+          <span className="absolute top-7 right-[12%] left-[12%] hidden h-0.5 bg-gradient-to-r from-brand-200 via-accent/40 to-emerald-300 sm:block" aria-hidden />
           {steps.map(({ icon: Icon, tile, title, body }, i) => (
             <li key={title} className="relative flex flex-col items-center text-center">
               <span className={`icon-tile ${tile} size-14 rounded-2xl ring-4 ring-slate-50`}><Icon className="size-6" aria-hidden /></span>
@@ -151,13 +157,8 @@ export default async function Home() {
 
       {/* Trust band */}
       <section className="bg-mesh-dark -mx-4 overflow-hidden px-6 py-12 text-white sm:mx-0 sm:rounded-[2rem] sm:px-12">
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            ...(fiu ? [{ icon: ShieldCheck, title: "FIU-IND registered", body: `Reg. no. ${s.company_fiu_reg}` }] : [{ icon: ShieldCheck, title: "Compliance first", body: "KYC for every user" }]),
-            { icon: BadgeCheck, title: "Verified users only", body: "ID-checked accounts" },
-            { icon: Lock, title: "Private documents", body: "Every view logged" },
-            { icon: Clock3, title: "Clear timelines", body: s.business_hours_text },
-          ].map(({ icon: Icon, title, body }) => (
+        <div className={`grid gap-8 sm:grid-cols-2 ${trust.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+          {trust.map(({ icon: Icon, title, body }) => (
             <div key={title} className="flex items-start gap-3">
               <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/15"><Icon className="size-5 text-emerald-300" aria-hidden /></span>
               <div>
@@ -175,7 +176,7 @@ export default async function Home() {
         <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Ready when you are.</h2>
         <p className="mt-2 text-white/80">Set up once. Sell in minutes.</p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
-          <Link href="/login" className="btn btn-lg bg-white text-brand-800 shadow-lg hover:bg-brand-50">Create free account <ArrowRight className="size-4" aria-hidden /></Link>
+          <Link href="/signup" className="btn btn-lg bg-white text-brand-800 shadow-lg hover:bg-brand-50">Create free account <ArrowRight className="size-4" aria-hidden /></Link>
           <Link href="/help" className="btn btn-lg text-white ring-1 ring-white/40 hover:bg-white/10">Read the FAQ</Link>
         </div>
       </section>

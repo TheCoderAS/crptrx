@@ -17,7 +17,7 @@ export function SupportPanel({ orderId, defaultOpen, hours }: { orderId: string;
       </summary>
       <ApiForm action="/api/support" className="mt-4 space-y-3" resetOnSuccess>
         <input type="hidden" name="orderId" value={orderId} />
-        <textarea name="message" required rows={4} className="input" placeholder="Tell us what happened" />
+        <textarea name="message" required rows={4} aria-label="Your message to support" className="input" placeholder="Tell us what happened" />
         <div>
           <label className="label" htmlFor="screenshot">Screenshot <span className="font-normal text-slate-500">(optional)</span></label>
           <input id="screenshot" name="screenshot" type="file" accept="image/jpeg,image/png,application/pdf" className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium" />

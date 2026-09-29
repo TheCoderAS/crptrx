@@ -67,11 +67,27 @@ export async function saveWalletCheck(orderId: string, input: { result: string; 
   await audit(actor, "WALLET_CHECK_SAVED", { targetType: "order", targetId: orderId, details: { result: input.result } });
 }
 
-export async function approveOrder(orderId: string, actor: Actor) {
+/** Why paying this order out would not match what we received, or null when it's clean. */
+export function paymentProblem(o: { txid: string | null; receivedAmount: unknown; usdtAmount: unknown }): string | null {
+  if (!o.txid) return "No blockchain payment is linked to this order.";
+  if (o.receivedAmount == null || !D(String(o.receivedAmount)).eq(D(String(o.usdtAmount))))
+    return `We received ${o.receivedAmount ?? 0} USDT, not the ${o.usdtAmount} USDT quoted.`;
+  return null;
+}
+
+export async function approveOrder(orderId: string, actor: Actor, overrideNote?: string) {
   const o = await load(orderId);
   if (!o.walletCheckResult || !o.walletCheckNote) throw new AppError("Fill in the wallet check before approving.", 422, "WALLET_CHECK_REQUIRED");
   if (o.walletCheckResult === "SUSPICIOUS") throw new AppError("The wallet check says Suspicious. Put the order on hold instead.", 422);
-  await prisma.$transaction((tx) => transition(tx, orderId, "APPROVED", actor, { from: "UNDER_REVIEW", publicMessage: "Approved. Payment is being sent." }));
+  // The payout is fixed to the quoted amount, so only approve when that's what arrived,
+  // unless an admin writes down why (e.g. the customer topped up in a second transfer).
+  const problem = paymentProblem(o);
+  const note = overrideNote?.trim();
+  if (problem && (!note || note.length < 10)) throw new AppError(`${problem} To approve anyway, write why in the override note.`, 422, "PAYMENT_MISMATCH");
+  await prisma.$transaction((tx) =>
+    transition(tx, orderId, "APPROVED", actor, { from: "UNDER_REVIEW", publicMessage: "Approved. Payment is being sent.", privateNote: problem ? `Approved despite: ${problem} Reason: ${note}` : null }),
+  );
+  if (problem) await audit(actor, "ORDER_APPROVED_OVERRIDE", { targetType: "order", targetId: orderId, details: { problem, note: note ?? null } });
 }
 
 /** Requires the caller to have re-checked the admin's 2FA code (spec 10.4). */
@@ -86,13 +102,19 @@ export async function markPaid(orderId: string, input: { utr: string; amount: st
   if (paidAt.getTime() > Date.now() + 5 * 60_000) throw new AppError("Paid time can't be in the future.");
   const dupUtr = await prisma.order.findFirst({ where: { utr, id: { not: orderId } }, select: { id: true } });
   if (dupUtr) throw new AppError(`This UTR is already recorded on ${dupUtr.id}.`, 409);
-  await prisma.$transaction((tx) =>
-    transition(tx, orderId, "PAID", actor, {
-      from: "APPROVED",
-      publicMessage: `Paid. Bank reference ${utr}.`,
-      data: { utr, paidAmount: D(o.net).toFixed(2), paidAt, paidByAdminId: actor.id },
-    }),
-  );
+  try {
+    await prisma.$transaction((tx) =>
+      transition(tx, orderId, "PAID", actor, {
+        from: "APPROVED",
+        publicMessage: `Paid. Bank reference ${utr}.`,
+        data: { utr, paidAmount: D(o.net).toFixed(2), paidAt, paidByAdminId: actor.id },
+      }),
+    );
+  } catch (e) {
+    // Unique index on utr: two admins entering the same UTR at the same moment.
+    if ((e as { code?: string }).code === "P2002") throw new AppError("This UTR is already recorded on another order.", 409);
+    throw e;
+  }
 }
 
 export async function closeManual(orderId: string, input: { resolutionNote: string; returnTxid?: string }, actor: Actor) {

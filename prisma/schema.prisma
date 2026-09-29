@@ -90,6 +90,9 @@ model User {
   mobile           String?
   mobileVerifiedAt DateTime?
   displayName      String?
+  passwordHash     String?
+  failedLogins     Int        @default(0)
+  lockedUntil      DateTime?
   status           UserStatus @default(ACTIVE)
   kycStatus        KycStatus  @default(NOT_STARTED)
   createdAt        DateTime   @default(now())
@@ -99,6 +102,8 @@ model User {
   payoutMethods  PayoutMethod[]
   orders         Order[]
   supportMessages SupportMessage[]
+  wallets         UserWallet[]
+  emailTokens     EmailToken[]
 
   @@map("users")
 }
@@ -116,6 +121,9 @@ model KycSubmission {
   aadhaarBackKey  String
   selfieKey     String
   maskedConfirmed Boolean
+  autoApproved  Boolean   @default(false) // approved instantly by the kyc_auto_approve setting
+  postReviewedAt DateTime? // when an admin looked at an auto-approved submission
+  postReviewedBy String?
   status        KycStatus
   reviewerId    String?
   reason        String?
@@ -143,6 +151,7 @@ model PayoutMethod {
   reviewerId             String?
   reason                 String?
   isDefault              Boolean      @default(false)
+  autoApproved           Boolean      @default(false) // holder name matched the KYC name exactly
   createdAt              DateTime     @default(now())
   reviewedAt             DateTime?
   deletedAt              DateTime?
@@ -377,6 +386,7 @@ model Session {
   createdAt   DateTime  @default(now())
   lastSeenAt  DateTime  @default(now())
   expiresAt   DateTime
+  stepUpAt    DateTime? // ADMIN: last time a 2FA code was entered (login or re-check)
 
   @@index([subjectType, subjectId])
   @@map("sessions")
@@ -433,4 +443,47 @@ model RateFeedState {
   updatedAt      DateTime  @updatedAt
 
   @@map("rate_feed_state")
+}
+
+/// One-time links sent by email (confirm email, reset password). Only the hash is stored.
+model EmailToken {
+  id        String    @id @default(cuid())
+  userId    String
+  purpose   String // VERIFY_EMAIL | RESET_PASSWORD
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, purpose])
+  @@map("email_tokens")
+}
+
+/// Wallets a user says they send USDT from (wallet_registration setting).
+model UserWallet {
+  id        String    @id @default(cuid())
+  userId    String
+  network   Network
+  address   String // canonical form
+  label     String?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, network])
+  @@map("user_wallets")
+}
+
+/// Brand files uploaded by the admin (e.g. the logo), stored in the database as base64.
+model BrandAsset {
+  key       String   @id // "logo"
+  mime      String
+  data      String // base64
+  size      Int
+  updatedAt DateTime @updatedAt
+
+  @@map("brand_assets")
 }

@@ -5,7 +5,7 @@ import { prisma, type Tx } from "./db";
 import { allKnownDepositAddresses } from "./deposit";
 import { D } from "./money";
 import { getAdapter, type ChainTransfer } from "./networks";
-import { limitProblem } from "./orders/quote";
+import { LATE_PAYMENT_WINDOW_MS, limitProblem } from "./orders/quote";
 import { transition } from "./orders/stateMachine";
 import { getSettings, tokenContractFor, type Settings } from "./settings";
 
@@ -19,11 +19,13 @@ export const HOLD = {
   TX_FAILED: "The transaction failed on the blockchain.",
   NOT_TO_US: "We couldn't find a USDT payment to our address in this transaction.",
   BEFORE_QUOTE: "The payment was made before this order was created.",
+  UNKNOWN_WALLET: "Sent from a wallet that isn't on your account.",
+  TXID_NOT_FOUND: "We couldn't find a payment with the transaction ID you gave.",
 } as const;
 
 export type MatchEvent = { orderId: string; kind: "CONFIRMED" | "ON_HOLD"; reason?: string };
 
-const LATE_WINDOW_MS = 24 * 3600_000;
+const LATE_WINDOW_MS = LATE_PAYMENT_WINDOW_MS;
 
 function toRow(t: ChainTransfer): Prisma.IncomingTransferCreateInput {
   return {
@@ -66,13 +68,20 @@ async function linkTransfer(tx: Tx, t: IncomingTransfer, orderId: string) {
   await tx.incomingTransfer.update({ where: { id: t.id }, data: { status: "MATCHED", matchedOrderId: orderId } });
 }
 
+export async function isRegisteredWallet(tx: Tx, userId: string, network: NetworkCode, address: string): Promise<boolean> {
+  const addr = getAdapter(network).normalizeAddress(address);
+  return (await tx.userWallet.count({ where: { userId, network, address: addr, deletedAt: null } })) > 0;
+}
+
 /** Confirm a transfer that pays `order` with the exact amount, then apply late / limit holds. */
 async function confirmExact(tx: Tx, s: Settings, t: IncomingTransfer, order: Order, events: MatchEvent[]) {
   await linkTransfer(tx, t, order.id);
   await transition(tx, order.id, "PAYMENT_CONFIRMED", SYSTEM, { from: order.status, publicMessage: "Payment received.", data: linkData(t) });
   const late = order.status === "EXPIRED" || t.blockTime > order.quoteExpiresAt;
   if (late) {
-    await transition(tx, order.id, "ON_HOLD", SYSTEM, { from: "PAYMENT_CONFIRMED", publicMessage: HOLD.LATE, data: { holdReason: HOLD.LATE } });
+    // Limits are still checked, so paying expired quotes late can't get around them.
+    const over = await limitProblem(tx, s, order.userId, D(order.usdtAmount), order.id);
+    await transition(tx, order.id, "ON_HOLD", SYSTEM, { from: "PAYMENT_CONFIRMED", publicMessage: HOLD.LATE, privateNote: over ? `Also over limit: ${over}` : null, data: { holdReason: HOLD.LATE } });
     events.push({ orderId: order.id, kind: "ON_HOLD", reason: HOLD.LATE });
     return;
   }
@@ -80,6 +89,12 @@ async function confirmExact(tx: Tx, s: Settings, t: IncomingTransfer, order: Ord
   if (problem) {
     await transition(tx, order.id, "ON_HOLD", SYSTEM, { from: "PAYMENT_CONFIRMED", publicMessage: HOLD.OVER_LIMIT, privateNote: problem, data: { holdReason: HOLD.OVER_LIMIT } });
     events.push({ orderId: order.id, kind: "ON_HOLD", reason: HOLD.OVER_LIMIT });
+    return;
+  }
+  if (s.wallet_registration === "REQUIRED" && !(await isRegisteredWallet(tx, order.userId, t.network as NetworkCode, t.fromAddress))) {
+    const note = `Sender ${t.fromAddress} is not a registered wallet of this user`;
+    await transition(tx, order.id, "ON_HOLD", SYSTEM, { from: "PAYMENT_CONFIRMED", publicMessage: HOLD.UNKNOWN_WALLET, privateNote: note, data: { holdReason: HOLD.UNKNOWN_WALLET } });
+    events.push({ orderId: order.id, kind: "ON_HOLD", reason: HOLD.UNKNOWN_WALLET });
     return;
   }
   events.push({ orderId: order.id, kind: "CONFIRMED" });
@@ -94,32 +109,8 @@ async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchE
   const a = getAdapter(t.network as NetworkCode);
   const to = a.normalizeAddress(t.toAddress);
 
-  // 1) An order that claimed this TxID.
-  const claimed = await tx.order.findFirst({ where: { submittedTxid: t.txid, status: "PAYMENT_SUBMITTED" } });
-  if (claimed) {
-    if (claimed.network !== t.network) {
-      await hold(tx, claimed, HOLD.OTHER_NETWORK, events, `Transfer ${t.network} ${t.txid}#${t.transferPosition}`);
-      return; // transfer stays unmatched for an admin to link by hand
-    }
-    if (a.normalizeAddress(claimed.depositAddress) === to) {
-      if (t.blockTime < claimed.createdAt) {
-        await linkTransfer(tx, t, claimed.id);
-        await hold(tx, claimed, HOLD.BEFORE_QUOTE, events);
-        return;
-      }
-      if (D(t.amount).eq(D(claimed.usdtAmount))) return confirmExact(tx, s, t, claimed, events);
-      // Wrong amount. If another transfer in the same tx pays it exactly, let that one match instead.
-      const exactSibling = siblings.some((x) => x.id !== t.id && a.normalizeAddress(x.toAddress) === to && D(x.amount).eq(D(claimed.usdtAmount)));
-      if (!exactSibling) {
-        await linkTransfer(tx, t, claimed.id);
-        await tx.order.update({ where: { id: claimed.id }, data: linkData(t) });
-        await hold(tx, claimed, HOLD.AMOUNT, events, `Expected ${claimed.usdtAmount} received ${t.amount}`);
-        return;
-      }
-    }
-  }
-
-  // 2) Exact amount among open quotes (or expired within 24 h) on the same network + address.
+  // The order this transfer pays exactly: an open quote (or one expired within
+  // 24 h) on the same network + address with exactly this amount.
   const candidates = await tx.order.findMany({
     where: {
       network: t.network,
@@ -132,8 +123,44 @@ async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchE
     orderBy: { createdAt: "desc" },
   });
   const sameAddress = candidates.filter((o) => a.normalizeAddress(o.depositAddress) === to);
-  const pick = sameAddress.find((o) => o.status === "QUOTE_READY") ?? sameAddress[0];
-  if (pick) return confirmExact(tx, s, t, pick, events);
+  const exact = sameAddress.find((o) => o.status === "QUOTE_READY") ?? sameAddress[0] ?? null;
+
+  // 1) An order that claimed this TxID. A claim only wins when it fits exactly,
+  //    or when no other order fits: anyone can copy a TxID off the blockchain,
+  //    so a wrong claim must never take a payment from the order it pays.
+  const claimed = await tx.order.findFirst({ where: { submittedTxid: t.txid, status: "PAYMENT_SUBMITTED" } });
+  if (claimed) {
+    if (claimed.network !== t.network) {
+      await hold(tx, claimed, HOLD.OTHER_NETWORK, events, `Transfer ${t.network} ${t.txid}#${t.transferPosition}`);
+      if (exact) return confirmExact(tx, s, t, exact, events);
+      return; // transfer stays unmatched for an admin to link by hand
+    }
+    if (a.normalizeAddress(claimed.depositAddress) === to) {
+      const fits = t.blockTime >= claimed.createdAt && D(t.amount).eq(D(claimed.usdtAmount));
+      if (fits) return confirmExact(tx, s, t, claimed, events);
+      if (exact) {
+        // Pays someone else's order exactly. The claimant is held: their TxID isn't theirs.
+        await hold(tx, claimed, HOLD.TXID_USED, events, `Claimed ${t.txid}, which pays ${exact.id}`);
+        return confirmExact(tx, s, t, exact, events);
+      }
+      if (t.blockTime < claimed.createdAt) {
+        await linkTransfer(tx, t, claimed.id);
+        await hold(tx, claimed, HOLD.BEFORE_QUOTE, events);
+        return;
+      }
+      // Wrong amount. If another transfer in the same tx pays it exactly, let that one match instead.
+      const exactSibling = siblings.some((x) => x.id !== t.id && a.normalizeAddress(x.toAddress) === to && D(x.amount).eq(D(claimed.usdtAmount)));
+      if (!exactSibling) {
+        await linkTransfer(tx, t, claimed.id);
+        await tx.order.update({ where: { id: claimed.id }, data: linkData(t) });
+        await hold(tx, claimed, HOLD.AMOUNT, events, `Expected ${claimed.usdtAmount} received ${t.amount}`);
+        return;
+      }
+    }
+  }
+
+  // 2) Exact amount.
+  if (exact) return confirmExact(tx, s, t, exact, events);
   // 3) No match: stays UNMATCHED for the admin list.
 }
 

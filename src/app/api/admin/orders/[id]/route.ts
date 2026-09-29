@@ -25,7 +25,7 @@ export const POST = api(async (req: Request, ctx: Ctx) => {
       await saveWalletCheck(id, { result: b.result, note: b.note }, a.actor);
       break;
     case "approve":
-      await approveOrder(id, a.actor);
+      await approveOrder(id, a.actor, b.overrideNote);
       await notifyOrder(id, "APPROVED");
       break;
     case "mark_paid":

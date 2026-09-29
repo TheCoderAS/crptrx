@@ -7,7 +7,7 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
   return (
     <button
       type="button"
-      aria-label={`${label}: ${text}`}
+      aria-label={done ? "Copied" : `${label}: ${text}`}
       className={`btn shrink-0 px-3 py-2 ring-1 ring-inset ${done ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"}`}
       onClick={async () => {
         try {
@@ -21,6 +21,7 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
     >
       {done ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
       {done ? "Copied" : label}
+      <span className="sr-only" aria-live="polite">{done ? "Copied to clipboard" : ""}</span>
     </button>
   );
 }

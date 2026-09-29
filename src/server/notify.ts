@@ -4,6 +4,7 @@ import { env } from "./env";
 import { fmtInr, fmtUsdt } from "./money";
 import { maskedPayout, type PayoutSnapshot } from "./payouts";
 import { getSettings } from "./settings";
+import { companyName, contactChannels } from "./contact";
 import type { MatchEvent } from "./matching";
 
 // ---------------------------------------------------------------------------
@@ -32,7 +33,10 @@ export async function sendEmail(to: string, subject: string, body: string) {
     error = (e as Error).message;
     console.error(`[email] failed to=${to}: ${error}`);
   }
-  await prisma.outboundMessage.create({ data: { channel: "EMAIL", to, subject, body, provider, status, error } });
+  // The console provider is the test Outbox, where testers need the links.
+  // With a real provider, one-time links are not kept in the database.
+  const stored = provider === "console" ? body : body.replace(/token=[^\s&]+/g, "token=[removed]");
+  await prisma.outboundMessage.create({ data: { channel: "EMAIL", to, subject, body: stored, provider, status, error } });
 }
 
 export async function sendSms(to: string, body: string, otp?: string) {
@@ -67,7 +71,8 @@ async function toUser(userId: string, subject: string, body: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return;
   const s = await getSettings();
-  const footer = `\n\n— ${s.company_name}\n${s.business_hours_text}\nNeed help? Reply to ${s.support_email}`;
+  const contacts = contactChannels(s).map((c) => `${c.label}: ${c.value}`).join(" · ");
+  const footer = `\n\n— ${companyName(s)}\n${s.business_hours_text}${contacts ? `\nNeed help? ${contacts}` : ""}`;
   await sendEmail(user.email, subject, body + footer);
   if (s.sms_notifications_enabled && user.mobile) await sendSms(user.mobile, `${subject}. ${body}`.slice(0, 300));
 }

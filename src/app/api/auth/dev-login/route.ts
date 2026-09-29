@@ -5,6 +5,7 @@ import { clientIp, createSession } from "@/server/auth/session";
 import { upsertUserFromIdentity } from "@/server/auth/user";
 import { rateLimit } from "@/server/ratelimit";
 import { getSettings } from "@/server/settings";
+import { afterLoginPath } from "@/server/auth/pages";
 
 /** Test phases only (DEV_LOGIN_ENABLED=true): sign in with any email, no Google account needed. */
 export const POST = api(async (req: Request) => {
@@ -17,5 +18,5 @@ export const POST = api(async (req: Request) => {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw new AppError("Enter an email address.");
   const user = await upsertUserFromIdentity({ uid: `dev:${e}`, email: e, emailVerified: true, provider: "dev" }, ip);
   await createSession("USER", user.id);
-  return { redirect: user.mobileVerifiedAt ? "/dashboard" : "/account" };
+  return { redirect: await afterLoginPath(user) };
 });

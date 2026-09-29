@@ -69,7 +69,7 @@ export async function delayedNetworks(now = new Date()): Promise<NetworkCode[]> 
 
 /** Check TxIDs users submitted (per network, so one outage never blocks the other). */
 export async function verifySubmitted(network: NetworkCode): Promise<MatchEvent[]> {
-  const pending = await prisma.order.findMany({ where: { status: "PAYMENT_SUBMITTED", network }, select: { id: true }, take: 50 });
+  const pending = await prisma.order.findMany({ where: { status: "PAYMENT_SUBMITTED", network }, select: { id: true }, orderBy: { createdAt: "asc" }, take: 50 });
   const out: MatchEvent[] = [];
   for (const o of pending) out.push(...(await verifySubmittedTxid(o.id)));
   return out;

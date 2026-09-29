@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AlertOctagon, BadgeCheck, FileClock, FlaskConical, Gauge, Landmark, LifeBuoy, ListOrdered, ScrollText, Settings, Users } from "lucide-react";
+import { AlertOctagon, BadgeCheck, FileClock, FlaskConical, Gauge, Landmark, LifeBuoy, ListOrdered, ScrollText, Settings, UserRound, Users } from "lucide-react";
 
-const ICONS = { Gauge, BadgeCheck, Landmark, ListOrdered, AlertOctagon, LifeBuoy, Settings, Users, FileClock, ScrollText, FlaskConical };
+const ICONS = { Gauge, BadgeCheck, Landmark, ListOrdered, AlertOctagon, LifeBuoy, Settings, Users, UserRound, FileClock, ScrollText, FlaskConical };
 export type AdminNavItem = { href: string; label: string; icon: keyof typeof ICONS; count?: number };
 
 export function AdminNav({ items }: { items: AdminNavItem[] }) {

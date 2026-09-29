@@ -1,12 +1,14 @@
 import { adminOrLogin } from "@/server/auth/pages";
+import { logoSrc } from "@/server/brand";
+import { ColorField } from "@/components/ColorField";
+import { env } from "@/server/env";
 import { prisma } from "@/server/db";
 import { RATE_SOURCE_IDS, rateFeedState } from "@/server/rateFeed";
-import { getSettings, LIVE_CONFIRM_PHRASE, rateIsStale, tokenContractFor } from "@/server/settings";
+import { getSettings, isRealValue, LIVE_CONFIRM_PHRASE, rateIsStale, tokenContractFor } from "@/server/settings";
 import { NETWORK_CODES, NETWORK_INFO } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { TotpField } from "@/components/Totp";
-import { Banner, PageHeader } from "@/components/ui";
+import { Banner, Logo, PageHeader } from "@/components/ui";
 import { Tabs } from "@/components/Tabs";
 import { Settings2 } from "lucide-react";
 
@@ -20,6 +22,24 @@ function Field({ name, label, value, hint, type = "text" }: { name: string; labe
   );
 }
 
+/** On/off switch with a short explanation. Unchecked boxes are sent as false by ApiForm. */
+function Toggle({ name, label, hint, checked, warn }: { name: string; label: string; hint?: string; checked: boolean; warn?: string }) {
+  return (
+    <label htmlFor={name} className="flex cursor-pointer items-start gap-4 rounded-xl p-3 transition hover:bg-slate-50">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-slate-900">{label}</span>
+        {hint && <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>}
+        {warn && <span className="mt-1 block text-xs font-medium text-amber-700">{warn}</span>}
+      </span>
+      <span className="relative mt-0.5 inline-flex shrink-0">
+        <input type="checkbox" id={name} name={name} value="true" defaultChecked={checked} className="peer sr-only" />
+        <span className="h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-emerald-500 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-600 peer-focus-visible:ring-offset-2" />
+        <span className="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+      </span>
+    </label>
+  );
+}
+
 export default async function SettingsPage() {
   await adminOrLogin("SUPER_ADMIN");
   const s = await getSettings();
@@ -27,17 +47,22 @@ export default async function SettingsPage() {
   const history = await prisma.settingsHistory.findMany({ orderBy: { createdAt: "desc" }, take: 20 });
   const feed = await rateFeedState();
   const mode = s.network_mode;
+  const firebaseReady = !!env.firebase.webConfig;
+  const [autoKycToReview, pendingKyc] = await Promise.all([
+    prisma.kycSubmission.count({ where: { autoApproved: true, postReviewedAt: null, status: "APPROVED" } }),
+    prisma.kycSubmission.count({ where: { status: "SUBMITTED" } }),
+  ]);
   const group = (title: string, children: React.ReactNode, extra?: React.ReactNode) => (
     <ApiForm action="/api/admin/settings" className="card space-y-3">
       <h2 className="h2">{title}</h2>
       {extra}
       <div className="grid gap-3 sm:grid-cols-2">{children}</div>
-      <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+      <div className="flex items-end gap-3"><button className="btn-primary">Save</button></div>
     </ApiForm>
   );
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Changes need your 2FA code and are logged." icon={<Settings2 className="size-6" />} tile="tile-slate" />
+      <PageHeader title="Settings" subtitle="Every change is logged. Risky ones ask for your 2FA code." icon={<Settings2 className="size-6" />} tile="tile-slate" />
       <Tabs
         tabs={[
           { id: "rate", label: "Rate", alert: rateIsStale(s), content: <>
@@ -70,7 +95,7 @@ export default async function SettingsPage() {
               <textarea id="rate_sources" name="rate_sources" rows={3} className="input font-mono" defaultValue={s.rate_sources.join("\n")} />
             </div>
           </div>
-          <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+          <div className="flex items-end gap-3"><button className="btn-primary">Save</button></div>
         </ApiForm>
 
         <div className="rounded-lg bg-slate-50 p-3 text-sm">
@@ -92,7 +117,6 @@ export default async function SettingsPage() {
             <ApiForm action="/api/admin/rate/refresh"><button className="btn-secondary">Fetch now</button></ApiForm>
             {feed?.lastError?.includes("above your") && (
               <ApiForm action="/api/admin/rate/accept" className="flex items-end gap-2">
-                <TotpField />
                 <button className="btn-danger">Accept new market price</button>
               </ApiForm>
             )}
@@ -145,9 +169,9 @@ export default async function SettingsPage() {
         {mode === "LIVE" ? <p className="muted">Live mode uses the official mainnet contracts. They can&apos;t be edited.</p> : (
           <ApiForm action="/api/admin/settings" className="space-y-2">
             <p className="muted">Test-mode tokens (Nile / BSC Testnet). Confirm these are the test USDT tokens you&apos;ll use. Mainnet contracts are refused here.</p>
-            <input name="test_token_contract.TRON" defaultValue={s.test_token_contract.TRON} className="input font-mono" />
-            <input name="test_token_contract.BSC" defaultValue={s.test_token_contract.BSC} className="input font-mono" />
-            <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+            <input name="test_token_contract.TRON" aria-label="Tron test USDT contract" defaultValue={s.test_token_contract.TRON} className="input font-mono" />
+            <input name="test_token_contract.BSC" aria-label="BSC test USDT contract" defaultValue={s.test_token_contract.BSC} className="input font-mono" />
+            <div className="flex items-end gap-3"><button className="btn-primary">Save</button></div>
           </ApiForm>
         )}
       </div>
@@ -158,17 +182,17 @@ export default async function SettingsPage() {
         {mode === "TEST" ? (
           <>
             <Banner tone="danger">Switching to Live means real USDT and real payouts. Set the Live deposit addresses first (they also take 1 hour).</Banner>
-            <input name="confirm" required className="input" placeholder={`Type ${LIVE_CONFIRM_PHRASE}`} />
+            <input name="confirm" aria-label="Type the confirmation phrase" required className="input" placeholder={`Type ${LIVE_CONFIRM_PHRASE}`} />
           </>
         ) : <input type="hidden" name="confirm" value="" />}
-        <div className="flex items-end gap-3"><TotpField /><button className={mode === "TEST" ? "btn-danger" : "btn-secondary"}>{mode === "TEST" ? "Switch to Live" : "Switch back to Test"}</button></div>
+        <div className="flex items-end gap-3"><button className={mode === "TEST" ? "btn-danger" : "btn-secondary"}>{mode === "TEST" ? "Switch to Live" : "Switch back to Test"}</button></div>
       </ApiForm>
 
           </> },
           { id: "address", label: "Deposit addresses", alert: pending.length > 0, content: <>
       <div id="address" className="card space-y-4 ring-2 ring-red-300">
         <h2 className="h2">Deposit addresses ({mode} mode)</h2>
-        <Banner tone="danger">If this address is wrong, every payment on that network goes to someone else. Changes need your 2FA code, take effect after 1 hour, and every admin is emailed a cancel link.</Banner>
+        <Banner tone="danger">If this address is wrong, every payment on that network goes to someone else. Changes ask for your 2FA code, take effect after 1 hour, and every admin is emailed a cancel link.</Banner>
         {NETWORK_CODES.map((n) => (
           <div key={n} className="rounded-lg p-3 ring-1 ring-slate-200">
             <p className="text-xl font-bold">{NETWORK_INFO[n].name}</p>
@@ -184,9 +208,8 @@ export default async function SettingsPage() {
               <summary className="cursor-pointer text-sm font-semibold text-red-700">Change the {NETWORK_INFO[n].name} address</summary>
               <ApiForm action="/api/admin/deposit-address" className="mt-2 space-y-2" confirm={`Change the ${NETWORK_INFO[n].name} deposit address? It takes effect in 1 hour.`}>
                 <input type="hidden" name="network" value={n} />
-                <input name="address" required className="input font-mono" placeholder={n === "TRON" ? "T…" : "0x… (checksummed)"} />
-                <input name="confirmNetwork" required className="input" placeholder={`Type ${n} to confirm the network`} />
-                <TotpField />
+                <input name="address" aria-label={`New ${n} deposit address`} required className="input font-mono" placeholder={n === "TRON" ? "T…" : "0x… (checksummed)"} />
+                <input name="confirmNetwork" aria-label="Type the network to confirm" required className="input" placeholder={`Type ${n} to confirm the network`} />
                 <button className="btn-danger">Request change</button>
               </ApiForm>
             </details>
@@ -195,31 +218,136 @@ export default async function SettingsPage() {
       </div>
 
           </> },
-          { id: "company", label: "Company & text", content: <>
+          { id: "onboarding", label: "Sign-in & onboarding", alert: s.auth_google_enabled && !firebaseReady, content: <>
+      <ApiForm action="/api/admin/settings" className="card space-y-2">
+        <h2 className="h2">Sign-in methods</h2>
+        <p className="muted">At least one must stay on. Turning a method off stops new logins with it; people already signed in stay signed in.</p>
+        <div className="-mx-3 divide-y divide-slate-100">
+          <Toggle name="auth_google_enabled" label="Google sign-in" checked={s.auth_google_enabled} warn={!firebaseReady ? "Firebase settings are missing on the server, so the Google button stays hidden until they're added." : undefined} />
+          <Toggle name="auth_email_enabled" label="Email and password" hint="Sign-up, login, forgot-password and change-password." checked={s.auth_email_enabled} />
+          <Toggle name="auth_email_verification_required" label="Require a confirmed email" hint="New email sign-ups must click the link we email before they can continue. Google accounts are already confirmed." checked={s.auth_email_verification_required} />
+        </div>
+        <div className="flex items-end gap-3 pt-2"><button className="btn-primary">Save</button></div>
+      </ApiForm>
+
+      <ApiForm action="/api/admin/settings" className="card mt-5 space-y-2">
+        <h2 className="h2">Onboarding steps</h2>
+        <p className="muted">Changes apply immediately to everyone, including people halfway through. Orders already placed are not affected.</p>
+        <div className="-mx-3 divide-y divide-slate-100">
+          <Toggle name="onboarding_mobile_required" label="Mobile number must be confirmed" hint="One-time code by SMS." checked={s.onboarding_mobile_required} />
+          <Toggle
+            name="kyc_required"
+            label="Identity check (KYC) required"
+            hint="PAN, masked Aadhaar and selfie before adding a bank account or selling."
+            checked={s.kyc_required}
+            warn={mode === "LIVE" ? "Can't be switched off in Live mode." : !s.kyc_required ? "Off: Test mode only. You can't switch to Live until this is back on." : undefined}
+          />
+          <Toggle
+            name="kyc_auto_approve"
+            label="Approve identity checks automatically"
+            hint="Approves as soon as the basic checks pass (valid PAN format, 18+, all documents). There is no automatic document check yet, so each one still lands in KYC → Auto-approved for a person to review."
+            checked={s.kyc_auto_approve}
+            warn={s.kyc_auto_approve ? `${autoKycToReview} auto-approved submission${autoKycToReview === 1 ? "" : "s"} waiting for a person to look at.` : pendingKyc > 0 ? `Turning this on doesn't approve the ${pendingKyc} already waiting.` : undefined}
+          />
+          <Toggle name="payout_auto_approve_on_name_match" label="Approve bank / UPI automatically when the name matches" hint="Only when the account holder name matches the approved identity check. Anything else waits for review." checked={s.payout_auto_approve_on_name_match} />
+        </div>
+        <div className="grid gap-2 px-0 pt-2">
+          <label className="label" htmlFor="wallet_registration">Customer sending wallets</label>
+          <select id="wallet_registration" name="wallet_registration" defaultValue={s.wallet_registration} className="input sm:max-w-sm">
+            <option value="OFF">Off: don&apos;t ask</option>
+            <option value="OPTIONAL">Optional: customers can add them</option>
+            <option value="REQUIRED">Required: hold payments from other wallets</option>
+          </select>
+          <p className="muted">&quot;Required&quot; also blocks new orders until the customer adds a wallet. Exchange withdrawals come from the exchange&apos;s wallet and will be held.</p>
+        </div>
+        <div className="flex items-end gap-3 pt-2"><button className="btn-primary">Save</button></div>
+      </ApiForm>
+          </> },
+          { id: "brand", label: "Brand & contact", content: <>
+      <div className="card space-y-4">
+        <div>
+          <h2 className="h2">Logo</h2>
+          <p className="muted">Square PNG or SVG, up to 300 KB. Used in the header, sign-in pages, browser tab and share previews.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-4 rounded-xl bg-slate-50 p-4">
+          <Logo name={s.brand_name} src={logoSrc(s)} size="lg" />
+          <span className="rounded-xl bg-slate-900 p-3"><Logo name={s.brand_name} src={logoSrc(s)} inverted /></span>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <ApiForm action="/api/admin/brand/logo" className="flex flex-wrap items-end gap-3" resetOnSuccess>
+            <div>
+              <label className="label" htmlFor="logo">New logo</label>
+              <input id="logo" name="logo" type="file" required accept="image/png,image/jpeg,image/svg+xml" className="block text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:font-medium file:text-brand-700" />
+            </div>
+            <button className="btn-primary">Upload</button>
+          </ApiForm>
+          {s.brand_logo_version && (
+            <ApiForm action="/api/admin/brand/logo" confirm="Remove the logo and go back to the built-in mark?">
+              <input type="hidden" name="remove" value="1" />
+              <button className="btn-ghost text-rose-600 hover:bg-rose-50">Remove logo</button>
+            </ApiForm>
+          )}
+        </div>
+      </div>
+
       {group(
-        "Text shown to users and on receipts",
+        "Name and colours",
         <>
-          <Field name="brand_name" label="App name shown to users" value={s.brand_name} />
+          <Field name="brand_name" label="App name" value={s.brand_name} hint="Shown in the header, emails, receipts and search results." />
+          <div className="hidden sm:block" />
+          <ColorField name="brand_primary_color" label="Main colour" value={s.brand_primary_color} hint="Buttons, links and highlights. Pick a dark enough colour for white text." />
+          <ColorField name="brand_accent_color" label="Second colour" value={s.brand_accent_color} hint="Blended into gradients." />
+        </>,
+      )}
+
+      {group(
+        "Contact details shown to customers",
+        <>
+          <Field name="support_email" label="Support email" value={isRealValue(s.support_email) ? s.support_email : ""} />
+          <Field name="support_phone" label="Support phone (optional)" value={s.support_phone} />
+          <Field name="support_whatsapp" label="WhatsApp number (optional)" value={s.support_whatsapp} hint="With country code, e.g. +91 98765 43210." />
           <Field name="business_hours_text" label="Business hours" value={s.business_hours_text} />
-          <Field name="review_hours" label="Typical review time (hours)" value={s.review_hours} type="number" />
-          <Field name="company_name" label="Company legal name" value={s.company_name} />
-          <Field name="company_address" label="Company address" value={s.company_address} />
-          <Field name="company_fiu_reg" label="FIU registration number" value={s.company_fiu_reg} />
-          <Field name="company_gstin" label="GSTIN" value={s.company_gstin} />
-          <Field name="support_email" label="Support email" value={s.support_email} />
+          <Field name="company_name" label="Company legal name" value={isRealValue(s.company_name) ? s.company_name : ""} />
+          <Field name="company_address" label="Company address" value={isRealValue(s.company_address) ? s.company_address : ""} />
+          <Field name="company_gstin" label="GSTIN" value={isRealValue(s.company_gstin) ? s.company_gstin : ""} />
+          <Field name="company_fiu_reg" label="FIU registration number" value={isRealValue(s.company_fiu_reg) ? s.company_fiu_reg : ""} />
+        </>,
+      )}
+          </> },
+          { id: "company", label: "Messages", content: <>
+      {group(
+        "Messages and notifications",
+        <>
+          <Field name="review_hours" label="Typical review time (hours)" value={s.review_hours} type="number" hint="Shown to customers while an order is being reviewed." />
           <div className="flex items-center gap-2 pt-6"><input type="checkbox" id="sms" name="sms_notifications_enabled" value="true" defaultChecked={s.sms_notifications_enabled} /><label htmlFor="sms">Also send SMS notifications</label></div>
         </>,
       )}
+
+      <ApiForm action="/api/admin/settings" className="card space-y-4">
+        <div>
+          <h2 className="h2">Terms and privacy text</h2>
+          <p className="muted">Paste the text from your lawyer. Leave a blank line between paragraphs; start a line with &quot;## &quot; for a heading. The pages stay out of Google until they have text.</p>
+        </div>
+        <div>
+          <label className="label" htmlFor="terms_text">Terms of service</label>
+          <textarea id="terms_text" name="terms_text" rows={8} className="input font-mono text-sm" defaultValue={s.terms_text} />
+        </div>
+        <div>
+          <label className="label" htmlFor="privacy_text">Privacy policy</label>
+          <textarea id="privacy_text" name="privacy_text" rows={8} className="input font-mono text-sm" defaultValue={s.privacy_text} />
+        </div>
+        <button className="btn-primary">Save</button>
+      </ApiForm>
 
           </> },
           { id: "security", label: "Holds & access", content: <>
       <ApiForm action="/api/admin/settings" className="card space-y-3">
         <h2 className="h2">Hold reasons and admin IP allow-list</h2>
         <label className="label">Hold reasons (one per line)</label>
-        <textarea name="hold_reasons" rows={8} className="input" defaultValue={s.hold_reasons.join("\n")} />
+        <textarea aria-label="Hold reasons (one per line)" name="hold_reasons" rows={8} className="input" defaultValue={s.hold_reasons.join("\n")} />
         <label className="label">Allowed admin IP addresses (one per line; empty = any)</label>
-        <textarea name="admin_ip_allowlist" rows={3} className="input font-mono" defaultValue={s.admin_ip_allowlist.join("\n")} />
-        <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
+        <textarea aria-label="Allowed admin IP addresses (one per line; empty = any)" name="admin_ip_allowlist" rows={3} className="input font-mono" defaultValue={s.admin_ip_allowlist.join("\n")} />
+        <div className="flex items-end gap-3"><button className="btn-primary">Save</button></div>
       </ApiForm>
 
           </> },

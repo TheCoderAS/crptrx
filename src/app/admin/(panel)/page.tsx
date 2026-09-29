@@ -11,7 +11,7 @@ export default async function Dashboard() {
   await adminOrLogin();
   const today = istDayStart();
   const [kyc, pms, byStatus, received, paid, unmatched, support, watchers] = await Promise.all([
-    prisma.kycSubmission.count({ where: { status: "SUBMITTED" } }),
+    prisma.kycSubmission.count({ where: { OR: [{ status: "SUBMITTED" }, { autoApproved: true, postReviewedAt: null, status: "APPROVED" }] } }),
     prisma.payoutMethod.count({ where: { status: "PENDING", deletedAt: null } }),
     prisma.order.groupBy({ by: ["status"], _count: true }),
     prisma.order.aggregate({ _sum: { receivedAmount: true }, where: { confirmedAt: { gte: today } } }),

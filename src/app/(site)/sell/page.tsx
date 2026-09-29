@@ -1,9 +1,12 @@
+import { contactChannels } from "@/server/contact";
+import { ContactLinks } from "@/components/ContactLinks";
 import Link from "next/link";
 import { ArrowLeftRight } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { maskedPayout } from "@/server/payouts";
 import { getSettings, rateIsStale } from "@/server/settings";
+import { notReadyMessage, onboardingState } from "@/server/onboarding";
 import { Banner, PageHeader } from "@/components/ui";
 import { SellForm } from "@/components/SellForm";
 import { NETWORK_CODES } from "@/lib/networks";
@@ -16,11 +19,15 @@ export default async function Sell() {
     getSettings(),
     prisma.payoutMethod.findMany({ where: { userId: user.id, status: "APPROVED", deletedAt: null }, orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
   ]);
-  if (user.kycStatus !== "APPROVED" || methods.length === 0 || !user.mobileVerifiedAt)
+  const o = await onboardingState(user, s);
+  if (!o.ready)
     return (
       <div>
         <PageHeader title="Sell USDT" />
-        <Banner tone="warn" title="Almost there">You need an approved identity check and an approved bank account or UPI ID before selling. <Link className="font-medium underline" href="/dashboard">See what&apos;s left</Link>.</Banner>
+        <Banner tone={o.blockedReason ? "danger" : "warn"} title={o.blockedReason ? undefined : "Almost there"}>
+          {notReadyMessage(o)} {!o.blockedReason && <Link className="font-medium underline" href="/dashboard">See what&apos;s left</Link>}
+        </Banner>
+        {o.blockedReason && <div className="mt-3"><ContactLinks channels={contactChannels(s)} /></div>}
       </div>
     );
   const stale = rateIsStale(s);

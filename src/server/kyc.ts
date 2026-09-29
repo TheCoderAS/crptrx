@@ -1,8 +1,9 @@
-import { audit, type Actor } from "./audit";
+import { audit, SYSTEM, type Actor } from "./audit";
 import { decrypt, encrypt } from "./crypto";
 import { prisma } from "./db";
 import { AppError } from "./errors";
 import { notifyKyc } from "./notify";
+import { getSettings } from "./settings";
 import { checkUpload, putFile, signedUrl } from "./storage";
 
 // KYC is its own module so automatic checks (R2: PAN API, DigiLocker, selfie match) can slot in.
@@ -36,7 +37,8 @@ function age(dob: string, now = new Date()): number {
 
 export async function submitKyc(userId: string, input: KycInput, actor: Actor) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  if (!user.mobileVerifiedAt) throw new AppError("Confirm your mobile number first.");
+  const set = await getSettings();
+  if (set.onboarding_mobile_required && !user.mobileVerifiedAt) throw new AppError("Confirm your mobile number first.");
   if (!["NOT_STARTED", "NEEDS_CHANGES"].includes(user.kycStatus)) throw new AppError("Your identity check is already submitted.");
   const fullName = input.fullName?.trim().replace(/\s+/g, " ");
   if (!fullName || fullName.length < 3) throw new AppError("Enter your full name exactly as on your PAN card.");
@@ -59,14 +61,25 @@ export async function submitKyc(userId: string, input: KycInput, actor: Actor) {
     } else if (prev) keys[KEY_COLUMN[f]] = prev[KEY_COLUMN[f]];
     else throw new AppError("Please upload all four documents.");
   }
+  // Automatic approval: the basic checks above passed, so approve now and
+  // leave the submission in the admin's "review later" queue.
+  const auto = set.kyc_auto_approve;
+  const status = auto ? "APPROVED" : "SUBMITTED";
   const sub = await prisma.$transaction(async (tx) => {
     const s = await tx.kycSubmission.create({
-      data: { userId, fullName, dob: input.dob, panEncrypted: encrypt(pan), panMasked: maskPan(pan), address: input.address.trim(), maskedConfirmed: true, status: "SUBMITTED", ...keys },
+      data: {
+        userId, fullName, dob: input.dob, panEncrypted: encrypt(pan), panMasked: maskPan(pan), address: input.address.trim(), maskedConfirmed: true,
+        status, autoApproved: auto, reviewedAt: auto ? new Date() : null, ...keys,
+      },
     });
-    await tx.user.update({ where: { id: userId }, data: { kycStatus: "SUBMITTED" } });
+    await tx.user.update({ where: { id: userId }, data: { kycStatus: status } });
     return s;
   });
   await audit(actor, "KYC_SUBMITTED", { targetType: "kyc_submission", targetId: sub.id });
+  if (auto) {
+    await audit(SYSTEM, "KYC_AUTO_APPROVED", { targetType: "kyc_submission", targetId: sub.id });
+    await notifyKyc(userId, "APPROVED");
+  }
   return sub;
 }
 
@@ -74,7 +87,22 @@ export async function reviewKyc(submissionId: string, decision: "APPROVED" | "NE
   if (decision !== "APPROVED" && !reason?.trim()) throw new AppError("A reason is required.");
   const sub = await prisma.kycSubmission.findUnique({ where: { id: submissionId } });
   if (!sub) throw new AppError("Submission not found", 404);
-  if (sub.status !== "SUBMITTED") throw new AppError("This submission was already reviewed.");
+  const postReview = sub.status === "APPROVED" && sub.autoApproved && !sub.postReviewedAt;
+  if (sub.status !== "SUBMITTED" && !postReview) throw new AppError("This submission was already reviewed.");
+  if (postReview) {
+    // Checking an automatically approved submission after the fact.
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.kycSubmission.update({
+        where: { id: sub.id },
+        data: { status: decision, reason: reason?.trim() || null, postReviewedAt: now, postReviewedBy: actor.id, ...(decision === "APPROVED" ? {} : { reviewerId: actor.id, reviewedAt: now }) },
+      }),
+      prisma.user.update({ where: { id: sub.userId }, data: { kycStatus: decision } }),
+    ]);
+    await audit(actor, decision === "APPROVED" ? "KYC_AUTO_CONFIRMED" : `KYC_${decision}`, { targetType: "kyc_submission", targetId: sub.id, details: { reason: reason ?? null, afterAutoApproval: true } });
+    if (decision !== "APPROVED") await notifyKyc(sub.userId, decision, reason);
+    return;
+  }
   await prisma.$transaction([
     prisma.kycSubmission.update({ where: { id: sub.id }, data: { status: decision, reason: reason?.trim() || null, reviewerId: actor.id, reviewedAt: new Date() } }),
     prisma.user.update({ where: { id: sub.userId }, data: { kycStatus: decision } }),

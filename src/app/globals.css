@@ -17,6 +17,8 @@
   --color-brand-800: #1e40af;
   --color-brand-900: #172e6e;
   --color-brand-950: #0e1b44;
+  /* Second brand colour for gradients. Both are overridden at runtime from admin settings. */
+  --color-accent: #7c3aed;
 
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
   --shadow-raised: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.05);
@@ -57,7 +59,7 @@
   .table td { @apply border-b border-slate-100 px-3 py-3 align-top; }
   .table tbody tr { @apply transition hover:bg-slate-50/70; }
 
-  .chip { @apply inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ring-1 ring-slate-200 ring-inset transition hover:bg-slate-50; }
+  .chip { @apply inline-flex min-h-9 items-center rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-slate-200 ring-inset transition hover:bg-slate-50; }
   .chip-active { @apply bg-slate-900 text-white ring-slate-900 hover:bg-slate-800; }
 
   .kbd-code { @apply rounded-lg bg-slate-100 px-2 py-1 font-mono text-[13px] break-all text-slate-800; }
@@ -86,7 +88,7 @@ body { @apply bg-slate-50 text-slate-900 antialiased; font-feature-settings: "cv
    Gradients and colour accents
 --------------------------------------------------------------------------- */
 @utility text-gradient {
-  background-image: linear-gradient(100deg, var(--color-brand-600) 0%, #7c3aed 55%, #059669 100%);
+  background-image: linear-gradient(100deg, var(--color-brand-600) 0%, var(--color-accent) 55%, #059669 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -94,25 +96,25 @@ body { @apply bg-slate-50 text-slate-900 antialiased; font-feature-settings: "cv
 @utility bg-mesh {
   background-color: #f8fafc;
   background-image:
-    radial-gradient(40rem 28rem at 10% -10%, rgb(59 124 246 / 0.22), transparent 60%),
-    radial-gradient(34rem 24rem at 95% 0%, rgb(124 58 237 / 0.16), transparent 60%),
+    radial-gradient(40rem 28rem at 10% -10%, color-mix(in srgb, var(--color-brand-500) 22%, transparent), transparent 60%),
+    radial-gradient(34rem 24rem at 95% 0%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 60%),
     radial-gradient(30rem 22rem at 70% 110%, rgb(16 185 129 / 0.14), transparent 60%);
 }
 @utility bg-mesh-dark {
-  background-color: #0b1437;
+  background-color: var(--color-brand-950);
   background-image:
-    radial-gradient(36rem 26rem at 0% 0%, rgb(59 124 246 / 0.45), transparent 60%),
+    radial-gradient(36rem 26rem at 0% 0%, color-mix(in srgb, var(--color-brand-500) 45%, transparent), transparent 60%),
     radial-gradient(30rem 22rem at 100% 100%, rgb(16 185 129 / 0.28), transparent 60%),
-    radial-gradient(24rem 20rem at 80% 10%, rgb(124 58 237 / 0.35), transparent 60%);
+    radial-gradient(24rem 20rem at 80% 10%, color-mix(in srgb, var(--color-accent) 35%, transparent), transparent 60%);
 }
 @utility bg-brand-gradient {
-  background-image: linear-gradient(135deg, var(--color-brand-500) 0%, var(--color-brand-700) 50%, #5b21b6 100%);
+  background-image: linear-gradient(135deg, var(--color-brand-500) 0%, var(--color-brand-700) 50%, color-mix(in oklab, var(--color-accent) 80%, black) 100%);
 }
 @utility ring-gradient {
   border: 1px solid transparent;
   background:
     linear-gradient(white, white) padding-box,
-    linear-gradient(135deg, rgb(59 124 246 / 0.55), rgb(124 58 237 / 0.35), rgb(16 185 129 / 0.45)) border-box;
+    linear-gradient(135deg, color-mix(in srgb, var(--color-brand-500) 55%, transparent), color-mix(in srgb, var(--color-accent) 35%, transparent), rgb(16 185 129 / 0.45)) border-box;
 }
 @utility bg-grid {
   background-image: linear-gradient(rgb(15 23 42 / 0.05) 1px, transparent 1px), linear-gradient(90deg, rgb(15 23 42 / 0.05) 1px, transparent 1px);
