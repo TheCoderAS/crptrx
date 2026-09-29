@@ -11,11 +11,11 @@
  * Usage: npx tsx scripts/check-chains.ts
  * Override tokens with CHECK_TRON_TOKEN / CHECK_BSC_TOKEN.
  */
-import { createPublicClient, fallback, getAddress, http, parseAbiItem } from "viem";
+import { createPublicClient, fallback, getAddress, http } from "viem";
 import { bscTestnet } from "viem/chains";
 import { NETWORK_INFO } from "@/lib/networks";
 import { env } from "@/server/env";
-import { bscAdapter } from "@/server/networks/bsc";
+import { bscAdapter, getTransferLogsAdaptive } from "@/server/networks/bsc";
 import { tronAdapter } from "@/server/networks/tron";
 import type { NetworkContext } from "@/server/networks/types";
 import { SETTING_DEFAULTS } from "@/server/settings";
@@ -70,15 +70,22 @@ async function checkBsc() {
     fin = (await c.getBlockNumber()) - 15n;
     record("bsc: provider supports 'finalized'", false, `falls back to latest-15 (${(e as Error).message.slice(0, 80)})`);
   }
-  const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
-  let logs: Awaited<ReturnType<typeof c.getLogs<typeof TRANSFER>>> = [];
+  // Walk backwards in windows the provider accepts (the helper shrinks them).
+  let logs: Awaited<ReturnType<typeof getTransferLogsAdaptive>>["logs"] = [];
   let to = fin;
-  for (let i = 0; i < 40 && logs.length === 0; i++) {
-    const from = to - 999n;
-    logs = await c.getLogs({ address: token, event: TRANSFER, fromBlock: from, toBlock: to });
+  let width = 500n;
+  let calls = 0;
+  while (logs.length === 0 && fin - to < 20_000n && calls++ < 1000) {
+    const from = to - width + 1n;
+    const r = await getTransferLogsAdaptive(c as never, { token, fromBlock: from, toBlock: to });
+    if (r.coveredTo < to) {
+      width = r.coveredTo - from + 1n; // provider limit learned; retry this window smaller
+      continue;
+    }
+    logs = r.logs;
     to = from - 1n;
   }
-  record("bsc: test token has recent transfers", logs.length > 0, `${logs.length} Transfer logs in the last ~${Number(fin - to)} blocks`);
+  record("bsc: test token has recent transfers", logs.length > 0, `${logs.length} Transfer logs found searching back ${Number(fin - to)} blocks (window ${width} blocks)`);
   if (!logs.length) return;
   const log = logs[logs.length - 1];
   const tx = await bscAdapter.lookupTx(log.transactionHash!, ctx);
