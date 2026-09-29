@@ -27,10 +27,11 @@ export default async function PayoutQueue() {
               <StatusPill status={p.status} />
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <div className={`rounded-lg p-3 ${match ? "bg-green-50" : "bg-red-50 ring-2 ring-red-400"}`}>
-                <p className="muted">KYC name</p><p className="font-semibold">{kn ?? "(no approved KYC)"}</p>
+              <div className={`rounded-lg p-3 ${match ? "bg-green-50" : kn ? "bg-red-50 ring-2 ring-red-400" : "bg-amber-50 ring-1 ring-amber-300"}`}>
+                <p className="muted">KYC name</p><p className="font-semibold">{kn ?? "No identity check on file"}</p>
                 <p className="muted mt-2">Holder name</p><p className="font-semibold">{p.holderName}</p>
-                {!match && <p className="mt-2 text-sm font-semibold text-red-700">Names differ. Check carefully before approving.</p>}
+                {kn && !match && <p className="mt-2 text-sm font-semibold text-red-700">Names differ. Check carefully before approving.</p>}
+                {!kn && <p className="mt-2 text-sm font-semibold text-amber-800">Identity checks are off, so there&apos;s no verified name to compare. Check the account belongs to the user (e.g. email or mobile) before approving.</p>}
               </div>
               <div className="rounded-lg bg-slate-50 p-3 text-sm">
                 {p.type === "BANK" ? <><p>A/c: <b>{p.accountNumberEncrypted ? decrypt(p.accountNumberEncrypted) : "—"}</b></p><p>IFSC: <b>{p.ifsc}</b></p></> : <p>UPI: <b>{p.upiId}</b></p>}

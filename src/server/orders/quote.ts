@@ -7,6 +7,7 @@ import { getActiveDepositAddress } from "../deposit";
 import { AppError } from "../errors";
 import { calculatePayout, D, Decimal, usdtForNetRupees } from "../money";
 import { payoutSnapshot } from "../payouts";
+import { notReadyMessage, onboardingState } from "../onboarding";
 import { getSettings, rateIsStale, tokenContractFor, type Settings } from "../settings";
 import { OPEN_QUOTE_STATUSES, transition } from "./stateMachine";
 
@@ -76,10 +77,8 @@ export async function nextOrderId(tx: Tx, now = new Date()): Promise<{ id: strin
 export async function assertCanCreateOrders(tx: Tx, userId: string) {
   const user = await tx.user.findUnique({ where: { id: userId } });
   if (!user || user.status !== "ACTIVE") throw new AppError("Your account can't place orders. Please contact support.", 403);
-  if (!user.mobileVerifiedAt) throw new AppError("Please confirm your mobile number first.", 403);
-  if (user.kycStatus !== "APPROVED") throw new AppError("Your identity check must be approved before you can sell USDT.", 403);
-  const approved = await tx.payoutMethod.count({ where: { userId, status: "APPROVED", deletedAt: null } });
-  if (approved === 0) throw new AppError("Add a bank account or UPI ID and wait for approval before selling.", 403);
+  const o = await onboardingState(user, undefined, tx);
+  if (!o.ready) throw new AppError(notReadyMessage(o), 403);
   return user;
 }
 

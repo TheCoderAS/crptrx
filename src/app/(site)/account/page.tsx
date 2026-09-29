@@ -1,6 +1,10 @@
-import { CheckCircle2, UserRound } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, CheckCircle2, Landmark, UserRound, Wallet } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
+import { getSettings } from "@/server/settings";
+import { USER_MIN_PASSWORD } from "@/server/auth/password";
 import { ApiForm } from "@/components/ApiForm";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Banner, PageHeader, Row, Section, StatusPill } from "@/components/ui";
 import { fmtIST } from "@/lib/time";
 
@@ -8,7 +12,10 @@ export const metadata = { title: "Account", robots: { index: false, follow: fals
 
 export default async function Account() {
   const user = await userOrLogin();
+  const s = await getSettings();
   const verified = !!(user.mobile && user.mobileVerifiedAt);
+  const google = !!user.firebaseUid && !user.firebaseUid.startsWith("dev:");
+  const methods = [google && "Google", user.passwordHash && "Email and password", user.firebaseUid?.startsWith("dev:") && "Test sign-in"].filter(Boolean).join(" · ") || "None";
   return (
     <div className="space-y-6">
       <PageHeader title="Account" subtitle="Your details and security." icon={<UserRound className="size-6" />} />
@@ -22,14 +29,27 @@ export default async function Account() {
           </div>
         </div>
         <div className="divide-y divide-slate-100">
-          <Row k="Sign-in" v={user.firebaseUid?.startsWith("dev:") ? "Test sign-in" : "Google"} />
+          <Row k="Sign-in" v={methods} />
           <Row k="Mobile" v={verified ? <span className="inline-flex items-center gap-1.5">{user.mobile} <CheckCircle2 className="size-4 text-emerald-600" aria-label="confirmed" /></span> : "Not confirmed"} />
           <Row k="Identity check" v={<StatusPill status={user.kycStatus} />} />
           <Row k="Member since" v={fmtIST(user.createdAt)} />
         </div>
       </Section>
 
-      <Section title={verified ? "Change mobile number" : "Confirm your mobile number"} description="We'll send a 6-digit code by SMS.">
+      <nav className="card divide-y divide-slate-100 p-0 sm:p-0" aria-label="Account shortcuts">
+        {[
+          { href: "/payout-methods", icon: Landmark, tile: "tile-emerald", label: "Bank & UPI", show: true },
+          { href: "/wallets", icon: Wallet, tile: "tile-amber", label: "Your wallets", show: s.wallet_registration !== "OFF" },
+        ].filter((x) => x.show).map(({ href, icon: Icon, tile, label }) => (
+          <Link key={href} href={href} className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-slate-50 first:rounded-t-2xl last:rounded-b-2xl">
+            <span className={`icon-tile ${tile} size-9 rounded-xl`}><Icon className="size-4" aria-hidden /></span>
+            <span className="flex-1 text-sm font-medium text-slate-900">{label}</span>
+            <ChevronRight className="size-4 text-slate-400" aria-hidden />
+          </Link>
+        ))}
+      </nav>
+
+      <Section title={verified ? "Change mobile number" : s.onboarding_mobile_required ? "Confirm your mobile number" : "Add your mobile number (optional)"} description="We'll send a 6-digit code by SMS.">
         <div className="space-y-5">
           <ApiForm action="/api/me/mobile" className="space-y-2">
             <label className="label" htmlFor="mobile">Mobile number</label>
@@ -51,8 +71,27 @@ export default async function Account() {
         </div>
       </Section>
 
+      {s.auth_email_enabled && (
+        <Section title={user.passwordHash ? "Change password" : "Set a password"} description={user.passwordHash ? undefined : "Lets you log in with your email as well."}>
+          <ApiForm action="/api/me/password" className="space-y-4" resetOnSuccess>
+            {user.passwordHash && (
+              <div>
+                <label className="label" htmlFor="current">Current password</label>
+                <PasswordInput id="current" name="current" autoComplete="current-password" />
+              </div>
+            )}
+            <div>
+              <label className="label" htmlFor="password">New password</label>
+              <PasswordInput id="password" autoComplete="new-password" minLength={USER_MIN_PASSWORD} />
+              <p className="hint">At least {USER_MIN_PASSWORD} characters.</p>
+            </div>
+            <button className="btn-primary">Save password</button>
+          </ApiForm>
+        </Section>
+      )}
+
       <Banner tone="info" title="Keep your account safe">
-        Your login is protected by your Google account. Turn on 2-Step Verification in your Google settings. We will never ask for your password or codes by phone or chat.
+        {google ? "Turn on 2-Step Verification in your Google settings. " : "Use a password you don't use anywhere else. "}We will never ask for your password or codes by phone or chat.
       </Banner>
     </div>
   );

@@ -128,6 +128,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             <Countdown until={o.quoteExpiresAt.toISOString()} variant="ring" />
           </div>
           <Banner tone="danger" title={`${nw} only`}>Send only USDT on the {nw} network. Sending on any other network, or any other coin, may permanently lose your funds.</Banner>
+          {s.wallet_registration === "REQUIRED" && <Banner tone="warn">Send from a wallet listed in <Link href="/wallets" className="font-medium underline">Your wallets</Link>. Payments from other wallets are held for a check.</Banner>}
           {n === "BSC" && <Banner tone="warn">This is <b>not</b> an Ethereum (ERC-20) address, even though it looks similar.</Banner>}
 
           <div>

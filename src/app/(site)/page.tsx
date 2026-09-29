@@ -71,7 +71,7 @@ export default async function Home() {
             </h1>
             <p className="mt-5 max-w-md text-lg text-slate-600">Exact quote. Own-name payout. Receipt with every rupee.</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/login" className="btn btn-lg bg-brand-gradient text-white shadow-lg shadow-brand-600/25 hover:opacity-95">
+              <Link href="/signup" className="btn btn-lg bg-brand-gradient text-white shadow-lg shadow-brand-600/25 hover:opacity-95">
                 Start selling <ArrowRight className="size-4" aria-hidden />
               </Link>
               <Link href="/help" className="btn-secondary btn-lg bg-white/80 backdrop-blur">How it works</Link>
@@ -175,7 +175,7 @@ export default async function Home() {
         <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Ready when you are.</h2>
         <p className="mt-2 text-white/80">Set up once. Sell in minutes.</p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
-          <Link href="/login" className="btn btn-lg bg-white text-brand-800 shadow-lg hover:bg-brand-50">Create free account <ArrowRight className="size-4" aria-hidden /></Link>
+          <Link href="/signup" className="btn btn-lg bg-white text-brand-800 shadow-lg hover:bg-brand-50">Create free account <ArrowRight className="size-4" aria-hidden /></Link>
           <Link href="/help" className="btn btn-lg text-white ring-1 ring-white/40 hover:bg-white/10">Read the FAQ</Link>
         </div>
       </section>

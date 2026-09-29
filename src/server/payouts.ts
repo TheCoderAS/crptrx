@@ -1,8 +1,10 @@
 import type { PayoutMethod, Prisma } from "@prisma/client";
-import { audit, type Actor } from "./audit";
+import { audit, SYSTEM, type Actor } from "./audit";
 import { decrypt, encrypt } from "./crypto";
 import { prisma } from "./db";
 import { AppError } from "./errors";
+import { notifyPayoutMethod } from "./notify";
+import { getSettings } from "./settings";
 
 // Payout method logic is its own module so automatic bank-name checks (R2) can slot in here.
 export const MAX_PAYOUT_METHODS = 3;
@@ -49,7 +51,9 @@ export async function addPayoutMethod(
   actor: Actor,
 ) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  if (user.kycStatus !== "APPROVED") throw new AppError("Finish your identity check before adding a payout method.", 403);
+  const set = await getSettings();
+  if (set.kyc_required && user.kycStatus !== "APPROVED") throw new AppError("Finish your identity check before adding a payout method.", 403);
+  if (user.kycStatus === "DECLINED") throw new AppError("Your identity check was declined, so you can't add a payout method.", 403);
   const count = await prisma.payoutMethod.count({ where: { userId, deletedAt: null } });
   if (count >= MAX_PAYOUT_METHODS) throw new AppError(`You can save up to ${MAX_PAYOUT_METHODS} payout methods.`);
   const holderName = input.holderName.trim().replace(/\s+/g, " ");
@@ -68,8 +72,19 @@ export async function addPayoutMethod(
     data = { userId, type: "UPI", holderName, upiId: upi };
   } else throw new AppError("Choose bank account or UPI.");
   data.isDefault = count === 0;
+  // Automatic approval only when the holder name matches an APPROVED identity check.
+  let auto = false;
+  if (set.payout_auto_approve_on_name_match && user.kycStatus === "APPROVED") {
+    const kyc = await prisma.kycSubmission.findFirst({ where: { userId, status: "APPROVED" }, orderBy: { submittedAt: "desc" } });
+    auto = !!kyc && namesMatch(kyc.fullName, holderName);
+  }
+  if (auto) Object.assign(data, { status: "APPROVED", autoApproved: true, reviewedAt: new Date() });
   const pm = await prisma.payoutMethod.create({ data });
   await audit(actor, "PAYOUT_METHOD_ADDED", { targetType: "payout_method", targetId: pm.id, details: { type: pm.type } });
+  if (auto) {
+    await audit(SYSTEM, "PAYOUT_METHOD_AUTO_APPROVED", { targetType: "payout_method", targetId: pm.id });
+    await notifyPayoutMethod(userId, true);
+  }
   return pm;
 }
 

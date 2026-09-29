@@ -42,8 +42,10 @@ console.log("admin logged in with 2FA");
 
 // 2. User sign-in (test login), mobile OTP
 await user.goto(BASE + "/login");
-await user.fill("#email", "tester@example.com");
-await user.click("text=Continue");
+// Test sign-in is folded away when real sign-in methods are on.
+if (await user.locator("summary:has-text('Test sign-in')").count()) await user.click("summary:has-text('Test sign-in')");
+await user.fill("#dev-email", "tester@example.com");
+await user.click("text=Continue with test sign-in");
 await user.waitForURL("**/account");
 await user.fill("#mobile", "9876543210");
 await user.click("text=Send code");

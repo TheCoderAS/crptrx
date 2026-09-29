@@ -17,7 +17,7 @@ export default async function Panel({ children }: { children: React.ReactNode })
     getSettings(),
     recentAddressChanges(),
     delayedNetworks(),
-    prisma.kycSubmission.count({ where: { status: "SUBMITTED" } }),
+    prisma.kycSubmission.count({ where: { OR: [{ status: "SUBMITTED" }, { autoApproved: true, postReviewedAt: null, status: "APPROVED" }] } }),
     prisma.payoutMethod.count({ where: { status: "PENDING", deletedAt: null } }),
     prisma.order.count({ where: { status: { in: ["PAYMENT_CONFIRMED", "UNDER_REVIEW", "APPROVED"] } } }),
     prisma.incomingTransfer.count({ where: { status: "UNMATCHED" } }),

@@ -43,6 +43,15 @@ export const SETTING_DEFAULTS = {
   business_hours_text: "Reviews happen 10 AM–7 PM, Mon–Sat",
   review_hours: 4,
   brand_name: "USDT Exchange", // OWNER: the app name shown to users
+  // Sign-in and onboarding (admin-controlled; see onboarding.ts)
+  auth_google_enabled: true,
+  auth_email_enabled: true,
+  auth_email_verification_required: true,
+  onboarding_mobile_required: true,
+  kyc_required: true, // can be switched off in TEST mode only
+  kyc_auto_approve: false, // approve on submission; kept in a "review later" queue
+  payout_auto_approve_on_name_match: false,
+  wallet_registration: "OFF" as "OFF" | "OPTIONAL" | "REQUIRED",
   company_name: "[Company legal name]",
   company_address: "[Registered address]",
   company_fiu_reg: "[FIU registration number]",
@@ -56,6 +65,7 @@ export const SETTING_DEFAULTS = {
     "Over your limits",
     "Sender wallet needs extra checks",
     "Name or identity check needed",
+    "Sent from a wallet that isn't on your account",
     "Other",
   ],
   bsc_finality_fallback_blocks: 15,
@@ -111,6 +121,14 @@ export const EDITABLE_KEYS: SettingKey[] = [
   "business_hours_text",
   "review_hours",
   "brand_name",
+  "auth_google_enabled",
+  "auth_email_enabled",
+  "auth_email_verification_required",
+  "onboarding_mobile_required",
+  "kyc_required",
+  "kyc_auto_approve",
+  "payout_auto_approve_on_name_match",
+  "wallet_registration",
   "company_name",
   "company_address",
   "company_fiu_reg",
@@ -176,7 +194,22 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
     if (arr.length === 0) throw new AppError("Choose at least one price source.");
     return [...new Set(arr)];
   }
-  if (key === "gst_enabled" || key === "sms_notifications_enabled") return value === true || value === "true";
+  const boolKeys: SettingKey[] = [
+    "gst_enabled",
+    "sms_notifications_enabled",
+    "auth_google_enabled",
+    "auth_email_enabled",
+    "auth_email_verification_required",
+    "onboarding_mobile_required",
+    "kyc_required",
+    "kyc_auto_approve",
+    "payout_auto_approve_on_name_match",
+  ];
+  if (boolKeys.includes(key)) return value === true || value === "true";
+  if (key === "wallet_registration") {
+    if (!["OFF", "OPTIONAL", "REQUIRED"].includes(String(value))) throw new AppError("Wallet registration must be Off, Optional or Required.");
+    return String(value);
+  }
   if (key === "network_enabled") {
     const v = value as Record<string, unknown>;
     return { TRON: v.TRON === true || v.TRON === "true", BSC: v.BSC === true || v.BSC === "true" };
@@ -220,6 +253,14 @@ export async function updateSetting(key: SettingKey, value: unknown, actor: Acto
     if (floor.gte(ceiling)) throw new AppError("The rate floor must be below the ceiling.");
   }
   if (key === "rate_margin_percent" && D(String(clean)).gte(50)) throw new AppError("Margin must be below 50%.");
+  if (key === "auth_google_enabled" && clean === false && !current.auth_email_enabled)
+    throw new AppError("Keep at least one sign-in method on (Google or email/password).");
+  if (key === "auth_email_enabled" && clean === false && !current.auth_google_enabled)
+    throw new AppError("Keep at least one sign-in method on (Google or email/password).");
+  if (key === "auth_email_enabled" && clean === false && !(await import("./env")).env.firebase.webConfig)
+    throw new AppError("Google sign-in isn't set up on the server yet (Firebase settings missing), so email sign-in must stay on.");
+  if (key === "kyc_required" && clean === false && current.network_mode === "LIVE")
+    throw new AppError("KYC can't be switched off in Live mode: without PAN there is no TDS reporting and no AML check. Use Test mode.");
   // Skip no-op saves so the history stays readable. Re-saving the rate is kept:
   // it confirms the rate is still current and resets its age.
   if (key !== "rate" && JSON.stringify(current[key]) === JSON.stringify(clean)) return;
@@ -247,6 +288,8 @@ export const isRealValue = (v: string | null | undefined) => !!v && !/^\s*\[.*\]
 export const LIVE_CONFIRM_PHRASE = "SWITCH TO LIVE";
 
 export async function setNetworkMode(mode: Mode, typedConfirmation: string, actor: Actor, ip?: string | null) {
+  if (mode === "LIVE" && !(await getSettings()).kyc_required)
+    throw new AppError("Turn KYC back on before switching to Live.");
   if (mode === "LIVE" && typedConfirmation !== LIVE_CONFIRM_PHRASE)
     throw new AppError(`Type ${LIVE_CONFIRM_PHRASE} exactly to switch to Live`);
   if (mode !== "LIVE" && mode !== "TEST") throw new AppError("Unknown mode");

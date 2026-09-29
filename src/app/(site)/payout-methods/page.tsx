@@ -3,6 +3,7 @@ import { Landmark, Smartphone } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { MAX_PAYOUT_METHODS, maskedPayout } from "@/server/payouts";
+import { getSettings } from "@/server/settings";
 import { ApiForm } from "@/components/ApiForm";
 import { Banner, PageHeader, StatusPill } from "@/components/ui";
 import { PayoutMethodForm } from "@/components/PayoutMethodForm";
@@ -11,11 +12,14 @@ export const metadata = { title: "Bank & UPI", robots: { index: false, follow: f
 
 export default async function PayoutMethods() {
   const user = await userOrLogin();
-  const methods = await prisma.payoutMethod.findMany({ where: { userId: user.id, deletedAt: null }, orderBy: { createdAt: "asc" } });
+  const [methods, s] = await Promise.all([prisma.payoutMethod.findMany({ where: { userId: user.id, deletedAt: null }, orderBy: { createdAt: "asc" } }), getSettings()]);
+  const declined = user.kycStatus === "DECLINED";
+  const canAdd = !declined && (!s.kyc_required || user.kycStatus === "APPROVED");
   return (
     <div className="space-y-6">
       <PageHeader title="Bank & UPI" subtitle="Payouts go only to accounts in your own name." icon={<Landmark className="size-6" />} tile="tile-emerald" />
-      {user.kycStatus !== "APPROVED" && <Banner tone="warn">Finish your <Link className="font-medium underline" href="/kyc">identity check</Link> first.</Banner>}
+      {declined && <Banner tone="danger">Your identity check was declined, so you can&apos;t add payout methods.</Banner>}
+      {!declined && !canAdd && <Banner tone="warn">Finish your <Link className="font-medium underline" href="/kyc">identity check</Link> first.</Banner>}
 
       {methods.length > 0 && (
         <ul className="space-y-3">
@@ -34,7 +38,7 @@ export default async function PayoutMethods() {
                 </div>
                 <StatusPill status={m.status} />
               </div>
-              {m.status === "PENDING" && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">We&apos;re checking the name matches your ID. Usually within a few hours.</p>}
+              {m.status === "PENDING" && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">We&apos;re checking {s.kyc_required ? "the name matches your ID" : "this account"}. Usually within a few hours.</p>}
               {m.status === "DECLINED" && m.reason && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">Declined: {m.reason}</p>}
               <div className="mt-3 flex justify-end gap-1 border-t border-slate-100 pt-3">
                 {!m.isDefault && m.status === "APPROVED" && (
@@ -50,7 +54,7 @@ export default async function PayoutMethods() {
         </ul>
       )}
 
-      {user.kycStatus === "APPROVED" && methods.length < MAX_PAYOUT_METHODS && <PayoutMethodForm first={methods.length === 0} />}
+      {canAdd && methods.length < MAX_PAYOUT_METHODS && <PayoutMethodForm first={methods.length === 0} kycRequired={s.kyc_required} />}
       {methods.length >= MAX_PAYOUT_METHODS && <p className="muted">You can save up to {MAX_PAYOUT_METHODS} payout methods. Remove one to add another.</p>}
     </div>
   );

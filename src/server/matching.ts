@@ -19,6 +19,7 @@ export const HOLD = {
   TX_FAILED: "The transaction failed on the blockchain.",
   NOT_TO_US: "We couldn't find a USDT payment to our address in this transaction.",
   BEFORE_QUOTE: "The payment was made before this order was created.",
+  UNKNOWN_WALLET: "Sent from a wallet that isn't on your account.",
 } as const;
 
 export type MatchEvent = { orderId: string; kind: "CONFIRMED" | "ON_HOLD"; reason?: string };
@@ -66,6 +67,11 @@ async function linkTransfer(tx: Tx, t: IncomingTransfer, orderId: string) {
   await tx.incomingTransfer.update({ where: { id: t.id }, data: { status: "MATCHED", matchedOrderId: orderId } });
 }
 
+export async function isRegisteredWallet(tx: Tx, userId: string, network: NetworkCode, address: string): Promise<boolean> {
+  const addr = getAdapter(network).normalizeAddress(address);
+  return (await tx.userWallet.count({ where: { userId, network, address: addr, deletedAt: null } })) > 0;
+}
+
 /** Confirm a transfer that pays `order` with the exact amount, then apply late / limit holds. */
 async function confirmExact(tx: Tx, s: Settings, t: IncomingTransfer, order: Order, events: MatchEvent[]) {
   await linkTransfer(tx, t, order.id);
@@ -80,6 +86,12 @@ async function confirmExact(tx: Tx, s: Settings, t: IncomingTransfer, order: Ord
   if (problem) {
     await transition(tx, order.id, "ON_HOLD", SYSTEM, { from: "PAYMENT_CONFIRMED", publicMessage: HOLD.OVER_LIMIT, privateNote: problem, data: { holdReason: HOLD.OVER_LIMIT } });
     events.push({ orderId: order.id, kind: "ON_HOLD", reason: HOLD.OVER_LIMIT });
+    return;
+  }
+  if (s.wallet_registration === "REQUIRED" && !(await isRegisteredWallet(tx, order.userId, t.network as NetworkCode, t.fromAddress))) {
+    const note = `Sender ${t.fromAddress} is not a registered wallet of this user`;
+    await transition(tx, order.id, "ON_HOLD", SYSTEM, { from: "PAYMENT_CONFIRMED", publicMessage: HOLD.UNKNOWN_WALLET, privateNote: note, data: { holdReason: HOLD.UNKNOWN_WALLET } });
+    events.push({ orderId: order.id, kind: "ON_HOLD", reason: HOLD.UNKNOWN_WALLET });
     return;
   }
   events.push({ orderId: order.id, kind: "CONFIRMED" });

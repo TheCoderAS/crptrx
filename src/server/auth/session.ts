@@ -70,9 +70,15 @@ export async function currentUser(): Promise<User | null> {
   return u && u.status === "ACTIVE" ? u : null;
 }
 
-export async function requireUser(): Promise<User> {
+/** True when the admin requires a confirmed email and this user hasn't confirmed it yet. */
+export async function needsEmailVerification(u: User): Promise<boolean> {
+  return !u.emailVerified && (await getSettings()).auth_email_verification_required;
+}
+
+export async function requireUser(opts: { allowUnverified?: boolean } = {}): Promise<User> {
   const u = await currentUser();
   if (!u) throw new AppError("Please log in.", 401, "UNAUTHENTICATED");
+  if (!opts.allowUnverified && (await needsEmailVerification(u))) throw new AppError("Please confirm your email address first. Check your inbox for the link.", 403, "EMAIL_UNVERIFIED");
   return u;
 }
 

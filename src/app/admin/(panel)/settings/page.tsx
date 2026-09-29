@@ -1,4 +1,5 @@
 import { adminOrLogin } from "@/server/auth/pages";
+import { env } from "@/server/env";
 import { prisma } from "@/server/db";
 import { RATE_SOURCE_IDS, rateFeedState } from "@/server/rateFeed";
 import { getSettings, LIVE_CONFIRM_PHRASE, rateIsStale, tokenContractFor } from "@/server/settings";
@@ -20,6 +21,24 @@ function Field({ name, label, value, hint, type = "text" }: { name: string; labe
   );
 }
 
+/** On/off switch with a short explanation. Unchecked boxes are sent as false by ApiForm. */
+function Toggle({ name, label, hint, checked, warn }: { name: string; label: string; hint?: string; checked: boolean; warn?: string }) {
+  return (
+    <label htmlFor={name} className="flex cursor-pointer items-start gap-4 rounded-xl p-3 transition hover:bg-slate-50">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-slate-900">{label}</span>
+        {hint && <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>}
+        {warn && <span className="mt-1 block text-xs font-medium text-amber-700">{warn}</span>}
+      </span>
+      <span className="relative mt-0.5 inline-flex shrink-0">
+        <input type="checkbox" id={name} name={name} value="true" defaultChecked={checked} className="peer sr-only" />
+        <span className="h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-emerald-500 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-600 peer-focus-visible:ring-offset-2" />
+        <span className="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+      </span>
+    </label>
+  );
+}
+
 export default async function SettingsPage() {
   await adminOrLogin("SUPER_ADMIN");
   const s = await getSettings();
@@ -27,6 +46,11 @@ export default async function SettingsPage() {
   const history = await prisma.settingsHistory.findMany({ orderBy: { createdAt: "desc" }, take: 20 });
   const feed = await rateFeedState();
   const mode = s.network_mode;
+  const firebaseReady = !!env.firebase.webConfig;
+  const [autoKycToReview, pendingKyc] = await Promise.all([
+    prisma.kycSubmission.count({ where: { autoApproved: true, postReviewedAt: null, status: "APPROVED" } }),
+    prisma.kycSubmission.count({ where: { status: "SUBMITTED" } }),
+  ]);
   const group = (title: string, children: React.ReactNode, extra?: React.ReactNode) => (
     <ApiForm action="/api/admin/settings" className="card space-y-3">
       <h2 className="h2">{title}</h2>
@@ -194,6 +218,51 @@ export default async function SettingsPage() {
         ))}
       </div>
 
+          </> },
+          { id: "onboarding", label: "Sign-in & onboarding", alert: s.auth_google_enabled && !firebaseReady, content: <>
+      <ApiForm action="/api/admin/settings" className="card space-y-2">
+        <h2 className="h2">Sign-in methods</h2>
+        <p className="muted">At least one must stay on. Turning a method off stops new logins with it; people already signed in stay signed in.</p>
+        <div className="-mx-3 divide-y divide-slate-100">
+          <Toggle name="auth_google_enabled" label="Google sign-in" checked={s.auth_google_enabled} warn={!firebaseReady ? "Firebase settings are missing on the server, so the Google button stays hidden until they're added." : undefined} />
+          <Toggle name="auth_email_enabled" label="Email and password" hint="Sign-up, login, forgot-password and change-password." checked={s.auth_email_enabled} />
+          <Toggle name="auth_email_verification_required" label="Require a confirmed email" hint="New email sign-ups must click the link we email before they can continue. Google accounts are already confirmed." checked={s.auth_email_verification_required} />
+        </div>
+        <div className="flex items-end gap-3 pt-2"><TotpField /><button className="btn-primary">Save</button></div>
+      </ApiForm>
+
+      <ApiForm action="/api/admin/settings" className="card mt-5 space-y-2">
+        <h2 className="h2">Onboarding steps</h2>
+        <p className="muted">Changes apply immediately to everyone, including people halfway through. Orders already placed are not affected.</p>
+        <div className="-mx-3 divide-y divide-slate-100">
+          <Toggle name="onboarding_mobile_required" label="Mobile number must be confirmed" hint="One-time code by SMS." checked={s.onboarding_mobile_required} />
+          <Toggle
+            name="kyc_required"
+            label="Identity check (KYC) required"
+            hint="PAN, masked Aadhaar and selfie before adding a bank account or selling."
+            checked={s.kyc_required}
+            warn={mode === "LIVE" ? "Can't be switched off in Live mode." : !s.kyc_required ? "Off: Test mode only. You can't switch to Live until this is back on." : undefined}
+          />
+          <Toggle
+            name="kyc_auto_approve"
+            label="Approve identity checks automatically"
+            hint="Approves as soon as the basic checks pass (valid PAN format, 18+, all documents). There is no automatic document check yet, so each one still lands in KYC → Auto-approved for a person to review."
+            checked={s.kyc_auto_approve}
+            warn={s.kyc_auto_approve ? `${autoKycToReview} auto-approved submission${autoKycToReview === 1 ? "" : "s"} waiting for a person to look at.` : pendingKyc > 0 ? `Turning this on doesn't approve the ${pendingKyc} already waiting.` : undefined}
+          />
+          <Toggle name="payout_auto_approve_on_name_match" label="Approve bank / UPI automatically when the name matches" hint="Only when the account holder name matches the approved identity check. Anything else waits for review." checked={s.payout_auto_approve_on_name_match} />
+        </div>
+        <div className="grid gap-2 px-0 pt-2">
+          <label className="label" htmlFor="wallet_registration">Customer sending wallets</label>
+          <select id="wallet_registration" name="wallet_registration" defaultValue={s.wallet_registration} className="input sm:max-w-sm">
+            <option value="OFF">Off: don&apos;t ask</option>
+            <option value="OPTIONAL">Optional: customers can add them</option>
+            <option value="REQUIRED">Required: hold payments from other wallets</option>
+          </select>
+          <p className="muted">&quot;Required&quot; also blocks new orders until the customer adds a wallet. Exchange withdrawals come from the exchange&apos;s wallet and will be held.</p>
+        </div>
+        <div className="flex items-end gap-3 pt-2"><TotpField /><button className="btn-primary">Save</button></div>
+      </ApiForm>
           </> },
           { id: "company", label: "Company & text", content: <>
       {group(

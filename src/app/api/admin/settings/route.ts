@@ -21,8 +21,14 @@ export const POST = api(async (req: Request) => {
     else grouped[key] = v;
   }
   if (Object.keys(grouped).length === 0) throw new AppError("Nothing to save.");
+  // Check combined switches before saving anything, so a refused save never half-applies.
+  const off = (k: string) => grouped[k] === false || grouped[k] === "false";
+  if (off("auth_google_enabled") && off("auth_email_enabled")) throw new AppError("Keep at least one sign-in method on (Google or email/password).");
   // Apply the mode first so a Manual -> Auto (or back) switch and its fields save together.
-  const order = Object.keys(grouped).sort((x, y) => Number(y === "rate_mode") - Number(x === "rate_mode"));
+  // Apply the rate mode first, and switches being turned ON before ones turned OFF,
+  // so swapping two related switches in one save never trips a "keep one on" rule.
+  const rank = (k: string) => (k === "rate_mode" ? 0 : grouped[k] === true || grouped[k] === "true" ? 1 : 2);
+  const order = Object.keys(grouped).sort((x, y) => rank(x) - rank(y));
   for (const k of order) await updateSetting(k as SettingKey, grouped[k], a.actor, a.ip);
   if (order.some((k) => k.startsWith("rate")) && (await getSettings()).rate_mode === "AUTO") {
     const r = await refreshAutoRate();

@@ -14,6 +14,8 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
   const s = await prisma.kycSubmission.findUnique({ where: { id }, include: { user: true, reviewer: true } });
   if (!s) notFound();
   const history = await prisma.kycSubmission.findMany({ where: { userId: s.userId, id: { not: s.id } }, orderBy: { submittedAt: "desc" } });
+  const postReviewer = s.postReviewedBy ? await prisma.admin.findUnique({ where: { id: s.postReviewedBy } }) : null;
+  const needsCheck = s.status === "APPROVED" && s.autoApproved && !s.postReviewedAt;
   const docs = [["panDoc", "PAN card"], ["aadhaarFront", "Masked Aadhaar front"], ["aadhaarBack", "Masked Aadhaar back"], ["selfie", "Selfie with PAN"]];
   return (
     <div className="space-y-4">
@@ -28,6 +30,8 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
           <Row k="Address" v={s.address} />
           <Row k="Submitted" v={fmtIST(s.submittedAt)} />
           <Row k="User account" v={<Link className="underline" href={`/admin/users/${s.userId}`}>{s.user.status}</Link>} />
+          {s.autoApproved && <Row k="Approved" v={`Automatically, ${fmtIST(s.reviewedAt)}`} />}
+          {postReviewer && <Row k="Checked by" v={`${postReviewer.name}, ${fmtIST(s.postReviewedAt)}`} />}
           {s.reviewer && <Row k="Reviewed by" v={`${s.reviewer.name}, ${fmtIST(s.reviewedAt)}`} />}
           {s.reason && <Row k="Reason" v={s.reason} />}
         </div>
@@ -40,13 +44,14 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
           <Banner tone="warn">Decline if the Aadhaar is NOT masked (all 12 digits visible). We must never keep a full Aadhaar number.</Banner>
         </div>
       </div>
-      {s.status === "SUBMITTED" && (
+      {needsCheck && <Banner tone="warn" title="Approved automatically">Nobody has looked at these documents yet. Check them, then confirm, or ask for changes / decline (the user can&apos;t place new orders until fixed).</Banner>}
+      {(s.status === "SUBMITTED" || needsCheck) && (
         <div className="card">
-          <h2 className="h2">Decision</h2>
+          <h2 className="h2">{needsCheck ? "Check" : "Decision"}</h2>
           <div className="mt-4 grid gap-4 lg:grid-cols-[auto_1fr] lg:items-start">
             <ApiForm action={`/api/admin/kyc/${s.id}`}>
               <input type="hidden" name="decision" value="APPROVED" />
-              <button className="btn w-full bg-emerald-600 px-6 text-white hover:bg-emerald-700 lg:w-auto">Approve</button>
+              <button className="btn w-full bg-emerald-600 px-6 text-white hover:bg-emerald-700 lg:w-auto">{needsCheck ? "Looks good" : "Approve"}</button>
             </ApiForm>
             <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row">
               <select name="decision" className="input sm:w-56"><option value="NEEDS_CHANGES">Needs changes</option><option value="DECLINED">Decline</option></select>

@@ -1,3 +1,4 @@
+import { isRegisteredWallet } from "@/server/matching";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -20,10 +21,11 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
     include: { user: true, events: { orderBy: { createdAt: "asc" } }, notes: { include: { admin: true }, orderBy: { createdAt: "asc" } }, transfers: true, support: { orderBy: { createdAt: "desc" } } },
   });
   if (!o) notFound();
-  const [s, kyc, admins] = await Promise.all([
+  const [s, kyc, admins, senderKnown] = await Promise.all([
     getSettings(),
     prisma.kycSubmission.findFirst({ where: { userId: o.userId }, orderBy: { submittedAt: "desc" } }),
     prisma.admin.findMany({ select: { id: true, name: true } }),
+    o.senderAddress ? isRegisteredWallet(prisma, o.userId, o.network as NetworkCode, o.senderAddress) : Promise.resolve(false),
   ]);
   const adminName = (aid: string | null) => admins.find((a) => a.id === aid)?.name ?? aid ?? "";
   const n = o.network as NetworkCode;
@@ -56,7 +58,17 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           {o.submittedTxid && <Row k="TxID submitted by user" v={txLink(o.submittedTxid, (o.submittedTxid.startsWith("0x") ? "BSC" : "TRON") as NetworkCode)} />}
           {o.txid && <Row k="Matched TxID" v={<>{txLink(o.txid)} <span className="text-xs text-slate-500">#{o.transferPosition}</span></>} />}
           {o.receivedAmount && <Row k="Amount received" v={<span className={D(o.receivedAmount).eq(D(o.usdtAmount)) ? "" : "text-red-700"}>{fmtUsdt(o.receivedAmount)} USDT</span>} />}
-          {o.senderAddress && <Row k="Sender wallet" v={<a className="font-mono text-xs underline" target="_blank" rel="noreferrer" href={explorerAddressUrl(n, mode, o.senderAddress)}>{o.senderAddress}</a>} />}
+          {o.senderAddress && (
+            <Row
+              k="Sender wallet"
+              v={
+                <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                  <a className="font-mono text-xs break-all underline" target="_blank" rel="noreferrer" href={explorerAddressUrl(n, mode, o.senderAddress)}>{o.senderAddress}</a>
+                  <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ${senderKnown ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>{senderKnown ? "Registered by user" : "Not registered"}</span>
+                </span>
+              }
+            />
+          )}
           {o.confirmedAt && <Row k="Confirmed" v={fmtIST(o.confirmedAt)} />}
         </div>
         <div className="card">

@@ -3,13 +3,13 @@ import { useState } from "react";
 import { Landmark, Smartphone } from "lucide-react";
 import { ApiForm } from "./ApiForm";
 
-export function PayoutMethodForm({ first }: { first?: boolean }) {
+export function PayoutMethodForm({ first, kycRequired = true }: { first?: boolean; kycRequired?: boolean }) {
   const [type, setType] = useState<"BANK" | "UPI">("BANK");
   return (
     <ApiForm action="/api/payout-methods" className="card space-y-5" resetOnSuccess>
       <div>
         <h2 className="h2">{first ? "Add where you want to be paid" : "Add another"}</h2>
-        <p className="mt-0.5 text-sm text-slate-500">It must be in the same name as your PAN.</p>
+        <p className="mt-0.5 text-sm text-slate-500">{kycRequired ? "It must be in the same name as your PAN." : "It must be in your own name."}</p>
       </div>
       <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Payout type">
         {([["BANK", "Bank account", Landmark], ["UPI", "UPI ID", Smartphone]] as const).map(([t, label, Icon]) => (
