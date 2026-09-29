@@ -1,0 +1,37 @@
+name: Testnet chain check
+
+# Runs the real Tron Nile and BSC Testnet readers against live test networks.
+# Run it manually (Actions tab) any time, e.g. after changing test tokens.
+on:
+  workflow_dispatch:
+    inputs:
+      tron_token:
+        description: Tron Nile test USDT contract (blank = app default)
+        required: false
+      bsc_token:
+        description: BSC Testnet test USDT contract (blank = app default)
+        required: false
+  pull_request:
+    paths:
+      - "src/server/networks/**"
+      - "scripts/check-chains.ts"
+      - ".github/workflows/chain-check.yml"
+  schedule:
+    - cron: "17 3 * * 1" # weekly, to notice testnet or provider changes
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      TRONGRID_API_KEY: ${{ secrets.TRONGRID_API_KEY }}
+      CHECK_TRON_TOKEN: ${{ inputs.tron_token }}
+      CHECK_BSC_TOKEN: ${{ inputs.bsc_token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/check-chains.ts

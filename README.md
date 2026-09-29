@@ -44,7 +44,10 @@ Things to try: pay the wrong amount, pay after the 15-minute expiry, submit a BS
 
 `e2e/flow.mjs` automates this walkthrough in a real browser. CI runs it against the built image.
 
-### Real testnet tokens (optional)
+### Real testnet tokens and Google sign-in (Stage 2)
+Step-by-step guide: **[docs/STAGE2.md](docs/STAGE2.md)**. The `Testnet chain check` workflow (Actions tab) checks the Tron/BSC readers against the live test networks.
+
+### Real testnet tokens (short version)
 The seeded test deposit addresses are random placeholders that nobody controls. To test with real Nile or BSC-Testnet tokens:
 1. Put your own testnet wallet addresses in **Admin → Settings → Deposit addresses** (they take effect after 1 hour).
 2. Check that **USDT token contracts** (Test mode) are the test tokens you will actually send. The pre-filled ones are commonly used test tokens and **must be confirmed by the owner**.

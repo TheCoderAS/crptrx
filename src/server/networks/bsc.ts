@@ -69,6 +69,54 @@ async function blockTime(c: PublicClient, n: bigint): Promise<Date> {
 
 const topicAddr = (t: string) => getAddress("0x" + t.slice(-40));
 
+/** Providers reject eth_getLogs over too many blocks, each with its own wording. */
+export function isRangeLimitError(e: unknown): boolean {
+  const err = e as { message?: string; details?: string; shortMessage?: string };
+  const text = `${err?.message ?? ""} ${err?.details ?? ""} ${err?.shortMessage ?? ""}`;
+  return /limit|exceed|too many|block range|range is too|query returned more than|response size/i.test(text);
+}
+
+// Largest block span the current provider accepted, learned at run time.
+let learnedSpan: bigint | null = null;
+export function resetLearnedSpanForTests() {
+  learnedSpan = null;
+}
+
+/**
+ * Read Transfer logs for [from, to]. If the provider refuses the range, halve
+ * it and retry, down to a single block. Returns the logs and the last block
+ * actually covered (may be below `to`), so the cursor never skips a block.
+ */
+export async function getTransferLogsAdaptive(
+  c: PublicClient,
+  params: { token: string; to?: string[]; fromBlock: bigint; toBlock: bigint },
+) {
+  let span = params.toBlock - params.fromBlock + 1n;
+  if (learnedSpan !== null && learnedSpan < span) span = learnedSpan;
+  for (;;) {
+    const end = params.fromBlock + span - 1n;
+    try {
+      const logs = await c.getLogs({
+        address: getAddress(params.token),
+        event: TRANSFER,
+        args: params.to ? { to: params.to.map((a) => getAddress(a)) } : undefined,
+        fromBlock: params.fromBlock,
+        toBlock: end,
+      });
+      return { logs, coveredTo: end };
+    } catch (e) {
+      if (!isRangeLimitError(e)) throw e;
+      if (span <= 1n)
+        throw new Error(
+          "The BNB Smart Chain data provider refuses log queries even for one block (it doesn't support eth_getLogs). " +
+            "Set BSC_TEST_RPC_URL / BSC_LIVE_RPC_URL to a provider that does.",
+        );
+      span = span / 2n;
+      learnedSpan = span;
+    }
+  }
+}
+
 export function decodeBscLog(log: Pick<Log, "address" | "topics" | "data" | "transactionHash" | "logIndex" | "blockNumber">, time: Date): ChainTransfer | null {
   const topics = log.topics as string[];
   if (!topics[0] || topics[0].toLowerCase() !== TRANSFER_TOPIC || topics.length < 3) return null;
@@ -125,16 +173,10 @@ export const bscAdapter: NetworkAdapter = {
     const last = (cursor as { lastBlock?: string } | null)?.lastBlock;
     const from = last != null ? BigInt(last) + 1n : fin - BigInt(ctx.initialLookback);
     if (from > fin) return { transfers: [], cursor: { lastBlock: (from - 1n).toString() } };
-    const to = from + BigInt(ctx.scanRange) - 1n < fin ? from + BigInt(ctx.scanRange) - 1n : fin;
-    if (addresses.length === 0) return { transfers: [], cursor: { lastBlock: to.toString() } };
+    const wanted = from + BigInt(ctx.scanRange) - 1n < fin ? from + BigInt(ctx.scanRange) - 1n : fin;
+    if (addresses.length === 0) return { transfers: [], cursor: { lastBlock: wanted.toString() } };
 
-    const logs = await c.getLogs({
-      address: getAddress(ctx.tokenContract),
-      event: TRANSFER,
-      args: { to: addresses.map((a) => getAddress(a)) },
-      fromBlock: from,
-      toBlock: to,
-    });
+    const { logs, coveredTo: to } = await getTransferLogsAdaptive(c, { token: ctx.tokenContract, to: addresses, fromBlock: from, toBlock: wanted });
     const out: ChainTransfer[] = [];
     const statusCache = new Map<string, boolean>();
     for (const log of logs) {

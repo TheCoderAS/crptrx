@@ -33,7 +33,7 @@ x-app: &app
     STORAGE_DRIVER: local
     # Blockchain data (testnets work without keys at low volume).
     TRONGRID_API_KEY: ${TRONGRID_API_KEY:-}
-    BSC_TEST_RPC_URL: ${BSC_TEST_RPC_URL:-https://data-seed-prebsc-1-s1.bnbchain.org:8545}
+    BSC_TEST_RPC_URL: ${BSC_TEST_RPC_URL:-https://bsc-testnet-rpc.publicnode.com}
     # First-run seed (only used when the database is empty).
     SEED_SUPER_ADMIN_EMAIL: ${SEED_SUPER_ADMIN_EMAIL:-owner@example.com}
     SEED_SUPER_ADMIN_PASSWORD: ${SEED_SUPER_ADMIN_PASSWORD:-change-me-now-please}

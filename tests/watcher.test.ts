@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { encodeAbiParameters, getAddress, pad } from "viem";
 import { prisma } from "@/server/db";
 import { setAdapterForTests, getAdapter } from "@/server/networks";
-import { bscAdapter, setBscClientForTests } from "@/server/networks/bsc";
+import { bscAdapter, resetLearnedSpanForTests, setBscClientForTests } from "@/server/networks/bsc";
 import { tronAdapter } from "@/server/networks/tron";
 import { toUnits } from "@/server/money";
 import { networkTick, recordWatcherFailure, delayedNetworks, watchOnce } from "@/server/watcher";
@@ -13,7 +13,7 @@ const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a
 interface FakeLog { blockNumber: bigint; logIndex: number; txid: string; to: string; amount: string; token?: string }
 
 /** Minimal fake of the viem client calls the BSC adapter makes. */
-function fakeBsc(logs: FakeLog[], opts: { finalized: bigint; failGetLogsAt?: bigint }) {
+function fakeBsc(logs: FakeLog[], opts: { finalized: bigint; failGetLogsAt?: bigint; maxRange?: bigint }) {
   const calls: [bigint, bigint][] = [];
   const client = {
     calls,
@@ -26,6 +26,7 @@ function fakeBsc(logs: FakeLog[], opts: { finalized: bigint; failGetLogsAt?: big
       return client.finalized + 20n;
     },
     async getLogs(a: { fromBlock: bigint; toBlock: bigint; args: { to: string[] }; address: string }) {
+      if (opts.maxRange && a.toBlock - a.fromBlock + 1n > opts.maxRange) throw new Error("Request exceeds defined limit.");
       calls.push([a.fromBlock, a.toBlock]);
       if (opts.failGetLogsAt !== undefined && a.fromBlock <= opts.failGetLogsAt && opts.failGetLogsAt <= a.toBlock) {
         throw new Error("provider died"); // keeps failing until the process restarts
@@ -55,6 +56,7 @@ beforeEach(async () => {
   await baseSettings({ bsc_scan_range: 10, bsc_initial_lookback_blocks: 50 });
 });
 afterEach(() => {
+  resetLearnedSpanForTests();
   setBscClientForTests(null);
   setAdapterForTests("TRON", tronAdapter);
   setAdapterForTests("BSC", bscAdapter);
@@ -106,6 +108,28 @@ describe("BSC watcher (spec 8.3, M6b)", () => {
     c.finalized = 1010n;
     await watchOnce("BSC");
     expect((await orderById(order.id)).status).toBe("PAYMENT_CONFIRMED");
+  });
+});
+
+describe("provider block-range limits", () => {
+  it("shrinks the request when the provider refuses a range, without skipping blocks", async () => {
+    await baseSettings({ bsc_scan_range: 500, bsc_initial_lookback_blocks: 50 });
+    const { order } = await makeOrder("BSC", "100");
+    // Real public BSC testnet nodes reject large eth_getLogs ranges ("exceeds defined limit").
+    const c = fakeBsc([{ blockNumber: 985n, logIndex: 0, txid: tx(21), to: ADDR.BSC, amount: order.usdtAmount.toString() }], { finalized: 1000n, maxRange: 20n });
+    setBscClientForTests(c);
+    for (let i = 0; i < 6; i++) await watchOnce("BSC");
+    // Every accepted call is within the limit, and the covered ranges are contiguous from 950.
+    expect(c.calls.every(([f, t]) => t - f + 1n <= 20n)).toBe(true);
+    expect(c.calls[0][0]).toBe(950n);
+    for (let i = 1; i < c.calls.length; i++) expect(c.calls[i][0]).toBe(c.calls[i - 1][1] + 1n);
+    expect((await orderById(order.id)).status).toBe("PAYMENT_CONFIRMED");
+  });
+
+  it("still fails loudly on errors that aren't range limits", async () => {
+    await makeOrder("BSC", "100");
+    setBscClientForTests(fakeBsc([], { finalized: 1000n, failGetLogsAt: 955n }));
+    await expect(watchOnce("BSC")).rejects.toThrow(/provider died/);
   });
 });
 

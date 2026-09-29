@@ -104,10 +104,12 @@ export const env = {
   },
   bsc: {
     get testRpcUrl() {
-      return process.env.BSC_TEST_RPC_URL ?? "https://data-seed-prebsc-1-s1.bnbchain.org:8545";
+      // Verified by the testnet chain check to serve eth_getLogs and the "finalized" tag.
+      // (bnbchain's own public data-seed nodes refuse eth_getLogs entirely.)
+      return opt("BSC_TEST_RPC_URL") ?? "https://bsc-testnet-rpc.publicnode.com";
     },
     get testRpcBackupUrl() {
-      return opt("BSC_TEST_RPC_BACKUP_URL") ?? "https://data-seed-prebsc-2-s1.bnbchain.org:8545";
+      return opt("BSC_TEST_RPC_BACKUP_URL");
     },
     get liveRpcUrl() {
       return opt("BSC_LIVE_RPC_URL");

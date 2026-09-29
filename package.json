@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "db:dev": "prisma migrate dev"
+    "db:dev": "prisma migrate dev",
+    "check:chains": "tsx scripts/check-chains.ts"
   },
   "engines": {
     "node": ">=20"
