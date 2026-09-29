@@ -49,7 +49,7 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
               <button className="btn w-full bg-emerald-600 px-6 text-white hover:bg-emerald-700 lg:w-auto">Approve</button>
             </ApiForm>
             <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row">
-              <select name="decision" className="input sm:w-44"><option value="NEEDS_CHANGES">Needs changes</option><option value="DECLINED">Decline</option></select>
+              <select name="decision" className="input sm:w-56"><option value="NEEDS_CHANGES">Needs changes</option><option value="DECLINED">Decline</option></select>
               <input name="reason" required className="input flex-1" placeholder="Reason shown to the user, e.g. Selfie is blurry" />
               <button className="btn-danger">Send</button>
             </ApiForm>
