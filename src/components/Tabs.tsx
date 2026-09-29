@@ -5,8 +5,14 @@ import { useEffect, useState, type ReactNode } from "react";
 export function Tabs({ tabs }: { tabs: { id: string; label: string; content: ReactNode; alert?: boolean }[] }) {
   const [active, setActive] = useState(tabs[0]?.id);
   useEffect(() => {
-    const h = window.location.hash.slice(1);
-    if (tabs.some((t) => t.id === h)) setActive(h);
+    // Also follow in-page links to a tab (e.g. a banner linking to #onboarding).
+    const sync = () => {
+      const h = window.location.hash.slice(1);
+      if (tabs.some((t) => t.id === h)) setActive(h);
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
   }, [tabs]);
   return (
     <div>

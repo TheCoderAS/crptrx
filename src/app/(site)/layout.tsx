@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const [user, s] = await Promise.all([currentUser(), getSettings()]);
+  // Someone who still has to confirm their email only gets "Log out", not the app navigation.
+  const pending = !!user && !user.emailVerified && s.auth_email_verification_required;
+  const nav = !!user && !pending;
   // Header, content and footer share one width so their edges line up.
   const width = user ? "max-w-4xl" : "max-w-5xl";
   return (
@@ -25,8 +28,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           </Link>
           {user ? (
             <div className="flex items-center gap-2">
-              <DesktopNav />
-              <span className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />
+              {nav && <DesktopNav />}
+              {nav && <span className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />}
               <LogoutButton action="/api/auth/logout" />
             </div>
           ) : (
@@ -35,13 +38,13 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         </div>
       </header>
 
-      <main className={`mx-auto w-full flex-1 px-4 py-6 sm:py-10 ${width} ${user ? "pb-28 md:pb-10" : ""}`}>{children}</main>
+      <main className={`mx-auto w-full flex-1 px-4 py-6 sm:py-10 ${width} ${nav ? "pb-28 md:pb-10" : ""}`}>{children}</main>
 
-      <footer className={`border-t border-slate-200 bg-white ${user ? "pb-20 md:pb-0" : ""}`}>
+      <footer className={`border-t border-slate-200 bg-white ${nav ? "pb-20 md:pb-0" : ""}`}>
         <div className={`mx-auto ${width} px-4 py-8`}>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs font-medium text-slate-600">
             {isRealValue(s.company_fiu_reg) && <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-4 text-emerald-600" aria-hidden /> FIU registration no. {s.company_fiu_reg}</span>}
-            <span className="inline-flex items-center gap-1.5"><BadgeCheck className="size-4 text-emerald-600" aria-hidden /> Verified users only (KYC)</span>
+            {s.kyc_required && <span className="inline-flex items-center gap-1.5"><BadgeCheck className="size-4 text-emerald-600" aria-hidden /> Verified users only (KYC)</span>}
             <span className="inline-flex items-center gap-1.5"><Lock className="size-4 text-emerald-600" aria-hidden /> Payouts only to your own account</span>
           </div>
           <div className="mt-5 flex flex-wrap items-end justify-between gap-4 text-xs text-slate-500">
@@ -57,7 +60,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           </div>
         </div>
       </footer>
-      {user && <MobileTabs />}
+      {nav && <MobileTabs />}
     </div>
   );
 }
