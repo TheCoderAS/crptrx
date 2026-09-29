@@ -54,7 +54,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           <Row k="Deposit address (saved on order)" v={<a className="font-mono text-xs underline" target="_blank" rel="noreferrer" href={explorerAddressUrl(n, mode, o.depositAddress)}>{o.depositAddress}</a>} />
           <Row k="Quote expires" v={fmtIST(o.quoteExpiresAt)} />
           {o.submittedTxid && <Row k="TxID submitted by user" v={txLink(o.submittedTxid, (o.submittedTxid.startsWith("0x") ? "BSC" : "TRON") as NetworkCode)} />}
-          {o.txid && <Row k="Matched TxID" v={<>{txLink(o.txid)} <span className="text-xs text-gray-500">#{o.transferPosition}</span></>} />}
+          {o.txid && <Row k="Matched TxID" v={<>{txLink(o.txid)} <span className="text-xs text-slate-500">#{o.transferPosition}</span></>} />}
           {o.receivedAmount && <Row k="Amount received" v={<span className={D(o.receivedAmount).eq(D(o.usdtAmount)) ? "" : "text-red-700"}>{fmtUsdt(o.receivedAmount)} USDT</span>} />}
           {o.senderAddress && <Row k="Sender wallet" v={<a className="font-mono text-xs underline" target="_blank" rel="noreferrer" href={explorerAddressUrl(n, mode, o.senderAddress)}>{o.senderAddress}</a>} />}
           {o.confirmedAt && <Row k="Confirmed" v={fmtIST(o.confirmedAt)} />}
@@ -140,7 +140,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           </ApiForm>
         )}
         {o.status === "ON_HOLD" && (
-          <ApiForm action={act} className="space-y-2 rounded-lg bg-gray-50 p-3" confirm="Close this order? This is final.">
+          <ApiForm action={act} className="space-y-2 rounded-lg bg-slate-50 p-3" confirm="Close this order? This is final.">
             <h3 className="font-semibold">Close hold (resolved outside the app)</h3>
             <input type="hidden" name="action" value="close_manual" />
             <textarea name="resolutionNote" required rows={2} className="input" placeholder="How it was resolved (required)" />
@@ -158,7 +158,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
         </div>
         <div className="card space-y-3">
           <h2 className="h2">Admin notes</h2>
-          {o.notes.map((nt) => <p key={nt.id} className="text-sm"><b>{nt.admin.name}</b> <span className="text-xs text-gray-500">{fmtIST(nt.createdAt)}</span><br />{nt.note}</p>)}
+          {o.notes.map((nt) => <p key={nt.id} className="text-sm"><b>{nt.admin.name}</b> <span className="text-xs text-slate-500">{fmtIST(nt.createdAt)}</span><br />{nt.note}</p>)}
           <ApiForm action={act} className="space-y-2" resetOnSuccess>
             <input type="hidden" name="action" value="note" />
             <textarea name="note" required rows={2} className="input" placeholder="Add a private note" />
@@ -166,7 +166,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           </ApiForm>
           {o.support.length > 0 && <>
             <h2 className="h2">Support messages</h2>
-            {o.support.map((m) => <p key={m.id} className="text-sm"><span className="text-xs text-gray-500">{fmtIST(m.createdAt)}</span><br />{m.message}{m.attachmentKey && <> · <a className="underline" target="_blank" rel="noreferrer" href={`/api/admin/support/${m.id}/file`}>attachment</a></>}</p>)}
+            {o.support.map((m) => <p key={m.id} className="text-sm"><span className="text-xs text-slate-500">{fmtIST(m.createdAt)}</span><br />{m.message}{m.attachmentKey && <> · <a className="underline" target="_blank" rel="noreferrer" href={`/api/admin/support/${m.id}/file`}>attachment</a></>}</p>)}
           </>}
         </div>
       </div>

@@ -134,7 +134,7 @@ await expectText(user, "Payment received");
 // 7. Admin workflow
 await admin.goto(`${BASE}/admin/orders/${orderId}`);
 await admin.click("button:has-text('Start review')");
-await expectText(admin, "Under review");
+await expectText(admin, "In review");
 admin.on("dialog", (d) => d.accept());
 await admin.fill("textarea[name=note]", "Checked sender on scam tool: no flags");
 await admin.check("input[value=CLEAN]");

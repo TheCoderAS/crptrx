@@ -46,12 +46,12 @@ export default async function SettingsPage() {
             <label className="flex items-center gap-2"><input type="radio" name="rate_mode" value="AUTO" defaultChecked={s.rate_mode === "AUTO"} /> Auto: live market price minus my margin</label>
           </div>
           <p className="text-2xl font-bold">
-            Current rate: ₹{s.rate} <span className="text-sm font-normal text-gray-500">({s.rate_mode === "AUTO" ? "auto" : "manual"}, updated {fmtIST(s.rateUpdatedAt)})</span>
+            Current rate: ₹{s.rate} <span className="text-sm font-normal text-slate-500">({s.rate_mode === "AUTO" ? "auto" : "manual"}, updated {fmtIST(s.rateUpdatedAt)})</span>
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="rate">Manual rate</label>
-              <input id="rate" name="rate" defaultValue={s.rate} disabled={s.rate_mode === "AUTO"} className="input disabled:bg-gray-100" />
+              <input id="rate" name="rate" defaultValue={s.rate} disabled={s.rate_mode === "AUTO"} className="input disabled:bg-slate-100" />
               <p className="muted mt-1">{s.rate_mode === "AUTO" ? "Set automatically in Auto mode." : "Affects new quotes only."}</p>
             </div>
             <Field name="rate_max_age_hours" label="Manual: block quotes if the rate is older than (hours)" value={s.rate_max_age_hours} type="number" />
@@ -69,7 +69,7 @@ export default async function SettingsPage() {
           <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
         </ApiForm>
 
-        <div className="rounded-lg bg-gray-50 p-3 text-sm">
+        <div className="rounded-lg bg-slate-50 p-3 text-sm">
           <p className="font-semibold">Live price feed</p>
           {feed?.sources ? (
             <ul className="mt-1 space-y-0.5">
@@ -135,7 +135,7 @@ export default async function SettingsPage() {
         <h2 className="h2">Deposit addresses ({mode} mode)</h2>
         <Banner tone="danger">If this address is wrong, every payment on that network goes to someone else. Changes need your 2FA code, take effect after 1 hour, and every admin is emailed a cancel link.</Banner>
         {NETWORK_CODES.map((n) => (
-          <div key={n} className="rounded-lg p-3 ring-1 ring-gray-200">
+          <div key={n} className="rounded-lg p-3 ring-1 ring-slate-200">
             <p className="text-xl font-bold">{NETWORK_INFO[n].name}</p>
             <p className="muted">Active address:</p>
             <p className="font-mono text-sm break-all">{s.deposit_address[mode][n] || "(not set)"}</p>
@@ -187,6 +187,7 @@ export default async function SettingsPage() {
       {group(
         "Text shown to users and on receipts",
         <>
+          <Field name="brand_name" label="App name shown to users" value={s.brand_name} />
           <Field name="business_hours_text" label="Business hours" value={s.business_hours_text} />
           <Field name="review_hours" label="Typical review time (hours)" value={s.review_hours} type="number" />
           <Field name="company_name" label="Company legal name" value={s.company_name} />

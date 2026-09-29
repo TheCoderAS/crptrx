@@ -3,7 +3,7 @@ import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { maskedPayout } from "@/server/payouts";
 import { getSettings, rateIsStale } from "@/server/settings";
-import { Banner } from "@/components/ui";
+import { Banner, PageHeader } from "@/components/ui";
 import { SellForm } from "@/components/SellForm";
 import { NETWORK_CODES } from "@/lib/networks";
 
@@ -17,16 +17,16 @@ export default async function Sell() {
   ]);
   if (user.kycStatus !== "APPROVED" || methods.length === 0 || !user.mobileVerifiedAt)
     return (
-      <div className="space-y-4">
-        <h1 className="h1">Sell USDT</h1>
-        <Banner tone="warn">You need an approved identity check and an approved bank account or UPI ID before selling. <Link className="underline" href="/dashboard">See what&apos;s left</Link>.</Banner>
+      <div>
+        <PageHeader title="Sell USDT" />
+        <Banner tone="warn" title="Almost there">You need an approved identity check and an approved bank account or UPI ID before selling. <Link className="font-medium underline" href="/dashboard">See what&apos;s left</Link>.</Banner>
       </div>
     );
   const stale = rateIsStale(s);
   const available = Object.fromEntries(NETWORK_CODES.map((n) => [n, s.network_enabled[n] && !!s.deposit_address[s.network_mode][n]])) as Record<"TRON" | "BSC", boolean>;
   return (
-    <div className="space-y-6">
-      <h1 className="h1">Sell USDT</h1>
+    <div>
+      <PageHeader title="Sell USDT" subtitle="Three quick choices. You'll see the exact amount before sending anything." />
       {stale ? (
         <Banner tone="warn">Our rate is being updated. Please try again shortly.</Banner>
       ) : (
@@ -42,7 +42,7 @@ export default async function Sell() {
           methods={methods.map((m) => ({ id: m.id, label: maskedPayout(m), isDefault: m.isDefault }))}
         />
       )}
-      <p className="muted">{s.business_hours_text}.</p>
+      <p className="muted mt-6">{s.business_hours_text}.</p>
     </div>
   );
 }

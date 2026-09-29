@@ -21,13 +21,13 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
     take: 300,
   });
   const tab = (key: string, label: string, active: boolean) => (
-    <Link key={key} href={`/admin/orders?status=${key}`} className={`rounded-full px-3 py-1 text-sm ring-1 ${active ? "bg-gray-900 text-white" : "bg-white ring-gray-300"}`}>{label}</Link>
+    <Link key={key} href={`/admin/orders?status=${key}`} className={`rounded-full px-3 py-1 text-sm ring-1 ${active ? "bg-slate-900 text-white" : "bg-white ring-slate-300"}`}>{label}</Link>
   );
   return (
     <div className="space-y-4">
       <h1 className="h1">Orders</h1>
       <div className="flex flex-wrap gap-2">
-        <Link href="/admin/orders" className={`rounded-full px-3 py-1 text-sm ring-1 ${!status ? "bg-gray-900 text-white" : "bg-white ring-gray-300"}`}>Work waiting</Link>
+        <Link href="/admin/orders" className={`rounded-full px-3 py-1 text-sm ring-1 ${!status ? "bg-slate-900 text-white" : "bg-white ring-slate-300"}`}>Work waiting</Link>
         {all.map((s) => tab(s, statusLabel(s), status === s))}
         {tab("ALL", "All", status === "ALL")}
       </div>

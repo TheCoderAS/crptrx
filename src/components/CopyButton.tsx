@@ -1,4 +1,5 @@
 "use client";
+import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 
 export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
@@ -6,13 +7,19 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
   return (
     <button
       type="button"
-      className="btn-secondary px-3 py-1.5"
+      aria-label={`${label}: ${text}`}
+      className={`btn shrink-0 px-3 py-2 ring-1 ring-inset ${done ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"}`}
       onClick={async () => {
-        await navigator.clipboard.writeText(text);
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          /* clipboard blocked: the value is still visible to copy by hand */
+        }
         setDone(true);
-        setTimeout(() => setDone(false), 1500);
+        setTimeout(() => setDone(false), 1600);
       }}
     >
+      {done ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
       {done ? "Copied" : label}
     </button>
   );

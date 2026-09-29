@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 /**
  * Posts the form to an API route (multipart when it has files, else JSON).
@@ -73,12 +74,22 @@ export function ApiForm({
   }
 
   return (
-    <form onSubmit={submit} className={className}>
+    <form onSubmit={submit} className={className} aria-busy={busy}>
       <fieldset disabled={busy} className="contents">
         {children}
       </fieldset>
-      {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-      {ok && <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">{ok}</p>}
+      {error && (
+        <p role="alert" className="mt-3 flex gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200 ring-inset">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>{error}</span>
+        </p>
+      )}
+      {ok && (
+        <p role="status" className="mt-3 flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 ring-1 ring-emerald-200 ring-inset">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>{ok}</span>
+        </p>
+      )}
     </form>
   );
 }

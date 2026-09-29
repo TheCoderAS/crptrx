@@ -1,5 +1,6 @@
 import { getSettings } from "@/server/settings";
-import { NetworkBadge } from "@/components/ui";
+import { ChevronDown } from "lucide-react";
+import { NetworkBadge, PageHeader } from "@/components/ui";
 
 export const metadata = { title: "Help & FAQ" };
 
@@ -26,15 +27,26 @@ export default async function Help() {
     ["Can I be paid to someone else's account?", "No. Payouts go only to bank accounts or UPI IDs in your own name, matching your identity check."],
   ];
   return (
-    <div className="space-y-4">
-      <h1 className="h1">Help &amp; FAQ</h1>
-      {faqs.map(([q, a]) => (
-        <details key={q} className="card">
-          <summary className="cursor-pointer font-semibold">{q}</summary>
-          <div className="mt-2 text-sm text-gray-700">{a}</div>
-        </details>
-      ))}
-      <p className="muted">Still stuck? Email {s.support_email}, or use &quot;Contact support&quot; on your order.</p>
+    <div className="mx-auto max-w-3xl">
+      <PageHeader title="Help & FAQ" subtitle="Straight answers about networks, timing, fees and tax." />
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[var(--shadow-card)]">
+        {faqs.map(([q, a]) => (
+          <details key={q} className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-medium text-slate-900 hover:bg-slate-50">
+              {q}
+              <ChevronDown className="size-4 shrink-0 text-slate-400 transition group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="px-5 pb-5 text-sm leading-relaxed text-slate-600">{a}</div>
+          </details>
+        ))}
+      </div>
+      <div className="card mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold text-slate-900">Still need help?</p>
+          <p className="text-sm text-slate-500">Email {s.support_email}, or use &quot;Contact support&quot; on your order.</p>
+        </div>
+        <a href={`mailto:${s.support_email}`} className="btn-secondary">Email support</a>
+      </div>
     </div>
   );
 }

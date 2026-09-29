@@ -16,11 +16,12 @@ export function TotpSetup() {
   if (err) return <p className="text-sm text-red-700">{err}</p>;
   if (!data) return <p className="muted">Loading…</p>;
   return (
-    <div className="card space-y-2 text-center">
-      <p className="text-sm">First sign-in: scan this with Google Authenticator, Microsoft Authenticator or similar.</p>
+    <div className="card space-y-3 p-6 text-center">
+      <p className="text-sm font-semibold text-slate-900">Set up your authenticator app</p>
+      <p className="text-sm text-slate-500">First sign-in only. Scan with Google Authenticator, Microsoft Authenticator or similar.</p>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={data.qr} alt="Authenticator QR code" className="mx-auto h-48 w-48" />
-      <p className="muted">Or enter this key: <code className="break-all">{data.secret}</code></p>
+      <img src={data.qr} alt="Authenticator QR code" className="mx-auto size-44 rounded-xl ring-1 ring-slate-200" />
+      <p className="muted">Or enter this key: <code className="kbd-code">{data.secret}</code></p>
     </div>
   );
 }

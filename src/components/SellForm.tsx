@@ -1,8 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
+import { ArrowRight, Check, Landmark, Lock } from "lucide-react";
 import { ApiForm } from "./ApiForm";
 import { NETWORK_CODES, NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { calculatePayout, fmtInr, usdtForNetRupees } from "@/server/money";
+import { NetworkMark } from "./ui";
 
 interface Props {
   rate: string;
@@ -16,10 +18,20 @@ interface Props {
   methods: { id: string; label: string; isDefault: boolean }[];
 }
 
+function StepTitle({ n, title, done }: { n: number; title: string; done: boolean }) {
+  return (
+    <div className="mb-4 flex items-center gap-3">
+      <span className={`grid size-7 place-items-center rounded-full text-xs font-bold ${done ? "bg-emerald-500 text-white" : "bg-slate-900 text-white"}`}>{done ? <Check className="size-4" aria-hidden /> : n}</span>
+      <h2 className="h2">{title}</h2>
+    </div>
+  );
+}
+
 export function SellForm(p: Props) {
   const [network, setNetwork] = useState<NetworkCode | null>(null);
   const [amountType, setAmountType] = useState<"USDT" | "INR">("USDT");
   const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState(p.methods.find((m) => m.isDefault)?.id ?? p.methods[0]?.id);
   const cfg = { rate: p.rate, taxPercent: p.taxPercent, feePercent: p.feePercent, gstEnabled: p.gstEnabled, gstPercent: p.gstPercent };
   const estimate = useMemo(() => {
     if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) return null;
@@ -31,48 +43,107 @@ export function SellForm(p: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amount, amountType]);
+  const outOfRange = estimate && (Number(estimate.usdt) < Number(p.min) || Number(estimate.usdt) > Number(p.max));
 
   return (
-    <ApiForm action="/api/quotes" className="space-y-6">
-      <div className="card space-y-3">
-        <h2 className="h2">1. Which network will you send on?</h2>
-        <p className="muted">Pick the network your wallet or exchange will use. Sending on a different network may lose your funds.</p>
-        {NETWORK_CODES.map((n) => (
-          <label key={n} className={`flex cursor-pointer items-start gap-3 rounded-lg p-3 ring-1 ${network === n ? "bg-brand-50 ring-2 ring-brand-600" : "ring-gray-300"} ${!p.available[n] ? "opacity-50" : ""}`}>
-            <input type="radio" name="network" value={n} required disabled={!p.available[n]} checked={network === n} onChange={() => setNetwork(n)} className="mt-1" />
-            <span>
-              <span className={`inline-flex rounded-full px-2 py-0.5 text-sm font-semibold ring-1 ${NETWORK_INFO[n].badge}`}>{NETWORK_INFO[n].name}</span>
-              <span className="mt-1 block text-sm text-gray-600">{p.available[n] ? NETWORK_INFO[n].hint : "Paused right now. Please use the other network or try later."}</span>
-            </span>
-          </label>
-        ))}
-      </div>
-      <div className="card space-y-3">
-        <h2 className="h2">2. How much?</h2>
-        <div className="flex gap-2">
-          {(["USDT", "INR"] as const).map((t) => (
-            <label key={t} className={`btn flex-1 cursor-pointer ring-1 ${amountType === t ? "bg-brand-50 ring-brand-600" : "ring-gray-300"}`}>
-              <input type="radio" name="amountType" value={t} checked={amountType === t} onChange={() => setAmountType(t)} className="sr-only" />
-              {t === "USDT" ? "USDT to sell" : "₹ to receive"}
-            </label>
-          ))}
-        </div>
-        <input name="amount" required inputMode="decimal" className="input text-lg" placeholder={amountType === "USDT" ? "e.g. 100" : "e.g. 9000"} value={amount} onChange={(e) => setAmount(e.target.value.trim())} />
-        <p className="muted">Per order: {p.min} to {p.max} USDT. Rate: {fmtInr(p.rate)} per USDT.</p>
-        {estimate && (
-          <div className="rounded-lg bg-gray-50 p-3 text-sm">
-            <p>About <b>{fmtInr(estimate.net)}</b> for about {estimate.usdt} USDT, after 1% tax held back and fees.</p>
-            <p className="muted">Your exact quote (with a few added cents that identify your payment) is on the next screen.</p>
+    <ApiForm action="/api/quotes" className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
+      <div className="space-y-6">
+        <section className="card">
+          <StepTitle n={1} title="Which network will you send on?" done={!!network} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {NETWORK_CODES.map((n) => {
+              const on = p.available[n];
+              const picked = network === n;
+              return (
+                <label
+                  key={n}
+                  className={`relative flex cursor-pointer gap-3 rounded-xl p-4 ring-1 transition ${picked ? "bg-brand-50/60 ring-2 ring-brand-600" : "ring-slate-200 hover:ring-slate-300"} ${!on ? "cursor-not-allowed opacity-50" : ""}`}
+                >
+                  <input type="radio" name="network" value={n} required disabled={!on} checked={picked} onChange={() => setNetwork(n)} className="sr-only" />
+                  <NetworkMark network={n} size={36} />
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-slate-900">{NETWORK_INFO[n].name}</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{on ? NETWORK_INFO[n].hint : "Paused right now. Please use the other network."}</span>
+                  </span>
+                  {picked && <Check className="absolute top-3 right-3 size-4 text-brand-600" aria-hidden />}
+                </label>
+              );
+            })}
           </div>
-        )}
+          <p className="mt-3 text-xs text-slate-500">Choose the same network when you withdraw from your wallet or exchange. Sending on a different network may lose your funds.</p>
+        </section>
+
+        <section className="card">
+          <StepTitle n={2} title="How much?" done={!!estimate && !outOfRange} />
+          <div className="mb-3 inline-grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+            {(["USDT", "INR"] as const).map((t) => (
+              <label key={t} className={`cursor-pointer rounded-lg px-4 py-1.5 text-sm font-medium transition ${amountType === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>
+                <input type="radio" name="amountType" value={t} checked={amountType === t} onChange={() => setAmountType(t)} className="sr-only" />
+                {t === "USDT" ? "USDT to sell" : "₹ to receive"}
+              </label>
+            ))}
+          </div>
+          <div className="relative">
+            <input
+              name="amount"
+              required
+              inputMode="decimal"
+              autoComplete="off"
+              className="input money py-3.5 pr-20 text-2xl"
+              placeholder={amountType === "USDT" ? "100" : "9,000"}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value.replace(/,/g, "").trim())}
+              aria-describedby="amount-hint"
+            />
+            <span className="absolute inset-y-0 right-4 flex items-center text-sm font-semibold text-slate-500">{amountType === "USDT" ? "USDT" : "INR"}</span>
+          </div>
+          <p id="amount-hint" className={`hint ${outOfRange ? "text-rose-600" : ""}`}>
+            Per order: {p.min}–{p.max} USDT · Rate {fmtInr(p.rate)} per USDT
+          </p>
+        </section>
+
+        <section className="card">
+          <StepTitle n={3} title="Where should we pay you?" done={!!method} />
+          <input type="hidden" name="payoutMethodId" value={method} />
+          <div className="space-y-2">
+            {p.methods.map((m) => (
+              <button
+                type="button"
+                key={m.id}
+                onClick={() => setMethod(m.id)}
+                aria-pressed={method === m.id}
+                className={`flex w-full items-center gap-3 rounded-xl p-3.5 text-left ring-1 transition ${method === m.id ? "bg-brand-50/60 ring-2 ring-brand-600" : "ring-slate-200 hover:ring-slate-300"}`}
+              >
+                <Landmark className="size-5 text-slate-500" aria-hidden />
+                <span className="flex-1 text-sm font-medium text-slate-900">{m.label}</span>
+                {method === m.id && <Check className="size-4 text-brand-600" aria-hidden />}
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
-      <div className="card space-y-3">
-        <h2 className="h2">3. Where should we pay you?</h2>
-        <select name="payoutMethodId" className="input" defaultValue={p.methods.find((m) => m.isDefault)?.id ?? p.methods[0]?.id}>
-          {p.methods.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-        </select>
-      </div>
-      <button className="btn-primary w-full py-3 text-base" disabled={!network}>Get my quote</button>
+
+      <aside className="card lg:sticky lg:top-24">
+        <p className="eyebrow">Summary</p>
+        <dl className="mt-3 space-y-2 text-sm">
+          <div className="flex justify-between"><dt className="text-slate-500">Network</dt><dd className="font-medium">{network ? NETWORK_INFO[network].name : "—"}</dd></div>
+          <div className="flex justify-between"><dt className="text-slate-500">You sell</dt><dd className="money">{estimate ? `≈ ${estimate.usdt} USDT` : "—"}</dd></div>
+          <div className="flex justify-between"><dt className="text-slate-500">Gross</dt><dd className="tabular-nums">{estimate ? fmtInr(estimate.gross) : "—"}</dd></div>
+          <div className="flex justify-between"><dt className="text-slate-500">Tax held back ({p.taxPercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.taxHeld)}` : "—"}</dd></div>
+          <div className="flex justify-between"><dt className="text-slate-500">Fee{p.gstEnabled ? " + GST" : ""}</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.fee.plus(estimate.gstOnFee))}` : "—"}</dd></div>
+        </dl>
+        <div className="mt-4 flex items-baseline justify-between border-t border-slate-100 pt-4">
+          <span className="font-semibold text-slate-900">You receive</span>
+          <span className="money text-2xl text-emerald-700">{estimate ? `≈ ${fmtInr(estimate.net)}` : "—"}</span>
+        </div>
+        <button className="btn-primary btn-lg mt-5 w-full" disabled={!network || !estimate || !!outOfRange}>
+          Get my quote <ArrowRight className="size-4" aria-hidden />
+        </button>
+        <p className="mt-3 flex items-start gap-1.5 text-xs text-slate-500">
+          <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          Next you&apos;ll see the exact amount, locked for 15 minutes. Nothing is charged until you send USDT.
+        </p>
+      </aside>
     </ApiForm>
   );
 }

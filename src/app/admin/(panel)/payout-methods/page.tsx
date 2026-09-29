@@ -31,7 +31,7 @@ export default async function PayoutQueue() {
                 <p className="muted mt-2">Holder name</p><p className="font-semibold">{p.holderName}</p>
                 {!match && <p className="mt-2 text-sm font-semibold text-red-700">Names differ. Check carefully before approving.</p>}
               </div>
-              <div className="rounded-lg bg-gray-50 p-3 text-sm">
+              <div className="rounded-lg bg-slate-50 p-3 text-sm">
                 {p.type === "BANK" ? <><p>A/c: <b>{p.accountNumberEncrypted ? decrypt(p.accountNumberEncrypted) : "—"}</b></p><p>IFSC: <b>{p.ifsc}</b></p></> : <p>UPI: <b>{p.upiId}</b></p>}
                 <p className="muted mt-2">Added {fmtIST(p.createdAt)} · <Link className="underline" href={`/admin/users/${p.userId}`}>user</Link></p>
               </div>
