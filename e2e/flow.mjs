@@ -110,7 +110,7 @@ await user.goto(BASE + "/sell");
 await user.click("label:has-text('Tron (TRC-20)')");
 await user.fill("input[name=amount]", "100");
 await shot(user, "05-user-sell");
-await user.click("text=Get my quote");
+await user.click("button:has-text('Get my quote'):visible");
 await user.waitForURL("**step=quote");
 await shot(user, "06-user-quote");
 await user.click("text=Confirm and get deposit address");
@@ -134,7 +134,7 @@ await expectText(user, "Payment received");
 // 7. Admin workflow
 await admin.goto(`${BASE}/admin/orders/${orderId}`);
 await admin.click("button:has-text('Start review')");
-await expectText(admin, "Under review");
+await expectText(admin, "In review");
 admin.on("dialog", (d) => d.accept());
 await admin.fill("textarea[name=note]", "Checked sender on scam tool: no flags");
 await admin.check("input[value=CLEAN]");
@@ -158,7 +158,7 @@ console.log("marked paid");
 
 // 8. User sees paid + receipt
 await user.goto(orderUrl);
-await expectText(user, "Bank reference: HDFCN52026092812");
+await expectText(user, "HDFCN52026092812");
 await shot(user, "09-user-order-paid");
 const r = await user.request.get(`${BASE}/api/orders/${orderId}/receipt`);
 console.log("receipt", r.status(), r.headers()["content-type"], (await r.body()).length, "bytes");

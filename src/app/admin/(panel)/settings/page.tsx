@@ -6,7 +6,9 @@ import { NETWORK_CODES, NETWORK_INFO } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { TotpField } from "@/components/Totp";
-import { Banner } from "@/components/ui";
+import { Banner, PageHeader } from "@/components/ui";
+import { Tabs } from "@/components/Tabs";
+import { Settings2 } from "lucide-react";
 
 function Field({ name, label, value, hint, type = "text" }: { name: string; label: string; value: string | number; hint?: string; type?: string }) {
   return (
@@ -34,9 +36,11 @@ export default async function SettingsPage() {
     </ApiForm>
   );
   return (
-    <div className="space-y-6">
-      <h1 className="h1">Settings</h1>
-
+    <div>
+      <PageHeader title="Settings" subtitle="Changes need your 2FA code and are logged." icon={<Settings2 className="size-6" />} tile="tile-slate" />
+      <Tabs
+        tabs={[
+          { id: "rate", label: "Rate", alert: rateIsStale(s), content: <>
       <div className="card space-y-4">
         <ApiForm action="/api/admin/settings" className="space-y-3">
           <h2 className="h2">Rate (₹ per USDT)</h2>
@@ -46,12 +50,12 @@ export default async function SettingsPage() {
             <label className="flex items-center gap-2"><input type="radio" name="rate_mode" value="AUTO" defaultChecked={s.rate_mode === "AUTO"} /> Auto: live market price minus my margin</label>
           </div>
           <p className="text-2xl font-bold">
-            Current rate: ₹{s.rate} <span className="text-sm font-normal text-gray-500">({s.rate_mode === "AUTO" ? "auto" : "manual"}, updated {fmtIST(s.rateUpdatedAt)})</span>
+            Current rate: ₹{s.rate} <span className="text-sm font-normal text-slate-500">({s.rate_mode === "AUTO" ? "auto" : "manual"}, updated {fmtIST(s.rateUpdatedAt)})</span>
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="rate">Manual rate</label>
-              <input id="rate" name="rate" defaultValue={s.rate} disabled={s.rate_mode === "AUTO"} className="input disabled:bg-gray-100" />
+              <input id="rate" name="rate" defaultValue={s.rate} disabled={s.rate_mode === "AUTO"} className="input disabled:bg-slate-100" />
               <p className="muted mt-1">{s.rate_mode === "AUTO" ? "Set automatically in Auto mode." : "Affects new quotes only."}</p>
             </div>
             <Field name="rate_max_age_hours" label="Manual: block quotes if the rate is older than (hours)" value={s.rate_max_age_hours} type="number" />
@@ -69,7 +73,7 @@ export default async function SettingsPage() {
           <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
         </ApiForm>
 
-        <div className="rounded-lg bg-gray-50 p-3 text-sm">
+        <div className="rounded-lg bg-slate-50 p-3 text-sm">
           <p className="font-semibold">Live price feed</p>
           {feed?.sources ? (
             <ul className="mt-1 space-y-0.5">
@@ -96,6 +100,8 @@ export default async function SettingsPage() {
         </div>
       </div>
 
+          </> },
+          { id: "fees", label: "Fees & limits", content: <>
       {group(
         "Fees and tax",
         <>
@@ -117,6 +123,8 @@ export default async function SettingsPage() {
         </>,
       )}
 
+          </> },
+          { id: "networks", label: "Networks", content: <>
       {group(
         "Networks on/off",
         <>
@@ -130,34 +138,6 @@ export default async function SettingsPage() {
         </>,
         <p className="muted">Switching a network off blocks new quotes only. Open orders keep being watched.</p>,
       )}
-
-      <div id="address" className="card space-y-4 ring-2 ring-red-300">
-        <h2 className="h2">Deposit addresses ({mode} mode)</h2>
-        <Banner tone="danger">If this address is wrong, every payment on that network goes to someone else. Changes need your 2FA code, take effect after 1 hour, and every admin is emailed a cancel link.</Banner>
-        {NETWORK_CODES.map((n) => (
-          <div key={n} className="rounded-lg p-3 ring-1 ring-gray-200">
-            <p className="text-xl font-bold">{NETWORK_INFO[n].name}</p>
-            <p className="muted">Active address:</p>
-            <p className="font-mono text-sm break-all">{s.deposit_address[mode][n] || "(not set)"}</p>
-            {pending.filter((p) => p.network === n && p.networkMode === mode).map((p) => (
-              <div key={p.id} className="mt-2 rounded bg-orange-50 p-2 text-sm">
-                Pending: <code className="break-all">{p.newAddress}</code> at {fmtIST(p.effectiveAt)}
-                <ApiForm action="/api/admin/deposit-address/cancel" className="mt-1"><input type="hidden" name="id" value={p.id} /><button className="btn-danger px-3 py-1">Cancel this change</button></ApiForm>
-              </div>
-            ))}
-            <details className="mt-2">
-              <summary className="cursor-pointer text-sm font-semibold text-red-700">Change the {NETWORK_INFO[n].name} address</summary>
-              <ApiForm action="/api/admin/deposit-address" className="mt-2 space-y-2" confirm={`Change the ${NETWORK_INFO[n].name} deposit address? It takes effect in 1 hour.`}>
-                <input type="hidden" name="network" value={n} />
-                <input name="address" required className="input font-mono" placeholder={n === "TRON" ? "T…" : "0x… (checksummed)"} />
-                <input name="confirmNetwork" required className="input" placeholder={`Type ${n} to confirm the network`} />
-                <TotpField />
-                <button className="btn-danger">Request change</button>
-              </ApiForm>
-            </details>
-          </div>
-        ))}
-      </div>
 
       <div className="card space-y-3">
         <h2 className="h2">USDT token contracts</h2>
@@ -184,9 +164,42 @@ export default async function SettingsPage() {
         <div className="flex items-end gap-3"><TotpField /><button className={mode === "TEST" ? "btn-danger" : "btn-secondary"}>{mode === "TEST" ? "Switch to Live" : "Switch back to Test"}</button></div>
       </ApiForm>
 
+          </> },
+          { id: "address", label: "Deposit addresses", alert: pending.length > 0, content: <>
+      <div id="address" className="card space-y-4 ring-2 ring-red-300">
+        <h2 className="h2">Deposit addresses ({mode} mode)</h2>
+        <Banner tone="danger">If this address is wrong, every payment on that network goes to someone else. Changes need your 2FA code, take effect after 1 hour, and every admin is emailed a cancel link.</Banner>
+        {NETWORK_CODES.map((n) => (
+          <div key={n} className="rounded-lg p-3 ring-1 ring-slate-200">
+            <p className="text-xl font-bold">{NETWORK_INFO[n].name}</p>
+            <p className="muted">Active address:</p>
+            <p className="font-mono text-sm break-all">{s.deposit_address[mode][n] || "(not set)"}</p>
+            {pending.filter((p) => p.network === n && p.networkMode === mode).map((p) => (
+              <div key={p.id} className="mt-2 rounded bg-orange-50 p-2 text-sm">
+                Pending: <code className="break-all">{p.newAddress}</code> at {fmtIST(p.effectiveAt)}
+                <ApiForm action="/api/admin/deposit-address/cancel" className="mt-1"><input type="hidden" name="id" value={p.id} /><button className="btn-danger px-3 py-1">Cancel this change</button></ApiForm>
+              </div>
+            ))}
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm font-semibold text-red-700">Change the {NETWORK_INFO[n].name} address</summary>
+              <ApiForm action="/api/admin/deposit-address" className="mt-2 space-y-2" confirm={`Change the ${NETWORK_INFO[n].name} deposit address? It takes effect in 1 hour.`}>
+                <input type="hidden" name="network" value={n} />
+                <input name="address" required className="input font-mono" placeholder={n === "TRON" ? "T…" : "0x… (checksummed)"} />
+                <input name="confirmNetwork" required className="input" placeholder={`Type ${n} to confirm the network`} />
+                <TotpField />
+                <button className="btn-danger">Request change</button>
+              </ApiForm>
+            </details>
+          </div>
+        ))}
+      </div>
+
+          </> },
+          { id: "company", label: "Company & text", content: <>
       {group(
         "Text shown to users and on receipts",
         <>
+          <Field name="brand_name" label="App name shown to users" value={s.brand_name} />
           <Field name="business_hours_text" label="Business hours" value={s.business_hours_text} />
           <Field name="review_hours" label="Typical review time (hours)" value={s.review_hours} type="number" />
           <Field name="company_name" label="Company legal name" value={s.company_name} />
@@ -198,6 +211,8 @@ export default async function SettingsPage() {
         </>,
       )}
 
+          </> },
+          { id: "security", label: "Holds & access", content: <>
       <ApiForm action="/api/admin/settings" className="card space-y-3">
         <h2 className="h2">Hold reasons and admin IP allow-list</h2>
         <label className="label">Hold reasons (one per line)</label>
@@ -207,6 +222,8 @@ export default async function SettingsPage() {
         <div className="flex items-end gap-3"><TotpField /><button className="btn-primary">Save</button></div>
       </ApiForm>
 
+          </> },
+          { id: "advanced", label: "Advanced", content: <>
       {group(
         "Blockchain reading (advanced)",
         <>
@@ -217,6 +234,8 @@ export default async function SettingsPage() {
         </>,
       )}
 
+          </> },
+          { id: "history", label: "History", content: <>
       <div className="card overflow-x-auto">
         <h2 className="h2 mb-2">Recent setting changes</h2>
         <table className="table">
@@ -226,6 +245,9 @@ export default async function SettingsPage() {
           </tbody>
         </table>
       </div>
+          </> },
+        ]}
+      />
     </div>
   );
 }

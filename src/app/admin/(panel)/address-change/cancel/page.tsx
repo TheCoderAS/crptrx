@@ -1,10 +1,11 @@
+import { ShieldAlert } from "lucide-react";
 import { adminOrLogin } from "@/server/auth/pages";
 import { sha256 } from "@/server/crypto";
 import { prisma } from "@/server/db";
 import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { Banner } from "@/components/ui";
+import { Banner, PageHeader } from "@/components/ui";
 
 /** Target of the "Cancel this change" link emailed to all admins. */
 export default async function CancelChange({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
@@ -14,7 +15,7 @@ export default async function CancelChange({ searchParams }: { searchParams: Pro
   if (!c) return <Banner tone="danger">This cancel link is not valid.</Banner>;
   return (
     <div className="mx-auto max-w-xl space-y-4">
-      <h1 className="h1">Cancel deposit address change?</h1>
+      <PageHeader title="Cancel deposit address change?" icon={<ShieldAlert className="size-6" />} tile="tile-rose" />
       <div className="card space-y-2">
         <p className="text-2xl font-bold">{NETWORK_INFO[c.network as NetworkCode].name}</p>
         <p className="text-sm">Mode: {c.networkMode}</p>

@@ -1,8 +1,9 @@
+import { BadgeCheck } from "lucide-react";
 import Link from "next/link";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fmtIST } from "@/lib/time";
-import { StatusPill } from "@/components/ui";
+import { FilterChips, PageHeader, StatusPill } from "@/components/ui";
 
 export default async function KycQueue({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
   await adminOrLogin();
@@ -16,9 +17,9 @@ export default async function KycQueue({ searchParams }: { searchParams: Promise
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="h1">KYC {all ? "(all)" : "queue"}</h1>
-        <Link className="text-sm underline" href={all ? "/admin/kyc" : "/admin/kyc?all=1"}>{all ? "Show waiting only" : "Show all"}</Link>
+        <PageHeader title="KYC" subtitle="Oldest first." icon={<BadgeCheck className="size-6" />} tile="tile-violet" />
       </div>
+      <FilterChips items={[{ href: "/admin/kyc", label: "Waiting", active: !all }, { href: "/admin/kyc?all=1", label: "All", active: !!all }]} />
       <div className="card overflow-x-auto">
         {subs.length === 0 ? <p className="muted">Nothing waiting.</p> : (
           <table className="table">

@@ -37,7 +37,7 @@ x-app: &app
     # First-run seed (only used when the database is empty).
     SEED_SUPER_ADMIN_EMAIL: ${SEED_SUPER_ADMIN_EMAIL:-owner@example.com}
     SEED_SUPER_ADMIN_PASSWORD: ${SEED_SUPER_ADMIN_PASSWORD:-change-me-now-please}
-    SEED_RATE: ${SEED_RATE:-88.50}
+    SEED_RATE: ${SEED_RATE:-98.00}
     # Placeholder test addresses nobody controls. Replace with your own testnet wallets
     # (Settings > Deposit addresses) before sending real testnet tokens.
     SEED_TEST_DEPOSIT_TRON: ${SEED_TEST_DEPOSIT_TRON:-TCkmv2uUUPBTuci1UjZxbH7HYPn7ciwUUk}

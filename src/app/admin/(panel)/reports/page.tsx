@@ -1,3 +1,5 @@
+import { FileClock } from "lucide-react";
+import { PageHeader } from "@/components/ui";
 import { adminOrLogin } from "@/server/auth/pages";
 import { DownloadForm } from "@/components/DownloadForm";
 import { TotpField } from "@/components/Totp";
@@ -8,7 +10,7 @@ export default async function Reports() {
   const monthAgo = new Date(Date.now() + 330 * 60_000 - 30 * 86400_000).toISOString().slice(0, 10);
   return (
     <div className="space-y-4">
-      <h1 className="h1">Reports</h1>
+      <PageHeader title="Reports" subtitle="CSV exports for your CA and records." icon={<FileClock className="size-6" />} tile="tile-emerald" />
       <DownloadForm action="/api/admin/reports" className="card space-y-3">
         <div>
           <label className="label">Report</label>

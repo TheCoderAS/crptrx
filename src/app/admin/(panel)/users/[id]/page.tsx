@@ -1,3 +1,4 @@
+import { UserRound } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -6,7 +7,7 @@ import { fmtInr, fmtUsdt } from "@/server/money";
 import { maskedPayout } from "@/server/payouts";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { NetworkBadge, Row, StatusPill } from "@/components/ui";
+import { NetworkBadge, PageHeader, Row, StatusPill } from "@/components/ui";
 
 export default async function UserDetail({ params }: { params: Promise<{ id: string }> }) {
   await adminOrLogin();
@@ -15,7 +16,7 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
   if (!u) notFound();
   return (
     <div className="space-y-4">
-      <h1 className="h1">{u.email}</h1>
+      <PageHeader title={u.email} icon={<UserRound className="size-6" />} />
       <div className="card">
         <Row k="Status" v={<StatusPill status={u.status} />} />
         <Row k="Mobile" v={u.mobile ?? "—"} />

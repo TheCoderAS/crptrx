@@ -22,3 +22,7 @@ export function istMonthStart(now = new Date()): Date {
   const start = Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), 1);
   return new Date(start - IST_OFFSET_MS);
 }
+
+const shortFmt = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true });
+/** Compact IST time for lists, e.g. "30 Sept, 1:31 am". */
+export const fmtISTShort = (d: Date | string) => shortFmt.format(new Date(d));

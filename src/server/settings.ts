@@ -42,6 +42,7 @@ export const SETTING_DEFAULTS = {
   limit_platform_daily_usdt: "50000", // OWNER
   business_hours_text: "Reviews happen 10 AM–7 PM, Mon–Sat",
   review_hours: 4,
+  brand_name: "USDT Exchange", // OWNER: the app name shown to users
   company_name: "[Company legal name]",
   company_address: "[Registered address]",
   company_fiu_reg: "[FIU registration number]",
@@ -109,6 +110,7 @@ export const EDITABLE_KEYS: SettingKey[] = [
   "limit_platform_daily_usdt",
   "business_hours_text",
   "review_hours",
+  "brand_name",
   "company_name",
   "company_address",
   "company_fiu_reg",
@@ -238,6 +240,9 @@ export async function writeSetting(key: SettingKey, value: unknown, actor: Actor
   if (tx) return run(tx);
   return prisma.$transaction(run);
 }
+
+/** False for empty values and the "[placeholder]" defaults, so unset details are never shown as claims. */
+export const isRealValue = (v: string | null | undefined) => !!v && !/^\s*\[.*\]\s*$/.test(v);
 
 export const LIVE_CONFIRM_PHRASE = "SWITCH TO LIVE";
 
