@@ -27,13 +27,14 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const user = await userOrLogin();
   const { id } = await params;
   const { step } = await searchParams;
-  const o = await prisma.order.findFirst({ where: { id, userId: user.id } });
-  if (!o) notFound();
-  const [s, events] = await Promise.all([
+  // In parallel; the events are only used once the order is confirmed to be theirs.
+  const [o, s, events] = await Promise.all([
+    prisma.order.findFirst({ where: { id, userId: user.id } }),
     getSettings(),
     // Users never see private admin notes.
-    prisma.orderEvent.findMany({ where: { orderId: o.id }, orderBy: { createdAt: "asc" }, select: { id: true, toStatus: true, createdAt: true, publicMessage: true } }),
+    prisma.orderEvent.findMany({ where: { orderId: id }, orderBy: { createdAt: "asc" }, select: { id: true, toStatus: true, createdAt: true, publicMessage: true } }),
   ]);
+  if (!o) notFound();
   const n = o.network as NetworkCode;
   const nw = NETWORK_INFO[n].name;
   const snap = o.payoutSnapshot as unknown as PayoutSnapshot;
@@ -80,7 +81,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     );
 
   // ---------------------------------------------------------------- order
-  const qr = waiting ? await QRCode.toDataURL(o.depositAddress, { margin: 1, width: 240, color: { dark: "#0f172a" } }) : null;
+  const qr = waiting ? await depositQr(o.depositAddress) : null;
   const pIdx = progressIndex[o.status];
   const HeroIcon = o.status === "PAID" ? CheckCircle2 : o.status === "ON_HOLD" ? PauseCircle : ["EXPIRED", "CLOSED_MANUAL"].includes(o.status) ? XCircle : Hourglass;
   // Short hero text; the details live in the panels below.
@@ -196,4 +197,17 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       </div>
     </div>
   );
+}
+
+// The same few deposit addresses are drawn again and again: keep the images.
+const qrCache = new Map<string, Promise<string>>();
+function depositQr(address: string) {
+  let q = qrCache.get(address);
+  if (!q) {
+    if (qrCache.size > 50) qrCache.clear();
+    q = QRCode.toDataURL(address, { margin: 1, width: 240, color: { dark: "#0f172a" } });
+    q.catch(() => qrCache.delete(address));
+    qrCache.set(address, q);
+  }
+  return q;
 }

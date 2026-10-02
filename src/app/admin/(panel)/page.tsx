@@ -1,4 +1,5 @@
 import { AlertOctagon, BadgeCheck, Banknote, Gauge, Landmark, LifeBuoy, Percent, Wallet } from "lucide-react";
+import { adminCounts } from "@/server/adminCounts";
 import Link from "next/link";
 import type { OrderStatus } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -10,14 +11,11 @@ import { PageHeader, Section, Stat, StatusPill } from "@/components/ui";
 export default async function Dashboard() {
   await adminOrLogin();
   const today = istDayStart();
-  const [kyc, pms, byStatus, received, paid, unmatched, support, watchers] = await Promise.all([
-    prisma.kycSubmission.count({ where: { OR: [{ status: "SUBMITTED" }, { autoApproved: true, postReviewedAt: null, status: "APPROVED" }] } }),
-    prisma.payoutMethod.count({ where: { status: "PENDING", deletedAt: null } }),
+  const [{ kyc, payout: pms, unmatched, support }, byStatus, received, paid, watchers] = await Promise.all([
+    adminCounts(),
     prisma.order.groupBy({ by: ["status"], _count: true }),
     prisma.order.aggregate({ _sum: { receivedAmount: true }, where: { confirmedAt: { gte: today } } }),
     prisma.order.aggregate({ _sum: { paidAmount: true, taxHeld: true }, where: { status: "PAID", paidAt: { gte: today } } }),
-    prisma.incomingTransfer.count({ where: { status: "UNMATCHED" } }),
-    prisma.supportMessage.count({ where: { handled: false } }),
     prisma.watcherState.findMany(),
   ]);
   const count = (s: OrderStatus) => byStatus.find((b) => b.status === s)?._count ?? 0;

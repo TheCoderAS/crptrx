@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { NETWORK_INFO, type Mode, type NetworkCode } from "@/lib/networks";
 import { audit, type Actor } from "./audit";
@@ -89,7 +90,17 @@ export type Settings = typeof SETTING_DEFAULTS;
 export const RATE_SOURCES_REF = { RATE_SOURCE_IDS: ["coindcx", "wazirx", "coingecko"] };
 export type SettingKey = keyof Settings;
 
+/**
+ * Current settings. While a page renders, the layout and the page share one read
+ * (React cache); outside rendering (API routes, the watcher, tests) and inside a
+ * transaction it always reads fresh.
+ */
 export async function getSettings(tx: Tx = prisma): Promise<Settings & { rateUpdatedAt: Date | null }> {
+  return tx === prisma ? structuredClone(await settingsForRender()) : loadSettings(tx);
+}
+const settingsForRender = cache(() => loadSettings(prisma));
+
+async function loadSettings(tx: Tx): Promise<Settings & { rateUpdatedAt: Date | null }> {
   const [rows, feed] = await Promise.all([tx.setting.findMany(), tx.rateFeedState.findUnique({ where: { id: 1 } })]);
   const out = structuredClone(SETTING_DEFAULTS) as Settings & { rateUpdatedAt: Date | null };
   out.rateUpdatedAt = null;

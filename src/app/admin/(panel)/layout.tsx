@@ -1,7 +1,7 @@
 import { logoSrc } from "@/server/brand";
 import Link from "next/link";
 import { adminOrLogin } from "@/server/auth/pages";
-import { prisma } from "@/server/db";
+import { adminCounts } from "@/server/adminCounts";
 import { recentAddressChanges } from "@/server/deposit";
 import { env } from "@/server/env";
 import { getSettings } from "@/server/settings";
@@ -9,28 +9,23 @@ import { delayedNetworks } from "@/server/watcher";
 import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { AdminMobileNav, AdminNav, type AdminNavItem } from "@/components/AdminNav";
+import { Suspense } from "react";
+import { LivePulse } from "@/components/LivePulse";
+import { NavProgress } from "@/components/NavProgress";
 import { LogoutButton } from "@/components/LogoutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Banner, Logo } from "@/components/ui";
 
 export default async function Panel({ children }: { children: React.ReactNode }) {
   const admin = await adminOrLogin();
-  const [s, changes, delayed, kyc, pms, work, unmatched, support] = await Promise.all([
-    getSettings(),
-    recentAddressChanges(),
-    delayedNetworks(),
-    prisma.kycSubmission.count({ where: { OR: [{ status: "SUBMITTED" }, { autoApproved: true, postReviewedAt: null, status: "APPROVED" }] } }),
-    prisma.payoutMethod.count({ where: { status: "PENDING", deletedAt: null } }),
-    prisma.order.count({ where: { status: { in: ["PAYMENT_CONFIRMED", "UNDER_REVIEW", "ON_HOLD", "APPROVED"] } } }),
-    prisma.incomingTransfer.count({ where: { status: "UNMATCHED" } }),
-    prisma.supportMessage.count({ where: { handled: false } }),
-  ]);
+  const [s, changes, delayed, counts] = await Promise.all([getSettings(), recentAddressChanges(), delayedNetworks(), adminCounts()]);
+  const { work, reviews, unmatched, support } = counts;
   const sup = admin.role === "SUPER_ADMIN";
   const items: AdminNavItem[] = [
     { href: "/admin", label: "Dashboard", icon: "Gauge" },
     { href: "/admin/orders", label: "Orders", icon: "ListOrdered", count: work },
     { href: "/admin/users", label: "Customers", icon: "UserRound" },
-    { href: "/admin/reviews", label: "Reviews", icon: "BadgeCheck", count: kyc + pms },
+    { href: "/admin/reviews", label: "Reviews", icon: "BadgeCheck", count: reviews },
     { href: "/admin/unmatched", label: "Unmatched payments", icon: "AlertOctagon", count: unmatched },
     { href: "/admin/support", label: "Support", icon: "LifeBuoy", count: support },
     { href: "/admin/audit", label: "Audit log", icon: "ScrollText" },
@@ -53,6 +48,8 @@ export default async function Panel({ children }: { children: React.ReactNode })
   );
   return (
     <div className="admin-ui lg:flex">
+      <LivePulse url="/api/admin/pulse" everyMs={20_000} />
+      <Suspense fallback={null}><NavProgress /></Suspense>
       <AdminMobileNav items={items} brand={<span className="flex items-center gap-2"><Link href="/admin"><Logo name={s.brand_name} src={logoSrc(s)} inverted /></Link>{mode}</span>} badge={mode} footer={who} />
       <aside className="theme-lock sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-white/5 bg-slate-950 lg:flex">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
