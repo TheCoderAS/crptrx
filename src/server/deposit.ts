@@ -133,6 +133,17 @@ export async function watchedAddresses(network: NetworkCode, mode: Mode): Promis
 }
 
 /** Every address that has ever been a deposit address for this network (for TxID lookups). */
+/**
+ * The deposit addresses set right now (test and live). A payment sent from one of
+ * these is our own money moving, never a customer's. Old addresses don't count:
+ * they may since have been reused, e.g. as a test customer's wallet.
+ */
+export async function currentDepositAddresses(network: NetworkCode): Promise<string[]> {
+  const a = getAdapter(network);
+  const s = await getSettings();
+  return (["TEST", "LIVE"] as Mode[]).map((m) => s.deposit_address[m][network]).filter(Boolean).map((x) => a.normalizeAddress(x));
+}
+
 export async function allKnownDepositAddresses(network: NetworkCode): Promise<string[]> {
   const a = getAdapter(network);
   const [changes, s, orders] = await Promise.all([

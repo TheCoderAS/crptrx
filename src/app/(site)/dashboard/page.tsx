@@ -1,4 +1,5 @@
 import { contactChannels } from "@/server/contact";
+import { InfoTip } from "@/components/InfoTip";
 import { ContactLinks } from "@/components/ContactLinks";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, Banknote, CheckCircle2, Clock3, Inbox, Landmark, Lock, Smartphone, Wallet } from "lucide-react";
@@ -100,7 +101,7 @@ export default async function Dashboard() {
       {ready && openOptional.length > 0 && (
         <div className="card-flat flex items-center gap-4">
           <span className="icon-tile tile-amber size-10 rounded-xl"><Wallet className="size-5" aria-hidden /></span>
-          <p className="min-w-0 flex-1 text-sm text-slate-700">Add the wallet you send USDT from, so we can match your payments faster.</p>
+          <p className="flex min-w-0 flex-1 items-center gap-1 text-sm text-slate-700">Add your sending wallet <InfoTip>The wallet you send USDT from. It helps us match your payments faster.</InfoTip></p>
           <Link href="/wallets" className="btn-secondary px-3.5 py-2">Add</Link>
         </div>
       )}

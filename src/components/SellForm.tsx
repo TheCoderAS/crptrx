@@ -1,4 +1,5 @@
 "use client";
+import { InfoTip } from "./InfoTip";
 import { useMemo, useState } from "react";
 import { ArrowRight, Check, Landmark, Lock } from "lucide-react";
 import { ApiForm } from "./ApiForm";
@@ -18,11 +19,11 @@ interface Props {
   methods: { id: string; label: string; isDefault: boolean }[];
 }
 
-function StepTitle({ n, title, done }: { n: number; title: string; done: boolean }) {
+function StepTitle({ n, title, done, info }: { n: number; title: string; done: boolean; info?: string }) {
   return (
     <div className="mb-4 flex items-center gap-3">
       <span className={`grid size-8 place-items-center rounded-xl text-sm font-bold text-white shadow-sm ${done ? "tile-emerald" : "bg-brand-gradient"}`}>{done ? <Check className="size-4" aria-hidden /> : n}</span>
-      <h2 className="h2">{title}</h2>
+      <h2 className="h2 flex items-center gap-1">{title}{info && <InfoTip>{info}</InfoTip>}</h2>
     </div>
   );
 }
@@ -51,7 +52,7 @@ export function SellForm(p: Props) {
     <ApiForm action="/api/quotes" className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
       <div className="space-y-6">
         <section className="card">
-          <StepTitle n={1} title={networks.length === 1 ? "Send on this network" : "Which network will you send on?"} done={!!network} />
+          <StepTitle n={1} title={networks.length === 1 ? "Send on this network" : "Which network will you send on?"} done={!!network} info="Pick the same network when you withdraw from your wallet or exchange. A different network may lose your funds." />
           {networks.length === 0 && <p className="text-sm text-slate-600">Selling is paused right now. Please check back soon.</p>}
           <div className={`grid gap-3 ${networks.length > 1 ? "sm:grid-cols-2" : ""}`}>
             {networks.map((n) => {
@@ -72,7 +73,6 @@ export function SellForm(p: Props) {
               );
             })}
           </div>
-          <p className="mt-3 text-xs text-slate-500">Choose the same network when you withdraw from your wallet or exchange. Sending on a different network may lose your funds.</p>
         </section>
 
         <section className="card">
@@ -151,9 +151,10 @@ export function SellForm(p: Props) {
         <button className="btn btn-lg bg-brand-gradient mt-5 hidden w-full text-white shadow-lg shadow-brand-600/20 hover:opacity-95 lg:flex" disabled={!network || !estimate || !!outOfRange}>
           Get my quote <ArrowRight className="size-4" aria-hidden />
         </button>
-        <p className="mt-3 flex items-start gap-1.5 text-xs text-slate-500">
-          <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          Next you&apos;ll see the exact amount, locked for 15 minutes. Nothing is charged until you send USDT.
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
+          <Lock className="size-3.5 shrink-0" aria-hidden />
+          Price locked for 15 minutes
+          <InfoTip>Next you&apos;ll see the exact amount to send. Nothing is charged until you send USDT.</InfoTip>
         </p>
       </aside>
 

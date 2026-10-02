@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { CheckCircle2, Clock, Download, PauseCircle, RefreshCw, ShieldAlert, ShieldCheck, StickyNote, XCircle } from "lucide-react";
 import { paymentProblem } from "@/server/orders/actions";
 import { isRegisteredWallet, RECHECKABLE_HOLDS } from "@/server/matching";
-import { allKnownDepositAddresses } from "@/server/deposit";
+import { currentDepositAddresses } from "@/server/deposit";
 import { getAdapter } from "@/server/networks";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
@@ -47,7 +47,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           orderBy: { blockTime: "desc" },
           take: 10,
         }),
-        allKnownDepositAddresses(o.network as NetworkCode),
+        currentDepositAddresses(o.network as NetworkCode),
       ])
     : [[], []];
   const ours = new Set(ourAddrs.map((x) => getAdapter(o.network as NetworkCode).normalizeAddress(x)));

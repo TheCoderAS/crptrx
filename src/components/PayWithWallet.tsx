@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { encodeFunctionData, erc20Abi, parseUnits } from "viem";
 import { AlertCircle, Loader2, Wallet } from "lucide-react";
+import { InfoTip } from "./InfoTip";
 
 type Eip1193 = { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> };
 type TronWeb = {
@@ -162,20 +163,22 @@ export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mod
 
   return (
     <div className="space-y-2">
-      <button type="button" onClick={pay} disabled={!!busy} className="btn btn-lg bg-brand-gradient w-full text-white shadow-lg shadow-brand-600/20 hover:opacity-95">
-        {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Wallet className="size-4" aria-hidden />}
-        {busy ?? (injected ? `Pay ${p.amount} USDT with ${walletName}` : `Pay ${p.amount} USDT with a wallet app`)}
-      </button>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={pay} disabled={!!busy} className="btn btn-lg bg-brand-gradient flex-1 text-white shadow-lg shadow-brand-600/20 hover:opacity-95">
+          {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Wallet className="size-4" aria-hidden />}
+          {busy ?? (injected ? `Pay ${p.amount} USDT with ${walletName}` : `Pay ${p.amount} USDT with a wallet app`)}
+        </button>
+        <InfoTip>
+          {injected
+            ? "Opens your wallet with everything filled in. Or send it yourself using the details below."
+            : `Pick your wallet app (${p.network === "BSC" ? "MetaMask, Trust Wallet…" : "TronLink, Trust Wallet…"}). On a computer, scan the QR code with your phone. Or send it yourself using the details below.`}
+        </InfoTip>
+      </div>
       {error && (
         <p role="alert" className="flex gap-2 text-sm text-rose-700">
           <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden /> {error}
         </p>
       )}
-      <p className="text-center text-xs text-slate-500">
-        {injected
-          ? "Opens your wallet with everything filled in. Or send it yourself using the details below."
-          : `Pick your wallet app (${p.network === "BSC" ? "MetaMask, Trust Wallet…" : "TronLink, Trust Wallet…"}); on a computer, scan the QR code with your phone. Or send it yourself using the details below.`}
-      </p>
     </div>
   );
 }

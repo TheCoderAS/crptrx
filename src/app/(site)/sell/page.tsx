@@ -50,7 +50,6 @@ export default async function Sell() {
           methods={methods.map((m) => ({ id: m.id, label: maskedPayout(m), isDefault: m.isDefault }))}
         />
       )}
-      <p className="muted mt-6">{s.business_hours_text}.</p>
     </div>
   );
 }

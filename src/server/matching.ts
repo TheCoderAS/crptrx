@@ -2,7 +2,7 @@ import type { IncomingTransfer, Order, Prisma } from "@prisma/client";
 import { txidNetwork, type NetworkCode } from "@/lib/networks";
 import { audit, SYSTEM, type Actor } from "./audit";
 import { prisma, type Tx } from "./db";
-import { allKnownDepositAddresses } from "./deposit";
+import { allKnownDepositAddresses, currentDepositAddresses } from "./deposit";
 import { AppError } from "./errors";
 import { D } from "./money";
 import { getAdapter, type ChainTransfer } from "./networks";
@@ -27,7 +27,7 @@ export const HOLD = {
 } as const;
 
 /** Holds that a fresh look at the blockchain can clear (wrong settings, a slow node, a typo fixed by the user). */
-export const RECHECKABLE_HOLDS: string[] = [HOLD.NOT_TO_US, HOLD.TXID_NOT_FOUND, HOLD.TX_FAILED];
+export const RECHECKABLE_HOLDS: string[] = [HOLD.NOT_TO_US, HOLD.TXID_NOT_FOUND, HOLD.TX_FAILED, HOLD.FROM_US];
 
 export type MatchEvent = { orderId: string; kind: "CONFIRMED" | "ON_HOLD"; reason?: string };
 
@@ -148,7 +148,7 @@ async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchE
   // Sent from one of our own deposit addresses (e.g. paying from the company
   // wallet by mistake, or moving funds): never a customer's payment. Stays
   // unmatched for an admin, and any order claiming it is held.
-  const ours = new Set((await allKnownDepositAddresses(t.network as NetworkCode)).map((x) => a.normalizeAddress(x)));
+  const ours = new Set(await currentDepositAddresses(t.network as NetworkCode));
   if (ours.has(a.normalizeAddress(t.fromAddress))) {
     const claimed = await tx.order.findFirst({ where: { submittedTxid: t.txid, status: "PAYMENT_SUBMITTED" } });
     if (claimed) await hold(tx, claimed, HOLD.FROM_US, events, `Sent from our deposit address ${t.fromAddress}`);
