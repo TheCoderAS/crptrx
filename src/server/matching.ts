@@ -22,6 +22,7 @@ export const HOLD = {
   BEFORE_QUOTE: "The payment was made before this order was created.",
   UNKNOWN_WALLET: "Sent from a wallet that isn't on your account.",
   TXID_NOT_FOUND: "We couldn't find a payment with the transaction ID you gave.",
+  FROM_US: "This payment came from our own wallet, not yours. Please pay from your own wallet.",
   SAME_AMOUNT: "Another order is open for the same amount, so we're confirming this payment is yours. Our team will check it shortly.",
 } as const;
 
@@ -140,6 +141,16 @@ async function confirmExact(tx: Tx, s: Settings, t: IncomingTransfer, order: Ord
 async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchEvent[], siblings: IncomingTransfer[]) {
   const a = getAdapter(t.network as NetworkCode);
   const to = a.normalizeAddress(t.toAddress);
+
+  // Sent from one of our own deposit addresses (e.g. paying from the company
+  // wallet by mistake, or moving funds): never a customer's payment. Stays
+  // unmatched for an admin, and any order claiming it is held.
+  const ours = new Set((await allKnownDepositAddresses(t.network as NetworkCode)).map((x) => a.normalizeAddress(x)));
+  if (ours.has(a.normalizeAddress(t.fromAddress))) {
+    const claimed = await tx.order.findFirst({ where: { submittedTxid: t.txid, status: "PAYMENT_SUBMITTED" } });
+    if (claimed) await hold(tx, claimed, HOLD.FROM_US, events, `Sent from our deposit address ${t.fromAddress}`);
+    return;
+  }
 
   // The order this transfer pays exactly: an open quote (or one expired within
   // 24 h) on the same network + address with exactly this amount.

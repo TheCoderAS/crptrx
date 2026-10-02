@@ -327,3 +327,20 @@ describe("re-check payment", () => {
     await expect(recheckPayment(order.id, stranger.actor, stranger.user.id)).rejects.toThrow(/not found/i);
   });
 });
+
+describe("payments from our own wallet", () => {
+  it("a transfer sent from our deposit address never pays an order", async () => {
+    const { order } = await makeOrder("TRON", "100");
+    await ingestTransfers([transfer("TRON", "100", { from: ADDR.TRON })]);
+    expect(await statusOf(order.id)).toBe("QUOTE_READY");
+    expect((await prisma.incomingTransfer.findFirstOrThrow()).status).toBe("UNMATCHED");
+  });
+
+  it("an order claiming such a transfer is held", async () => {
+    const { order, user, actor } = await makeOrder("TRON", "100");
+    const t = transfer("TRON", "100", { from: ADDR.TRON });
+    await submitTxid(order.id, user.id, t.txid, actor);
+    await ingestTransfers([t]);
+    expect((await orderById(order.id)).holdReason).toBe(HOLD.FROM_US);
+  });
+});
