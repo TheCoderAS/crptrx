@@ -1,5 +1,6 @@
 #!/bin/sh
-# Usage: entrypoint web | worker | migrate | seed
+# Usage: entrypoint web | worker | all | migrate | seed
+#   all = web + worker in one container (single-service hosts such as Render)
 set -e
 cd /app
 
@@ -49,6 +50,13 @@ case "${1:-web}" in
   worker)
     migrate
     exec npx tsx src/worker/index.ts
+    ;;
+  all)
+    migrate
+    npx tsx prisma/seed.ts
+    # Blockchain watcher in the background, restarted if it ever exits.
+    ( while true; do npx tsx src/worker/index.ts; echo "worker exited, restarting in 5s" >&2; sleep 5; done ) &
+    exec npx next start -p "${PORT:-3000}"
     ;;
   migrate) migrate ;;
   seed) npx tsx prisma/seed.ts ;;

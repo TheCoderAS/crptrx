@@ -4,8 +4,10 @@ import { env } from "./env";
 function key(): Buffer {
   const raw = env.encryptionKey;
   const buf = /^[0-9a-f]{64}$/i.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
-  if (buf.length !== 32) throw new Error("ENCRYPTION_KEY must be 32 bytes (64 hex chars or base64)");
-  return buf;
+  if (buf.length === 32) return buf;
+  // Any other long random secret (e.g. one a host generates for you) is turned into a 32-byte key.
+  if (raw.length >= 32) return createHash("sha256").update(raw, "utf8").digest();
+  throw new Error("ENCRYPTION_KEY must be at least 32 characters (64 hex chars or a 32-byte base64 value recommended)");
 }
 
 /** AES-256-GCM. Output: v1.<iv>.<tag>.<ciphertext> (base64url). */

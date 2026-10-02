@@ -53,6 +53,9 @@ The seeded test deposit addresses are random placeholders that nobody controls. 
 2. Check that **USDT token contracts** (Test mode) are the test tokens you will actually send. The pre-filled ones are commonly used test tokens and **must be confirmed by the owner**.
 3. Optional: add `TRONGRID_API_KEY` (TronGrid limits keyless use).
 
+### Hosting: Supabase + Firebase + Render / your own server
+Step by step: **[docs/DEPLOY.md](docs/DEPLOY.md)**. Supabase holds the database and ID documents, Firebase does Google sign-in, and the app runs on Render (testing) or your own server (production).
+
 ---
 
 ## Local development

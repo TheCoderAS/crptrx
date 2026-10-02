@@ -17,7 +17,7 @@ export const env = {
   get encryptionKey() {
     return req("ENCRYPTION_KEY");
   },
-  /** Secret for signing short-lived file links (local storage driver). */
+  /** Secret for signing short-lived file links. */
   get linkSigningSecret() {
     return req("LINK_SIGNING_SECRET", process.env.ENCRYPTION_KEY);
   },
@@ -54,19 +54,21 @@ export const env = {
   },
   storage: {
     get driver() {
-      return (process.env.STORAGE_DRIVER ?? "local") as "local" | "s3";
+      return (process.env.STORAGE_DRIVER ?? "local") as "local" | "supabase";
     },
     get localDir() {
       return process.env.STORAGE_LOCAL_DIR ?? "./.data/uploads";
     },
-    get s3Bucket() {
-      return req("S3_BUCKET");
+    /** e.g. https://abcdefgh.supabase.co (Project Settings > API). */
+    get supabaseUrl() {
+      return req("SUPABASE_URL");
     },
-    get s3Region() {
-      return process.env.S3_REGION ?? "ap-south-1";
+    /** The service-role key: server only, full access. Never expose it to browsers. */
+    get supabaseKey() {
+      return req("SUPABASE_SERVICE_ROLE_KEY");
     },
-    get s3Endpoint() {
-      return opt("S3_ENDPOINT");
+    get supabaseBucket() {
+      return process.env.SUPABASE_STORAGE_BUCKET ?? "kyc";
     },
   },
   email: {

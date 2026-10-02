@@ -1,14 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { hmac, randomToken, safeEqual } from "./crypto";
 import { env } from "./env";
 import { AppError } from "./errors";
 
 // Private storage for ID documents and support screenshots (spec 10.2).
-// "s3": S3-compatible bucket in an India region, server-side encrypted.
-// "local": a private folder served only through short-lived signed links (test phases).
+// "supabase": a PRIVATE Supabase Storage bucket, reached with the service-role key
+//   from the server only (never sent to browsers).
+// "local": a private folder (Docker volume) for test phases.
+// Either way, files are opened only through the app's own 5-minute signed links.
 
 export const LINK_TTL_SEC = 5 * 60;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -25,9 +25,12 @@ export function checkUpload(buf: Buffer, declared: string): string {
   return sniffed;
 }
 
-let s3: S3Client | null = null;
-const client = () =>
-  (s3 ??= new S3Client({ region: env.storage.s3Region, endpoint: env.storage.s3Endpoint, forcePathStyle: !!env.storage.s3Endpoint }));
+/** Supabase Storage REST API: /storage/v1/object/<bucket>/<key> with the service-role key. */
+function supabaseObjectUrl(key: string) {
+  const base = env.storage.supabaseUrl.replace(/\/+$/, "");
+  return `${base}/storage/v1/object/${encodeURIComponent(env.storage.supabaseBucket)}/${key.split("/").map(encodeURIComponent).join("/")}`;
+}
+const supabaseHeaders = () => ({ authorization: `Bearer ${env.storage.supabaseKey}`, apikey: env.storage.supabaseKey });
 
 const localPath = (key: string) => {
   const root = path.resolve(env.storage.localDir);
@@ -38,10 +41,17 @@ const localPath = (key: string) => {
 
 export async function putFile(prefix: string, buf: Buffer, contentType: string): Promise<string> {
   const key = `${prefix}/${new Date().toISOString().slice(0, 10)}/${randomToken(16)}.${TYPES[contentType]}`;
-  if (env.storage.driver === "s3") {
-    await client().send(
-      new PutObjectCommand({ Bucket: env.storage.s3Bucket, Key: key, Body: buf, ContentType: contentType, ServerSideEncryption: "AES256" }),
-    );
+  if (env.storage.driver === "supabase") {
+    const res = await fetch(supabaseObjectUrl(key), {
+      method: "POST",
+      headers: { ...supabaseHeaders(), "content-type": contentType, "x-upsert": "false" },
+      body: new Uint8Array(buf),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) {
+      console.error(`[storage] upload failed: HTTP ${res.status} ${await res.text().catch(() => "")}`);
+      throw new AppError("We couldn't save your file. Please try again.", 502);
+    }
   } else {
     const p = localPath(key);
     await mkdir(path.dirname(p), { recursive: true });
@@ -50,19 +60,24 @@ export async function putFile(prefix: string, buf: Buffer, contentType: string):
   return key;
 }
 
-/** A link that stops working after 5 minutes. */
+/**
+ * A link that stops working after 5 minutes. Always our own URL: the file is
+ * read through the app, so ID documents never get a public storage-provider link.
+ */
 export async function signedUrl(key: string): Promise<string> {
-  if (env.storage.driver === "s3")
-    return getSignedUrl(client(), new GetObjectCommand({ Bucket: env.storage.s3Bucket, Key: key }), { expiresIn: LINK_TTL_SEC });
   const exp = Math.floor(Date.now() / 1000) + LINK_TTL_SEC;
   return `/api/files?key=${encodeURIComponent(key)}&exp=${exp}&sig=${hmac(`${key}|${exp}`)}`;
 }
 
-export async function readSignedLocal(key: string, exp: string, sig: string): Promise<{ buf: Buffer; type: string }> {
-  if (env.storage.driver !== "local") throw new AppError("Not found", 404);
+export async function readSignedFile(key: string, exp: string, sig: string): Promise<{ buf: Buffer; type: string }> {
   if (!/^\d+$/.test(exp) || Number(exp) < Date.now() / 1000) throw new AppError("This link has expired.", 410);
   if (!safeEqual(sig, hmac(`${key}|${exp}`))) throw new AppError("Invalid link.", 403);
-  const buf = await readFile(localPath(key));
+  let buf: Buffer;
+  if (env.storage.driver === "supabase") {
+    const res = await fetch(supabaseObjectUrl(key), { headers: supabaseHeaders(), signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) throw new AppError("File not found.", 404);
+    buf = Buffer.from(await res.arrayBuffer());
+  } else buf = await readFile(localPath(key));
   const ext = key.split(".").pop();
   return { buf, type: Object.entries(TYPES).find(([, e]) => e === ext)?.[0] ?? "application/octet-stream" };
 }
