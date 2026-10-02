@@ -14,7 +14,8 @@ x-app: &app
   volumes:
     - appdata:/app/.data
   environment:
-    DATABASE_URL: postgresql://usdt:usdt@db:5432/usdt
+    # Leave unset to use the bundled database below; set it to use Supabase or another hosted Postgres.
+    DATABASE_URL: ${DATABASE_URL:-postgresql://usdt:usdt@db:5432/usdt}
     APP_URL: ${APP_URL:-http://localhost:3000}
     SECURE_COOKIES: ${SECURE_COOKIES:-false}
     AUTO_GENERATE_SECRETS: "true"
