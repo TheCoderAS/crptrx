@@ -13,8 +13,7 @@ import { NetworkBadge, PageHeader, StatusPill, statusLabel } from "@/components/
 
 // Everything waiting on an admin: new payments, reviews, holds and approved orders still to be paid.
 const WORK: OrderStatus[] = ["PAYMENT_CONFIRMED", "UNDER_REVIEW", "ON_HOLD", "APPROVED"];
-// The default view: every order still in progress, including ones not paid yet, so a new
-// order shows up the moment the customer gets a quote.
+// Every order not finished yet, including ones not paid yet.
 const ACTIVE: OrderStatus[] = ["QUOTE_READY", "PAYMENT_SUBMITTED", ...WORK];
 const PER_PAGE = 50;
 const SORTS = [
@@ -31,8 +30,9 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
   const { status, q, page, sort: sortParam } = await searchParams;
   const all = Object.keys(ALLOWED_NEXT) as OrderStatus[];
   const searching = !!q?.trim();
-  const chosen = all.includes(status as OrderStatus) ? [status as OrderStatus] : status === "ALL" || searching ? all : status === "WORK" ? WORK : ACTIVE; // a search looks through every order
-  const active = !status && !searching;
+  // Default: every order. A search also looks through every order.
+  const chosen = searching ? all : all.includes(status as OrderStatus) ? [status as OrderStatus] : status === "WORK" ? WORK : status === "ACTIVE" ? ACTIVE : all;
+  const active = status === "ACTIVE" && !searching;
   const queue = status === "WORK" && !searching; // the "needs action" queue is oldest first; every other list newest first
   const defaultSort: Sort = queue ? "old" : "new";
   const sort = pickSort(sortParam, SORTS.map((s) => s.value), defaultSort);
@@ -55,9 +55,9 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
       <ListToolbar placeholder="Order ID, TxID, UTR or email" sorts={[...SORTS]} defaultSort={defaultSort}>
         <FilterMenu
           items={[
-            { href: statusHref(), label: "In progress", active },
+            { href: statusHref(), label: "All orders", active: !status || searching },
+            { href: statusHref("ACTIVE"), label: "In progress", active },
             { href: statusHref("WORK"), label: "Needs action", active: queue },
-            { href: statusHref("ALL"), label: "All orders", active: status === "ALL" || (!status && searching) },
             ...all.map((s) => ({ href: statusHref(s), label: statusLabel(s), active: status === s })),
           ]}
         />

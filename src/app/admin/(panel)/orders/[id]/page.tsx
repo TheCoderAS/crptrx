@@ -1,6 +1,6 @@
 import { paymentProblem } from "@/server/orders/actions";
 import { Select } from "@/components/Select";
-import { isRegisteredWallet } from "@/server/matching";
+import { isRegisteredWallet, RECHECKABLE_HOLDS } from "@/server/matching";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -128,6 +128,9 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           {o.status === "PAYMENT_CONFIRMED" && <ApiForm action={act}><input type="hidden" name="action" value="start_review" /><button className="btn-primary">Start review</button></ApiForm>}
           {o.status === "UNDER_REVIEW" && !payProblem && <ApiForm action={act} confirm={`Approve ${o.id} for ${fmtInr(o.net)}?`}><input type="hidden" name="action" value="approve" /><button className="btn-primary" disabled={!o.walletCheckResult}>Approve</button></ApiForm>}
           {o.status === "ON_HOLD" && <ApiForm action={act}><input type="hidden" name="action" value="release" /><button className="btn-secondary">Release from hold</button></ApiForm>}
+          {o.submittedTxid && (o.status === "PAYMENT_SUBMITTED" || (o.status === "ON_HOLD" && RECHECKABLE_HOLDS.includes(o.holdReason ?? ""))) && (
+            <ApiForm action={act}><input type="hidden" name="action" value="recheck" /><button className="btn-secondary">Re-check payment on blockchain</button></ApiForm>
+          )}
         </div>
         {o.status === "UNDER_REVIEW" && payProblem && (
           <ApiForm action={act} className="mt-3 space-y-2 rounded-xl bg-rose-50 p-4 ring-1 ring-rose-200" confirm={`Approve ${o.id} for ${fmtInr(o.net)} even though the payment doesn't match?`}>

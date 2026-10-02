@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { OrderStatus } from "@prisma/client";
 import { prisma } from "@/server/db";
 import { D } from "@/server/money";
-import { createQuote, expireQuotes, HIGH_DEMAND, pickUniqueAmount } from "@/server/orders/quote";
+import { createQuote, expireQuotes } from "@/server/orders/quote";
 import { ALLOWED_NEXT, transition } from "@/server/orders/stateMachine";
 import { approveOrder, closeManual, markPaid, putOnHold, releaseHold, saveWalletCheck, startReview, submitTxid } from "@/server/orders/actions";
 import { writeSetting } from "@/server/settings";
@@ -24,8 +24,7 @@ describe("quotes (spec 4.4, 7.1, 7.2)", () => {
   it("freezes the payout breakdown on the order", async () => {
     const { order } = await makeOrder("TRON", "100");
     const amt = D(order.usdtAmount);
-    expect(amt.gt(100) && amt.lt(101)).toBe(true);
-    expect(amt.decimalPlaces()).toBeLessThanOrEqual(2);
+    expect(amt.toFixed(2)).toBe("100.00"); // exactly what the user typed
     expect(D(order.gross).eq(amt.mul(90).toDecimalPlaces(2))).toBe(true);
     expect(order.status).toBe("QUOTE_READY");
     expect(order.depositAddress).toBe(ADDR.TRON);
@@ -33,37 +32,18 @@ describe("quotes (spec 4.4, 7.1, 7.2)", () => {
     expect(order.quoteExpiresAt.getTime() - order.createdAt.getTime()).toBe(15 * 60_000);
   });
 
-  it("two users asking for the same amount get different exact amounts", async () => {
+  it("two users asking for the same amount both get exactly that amount", async () => {
     const a = await makeOrder("TRON", "100");
     const b = await makeOrder("TRON", "100");
-    expect(D(a.order.usdtAmount).eq(D(b.order.usdtAmount))).toBe(false);
-    // As little extra as possible: the smallest free cents, in order.
-    expect(D(a.order.usdtAmount).toFixed(2)).toBe("100.01");
-    expect(D(b.order.usdtAmount).toFixed(2)).toBe("100.02");
-  });
-
-  it("the same amount may be open on the other network at the same time", async () => {
-    await makeOrder("TRON", "100");
-    const u = await makeUser();
-    // Force the same suffix on BSC as TRON is allowed.
-    const bscPick = await pickUniqueAmount(prisma, "BSC", ADDR.BSC, D(100));
-    expect(bscPick!.toFixed(2)).toBe("100.01");
-    await createQuote({ userId: u.user.id, network: "BSC", amountType: "USDT", amount: "100", payoutMethodId: u.pm.id }, u.actor);
-  });
-
-  it("blocks with 'High demand' when all 99 amounts are taken", async () => {
-    await writeSetting("limit_platform_daily_usdt", "1000000", SYS);
-    for (let i = 0; i < 99; i++) await makeOrder("BSC", "50");
-    await expect(makeOrder("BSC", "50")).rejects.toThrow(HIGH_DEMAND);
-    // Other network is unaffected.
-    await makeOrder("TRON", "50");
+    expect(D(a.order.usdtAmount).toFixed(2)).toBe("100.00");
+    expect(D(b.order.usdtAmount).toFixed(2)).toBe("100.00");
   });
 
   it("enforces per-order and per-day limits", async () => {
     await expect(makeOrder("TRON", "5")).rejects.toThrow(/minimum/);
     await expect(makeOrder("TRON", "1000.01")).rejects.toThrow(/maximum/);
-    const atMax = await makeOrder("TRON", "1000"); // the unique suffix may go up to 0.99 above the maximum
-    expect(D(atMax.order.usdtAmount).gt(1000)).toBe(true);
+    const atMax = await makeOrder("TRON", "1000");
+    expect(D(atMax.order.usdtAmount).toFixed(2)).toBe("1000.00");
     await writeSetting("limit_user_daily_usdt", "150", SYS);
     const u = await makeUser();
     const q = (amount: string) => createQuote({ userId: u.user.id, network: "TRON", amountType: "USDT", amount, payoutMethodId: u.pm.id }, u.actor);

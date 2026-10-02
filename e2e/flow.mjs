@@ -86,7 +86,7 @@ console.log("doc view opened:", (await docImg.getAttribute("src")).startsWith("/
 await admin.keyboard.press("Escape");
 await admin.fill("#reason-changes", "Selfie is blurry");
 await admin.click("button:has-text('Ask for changes')");
-await admin.waitForURL("**/admin/reviews");
+await admin.waitForURL("**/admin/reviews?tab=kyc");
 await user.reload();
 await expectText(user, "Selfie is blurry");
 await user.fill("#pan", "ABCDE1234F");
@@ -97,7 +97,7 @@ await expectText(user, "Submitted, under review");
 await admin.goto(BASE + "/admin/reviews?tab=kyc");
 await admin.click("table a");
 await admin.click("button:has-text('Approve')");
-await admin.waitForURL("**/admin/reviews");
+await admin.waitForURL("**/admin/reviews?tab=kyc");
 console.log("kyc: needs changes -> resubmit -> approved");
 
 // 4. Payout method (the link opens the add dialog)

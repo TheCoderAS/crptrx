@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
-import { CheckCircle2, Download, Hourglass, PauseCircle, XCircle } from "lucide-react";
+import { CheckCircle2, Download, Hourglass, PauseCircle, RefreshCw, XCircle } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
+import { RECHECKABLE_HOLDS } from "@/server/matching";
 import { prisma } from "@/server/db";
 import { D, fmtInr, fmtUsdt } from "@/server/money";
 import { userStatusText } from "@/server/orders/messages";
@@ -110,6 +111,15 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <h1 className="mt-4 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{text.title}</h1>
         <p className="mt-1 text-slate-600">{heroBody}</p>
         {pIdx !== undefined && <div className="mt-6"><Steps steps={PROGRESS} current={pIdx} failed={o.status === "ON_HOLD"} /></div>}
+        {o.submittedTxid && (o.status === "PAYMENT_SUBMITTED" || (o.status === "ON_HOLD" && RECHECKABLE_HOLDS.includes(o.holdReason ?? ""))) && (
+          <ApiForm action={`/api/orders/${o.id}/recheck`} className="mt-5 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3.5 ring-1 ring-slate-200 ring-inset">
+            <div className="min-w-0 flex-1 text-sm">
+              <p className="text-slate-500">Transaction ID</p>
+              <p className="truncate font-mono text-xs text-slate-900">{o.submittedTxid}</p>
+            </div>
+            <button className="btn-secondary"><RefreshCw className="size-4" aria-hidden /> Re-check payment</button>
+          </ApiForm>
+        )}
         {(o.status === "EXPIRED" || (o.status === "QUOTE_READY" && !waiting)) && (
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <Link href="/sell" className="btn-primary">Start a new order</Link>
@@ -150,7 +160,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <CopyButton text={D(o.usdtAmount).toFixed()} />
             </div>
             <p className="mt-1.5 text-sm text-slate-600">
-              <b className="text-rose-700">Send exactly this amount.</b> The extra cents make it unique to your order, so we recognise your payment automatically. You&apos;re paid for the full amount.
+              <b className="text-rose-700">Send exactly this amount.</b> If your exchange takes a withdrawal fee, add it on top so exactly {amount} USDT arrives.
             </p>
           </div>
 

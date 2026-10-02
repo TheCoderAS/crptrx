@@ -2,13 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { NetworkCode } from "@/lib/networks";
 import { prisma } from "@/server/db";
 import { D } from "@/server/money";
-import { HOLD, ingestTransfers, verifySubmittedTxid } from "@/server/matching";
+import { HOLD, ingestTransfers, recheckPayment, verifySubmittedTxid } from "@/server/matching";
 import { setAdapterForTests, getAdapter, type NetworkAdapter, type TxLookup } from "@/server/networks";
 import { bscAdapter } from "@/server/networks/bsc";
 import { tronAdapter } from "@/server/networks/tron";
 import { submitTxid } from "@/server/orders/actions";
-import { expireQuotes } from "@/server/orders/quote";
-import { ADDR, baseSettings, makeOrder, orderById, randBsc, randTron, resetDb, transfer } from "./helpers";
+import { createQuote, expireQuotes } from "@/server/orders/quote";
+import { transition } from "@/server/orders/stateMachine";
+import { writeSetting } from "@/server/settings";
+import { ADDR, baseSettings, makeOrder, orderById, randBsc, randTron, resetDb, TOKEN, transfer } from "./helpers";
 import type { ChainTransfer } from "@/server/networks/types";
 
 beforeEach(async () => {
@@ -186,7 +188,7 @@ describe("matching by TxID (spec 7.3)", () => {
 
   it("a TxID already used by another order puts the second order on hold", async () => {
     const a = await makeOrder("TRON", "100");
-    const b = await makeOrder("TRON", "100");
+    const b = await makeOrder("TRON", "200");
     const t = transfer("TRON", a.order.usdtAmount.toString());
     await ingestTransfers([t]); // matched to A by amount
     expect(await statusOf(a.order.id)).toBe("PAYMENT_CONFIRMED");
@@ -230,5 +232,98 @@ describe("deposit address changes", () => {
     // Same amount to the new address doesn't match the old order.
     await ingestTransfers([transfer("BSC", next.order.usdtAmount.toString(), { to: newAddr })]);
     expect(await statusOf(next.order.id)).toBe("PAYMENT_CONFIRMED");
+  });
+});
+
+describe("same amount on several orders (amounts are exactly what users type)", () => {
+  const wallet = (userId: string, address: string) => prisma.userWallet.create({ data: { userId, network: "TRON", address } });
+
+  it("two people, same amount, unknown sender: nobody is guessed, an admin links it", async () => {
+    const a = await makeOrder("TRON", "100");
+    const b = await makeOrder("TRON", "100");
+    await ingestTransfers([transfer("TRON", "100")]);
+    expect(await statusOf(a.order.id)).toBe("QUOTE_READY");
+    expect(await statusOf(b.order.id)).toBe("QUOTE_READY");
+    expect((await prisma.incomingTransfer.findFirstOrThrow()).status).toBe("UNMATCHED");
+  });
+
+  it("the sender's registered wallet decides whose it is", async () => {
+    const a = await makeOrder("TRON", "100");
+    const b = await makeOrder("TRON", "100");
+    const from = randTron();
+    await wallet(b.user.id, from);
+    await ingestTransfers([transfer("TRON", "100", { from })]);
+    expect(await statusOf(b.order.id)).toBe("PAYMENT_CONFIRMED");
+    expect(await statusOf(a.order.id)).toBe("QUOTE_READY");
+  });
+
+  it("one person with two orders for the same amount: their oldest order is paid", async () => {
+    const a = await makeOrder("TRON", "100");
+    const second = await createQuote({ userId: a.user.id, network: "TRON", amountType: "USDT", amount: "100", payoutMethodId: (await prisma.payoutMethod.findFirstOrThrow({ where: { userId: a.user.id } })).id }, a.actor);
+    await ingestTransfers([transfer("TRON", "100")]);
+    expect(await statusOf(a.order.id)).toBe("PAYMENT_CONFIRMED");
+    expect(await statusOf(second.id)).toBe("QUOTE_READY");
+  });
+
+  it("copying the TxID of someone else's same-amount payment doesn't take it", async () => {
+    const victim = await makeOrder("TRON", "100");
+    const attacker = await makeOrder("TRON", "100");
+    const from = randTron();
+    await wallet(victim.user.id, from);
+    const t = transfer("TRON", "100", { from });
+    await submitTxid(attacker.order.id, attacker.user.id, t.txid, attacker.actor);
+    await ingestTransfers([t]);
+    expect(await statusOf(victim.order.id)).toBe("PAYMENT_CONFIRMED");
+    const a = await orderById(attacker.order.id);
+    expect(a.status).toBe("ON_HOLD");
+    expect(a.holdReason).toBe(HOLD.TXID_USED);
+  });
+
+  it("a TxID claim nobody can prove is held for an admin, not paid out", async () => {
+    const other = await makeOrder("TRON", "100");
+    const claimant = await makeOrder("TRON", "100");
+    const t = transfer("TRON", "100");
+    await submitTxid(claimant.order.id, claimant.user.id, t.txid, claimant.actor);
+    await ingestTransfers([t]);
+    expect((await orderById(claimant.order.id)).holdReason).toBe(HOLD.SAME_AMOUNT);
+    expect(await statusOf(other.order.id)).toBe("QUOTE_READY");
+    expect((await prisma.incomingTransfer.findFirstOrThrow()).status).toBe("UNMATCHED");
+  });
+
+  it("a TxID claim from the claimant's own wallet is confirmed", async () => {
+    await makeOrder("TRON", "100");
+    const claimant = await makeOrder("TRON", "100");
+    const from = randTron();
+    await wallet(claimant.user.id, from);
+    const t = transfer("TRON", "100", { from });
+    await submitTxid(claimant.order.id, claimant.user.id, t.txid, claimant.actor);
+    await ingestTransfers([t]);
+    expect(await statusOf(claimant.order.id)).toBe("PAYMENT_CONFIRMED");
+  });
+});
+
+describe("re-check payment", () => {
+  it("after the token setting is fixed, a re-check finds the payment that was ignored", async () => {
+    const { order, user, actor } = await makeOrder("TRON", "100");
+    const realToken = randTron(); // e.g. a test token the admin hadn't registered yet
+    const t = transfer("TRON", "100", { tokenContract: realToken });
+    fakeChain("TRON", { [t.txid]: { transfers: [t] } });
+    await submitTxid(order.id, user.id, t.txid, actor);
+    await verifySubmittedTxid(order.id);
+    expect((await orderById(order.id)).holdReason).toBe(HOLD.NOT_TO_US);
+
+    await writeSetting("test_token_contract", { TRON: realToken, BSC: TOKEN.BSC }, { type: "SYSTEM", id: null });
+    await recheckPayment(order.id, actor, user.id);
+    expect(await statusOf(order.id)).toBe("PAYMENT_CONFIRMED");
+  });
+
+  it("only clears holds a fresh look can fix, and only for the order's owner", async () => {
+    const { order, user, actor } = await makeOrder("TRON", "100");
+    const t = transfer("TRON", "100");
+    await submitTxid(order.id, user.id, t.txid, actor);
+    await prisma.$transaction((tx) => transition(tx, order.id, "ON_HOLD", actor, { data: { holdReason: HOLD.OVER_LIMIT } }));
+    await expect(recheckPayment(order.id, actor, user.id)).rejects.toThrow(/team/);
+    const stranger = await makeOrder("TRON", "50");
+    await expect(recheckPayment(order.id, stranger.actor, stranger.user.id)).rejects.toThrow(/not found/i);
   });
 });

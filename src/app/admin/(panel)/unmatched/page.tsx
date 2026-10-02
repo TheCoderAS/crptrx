@@ -30,13 +30,14 @@ export default async function Unmatched({ searchParams }: { searchParams: Promis
     ? { OR: [{ txid: { contains: q, mode: "insensitive" } }, { fromAddress: { contains: q, mode: "insensitive" } }, { toAddress: { contains: q, mode: "insensitive" } }, ...(/^\d+(\.\d+)?$/.test(q) ? [{ amount: q }] : [])] }
     : {};
   const showHref = (v?: string) => `/admin/unmatched?${new URLSearchParams({ ...(v ? { show: v } : {}), ...(q ? { q } : {}), ...(sort !== "new" ? { sort } : {}) })}`;
-  const status = show === "manual" ? "MANUAL_HANDLING" : show === "ignored" ? "IGNORED_WRONG_TOKEN" : "UNMATCHED";
-  const [rows, s] = await Promise.all([prisma.incomingTransfer.findMany({ where: { status, ...search }, orderBy: [ORDER_BY[sort], { blockTime: "desc" }], take: 200 }), getSettings()]);
+  // Default: everything that didn't match an order (waiting, manual handling and wrong token).
+  const status = show === "waiting" ? "UNMATCHED" : show === "manual" ? "MANUAL_HANDLING" : show === "ignored" ? "IGNORED_WRONG_TOKEN" : null;
+  const [rows, s] = await Promise.all([prisma.incomingTransfer.findMany({ where: { status: status ?? { in: ["UNMATCHED", "MANUAL_HANDLING", "IGNORED_WRONG_TOKEN"] }, ...search }, orderBy: [ORDER_BY[sort], { blockTime: "desc" }], take: 200 }), getSettings()]);
   return (
     <div className="space-y-4">
       <PageHeader title="Unmatched payments" subtitle="USDT that arrived but didn't match an order." icon={<AlertOctagon className="size-6" />} tile="tile-amber" />
       <ListToolbar placeholder="TxID, wallet address or amount" sorts={[...SORTS]} defaultSort="new">
-        <FilterMenu items={[{ href: showHref(), label: "Waiting", active: status === "UNMATCHED" }, { href: showHref("manual"), label: "Manual handling", active: status === "MANUAL_HANDLING" }, { href: showHref("ignored"), label: "Wrong token", active: status === "IGNORED_WRONG_TOKEN" }]} />
+        <FilterMenu items={[{ href: showHref(), label: "All", active: !status }, { href: showHref("waiting"), label: "Waiting", active: status === "UNMATCHED" }, { href: showHref("manual"), label: "Manual handling", active: status === "MANUAL_HANDLING" }, { href: showHref("ignored"), label: "Wrong token", active: status === "IGNORED_WRONG_TOKEN" }]} />
       </ListToolbar>
       {rows.length === 0 && <p className="muted">{q ? "Nothing matches your search." : "Nothing here."}</p>}
       {rows.map((t) => (

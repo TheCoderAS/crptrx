@@ -1,8 +1,9 @@
 import type { IncomingTransfer, Order, Prisma } from "@prisma/client";
 import { txidNetwork, type NetworkCode } from "@/lib/networks";
-import { audit, SYSTEM } from "./audit";
+import { audit, SYSTEM, type Actor } from "./audit";
 import { prisma, type Tx } from "./db";
 import { allKnownDepositAddresses } from "./deposit";
+import { AppError } from "./errors";
 import { D } from "./money";
 import { getAdapter, type ChainTransfer } from "./networks";
 import { LATE_PAYMENT_WINDOW_MS, limitProblem } from "./orders/quote";
@@ -21,7 +22,11 @@ export const HOLD = {
   BEFORE_QUOTE: "The payment was made before this order was created.",
   UNKNOWN_WALLET: "Sent from a wallet that isn't on your account.",
   TXID_NOT_FOUND: "We couldn't find a payment with the transaction ID you gave.",
+  SAME_AMOUNT: "Another order is open for the same amount, so we're confirming this payment is yours. Our team will check it shortly.",
 } as const;
+
+/** Holds that a fresh look at the blockchain can clear (wrong settings, a slow node, a typo fixed by the user). */
+export const RECHECKABLE_HOLDS: string[] = [HOLD.NOT_TO_US, HOLD.TXID_NOT_FOUND, HOLD.TX_FAILED];
 
 export type MatchEvent = { orderId: string; kind: "CONFIRMED" | "ON_HOLD"; reason?: string };
 
@@ -71,6 +76,33 @@ async function linkTransfer(tx: Tx, t: IncomingTransfer, orderId: string) {
 export async function isRegisteredWallet(tx: Tx, userId: string, network: NetworkCode, address: string): Promise<boolean> {
   const addr = getAdapter(network).normalizeAddress(address);
   return (await tx.userWallet.count({ where: { userId, network, address: addr, deletedAt: null } })) > 0;
+}
+
+/** Users who have sent from this address before, or registered it as their wallet. */
+async function senderOwners(tx: Tx, t: IncomingTransfer): Promise<Set<string>> {
+  const addr = getAdapter(t.network as NetworkCode).normalizeAddress(t.fromAddress);
+  const [wallets, past] = await Promise.all([
+    tx.userWallet.findMany({ where: { network: t.network, address: addr, deletedAt: null }, select: { userId: true } }),
+    tx.order.findMany({ where: { network: t.network, senderAddress: { in: [addr, t.fromAddress] } }, select: { userId: true }, distinct: ["userId"] }),
+  ]);
+  return new Set([...wallets, ...past].map((r) => r.userId));
+}
+
+/**
+ * Amounts are what the user typed, so several open orders can share one.
+ * Pick an order only when it's certain whose payment this is: the only order
+ * with that amount, the only one whose owner has sent from this wallet before,
+ * or all of them belong to the same person. Otherwise null: an admin links it.
+ */
+async function pickOrder(tx: Tx, t: IncomingTransfer, cands: Order[]): Promise<Order | null> {
+  if (cands.length <= 1) return cands[0] ?? null;
+  const owners = await senderOwners(tx, t);
+  const bySender = cands.filter((o) => owners.has(o.userId));
+  const pool = bySender.length > 0 ? bySender : cands;
+  if (new Set(pool.map((o) => o.userId)).size !== 1) return null;
+  // One person's orders (newest first): their oldest open quote, else the newest expired one.
+  const live = pool.filter((o) => o.status === "QUOTE_READY");
+  return live[live.length - 1] ?? pool[0];
 }
 
 /** Confirm a transfer that pays `order` with the exact amount, then apply late / limit holds. */
@@ -123,7 +155,7 @@ async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchE
     orderBy: { createdAt: "desc" },
   });
   const sameAddress = candidates.filter((o) => a.normalizeAddress(o.depositAddress) === to);
-  const exact = sameAddress.find((o) => o.status === "QUOTE_READY") ?? sameAddress[0] ?? null;
+  const exact = await pickOrder(tx, t, sameAddress);
 
   // 1) An order that claimed this TxID. A claim only wins when it fits exactly,
   //    or when no other order fits: anyone can copy a TxID off the blockchain,
@@ -137,11 +169,27 @@ async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchE
     }
     if (a.normalizeAddress(claimed.depositAddress) === to) {
       const fits = t.blockTime >= claimed.createdAt && D(t.amount).eq(D(claimed.usdtAmount));
-      if (fits) return confirmExact(tx, s, t, claimed, events);
-      if (exact) {
+      if (fits) {
+        // Another person has an open order for the same amount: a TxID is public,
+        // so the claim alone doesn't prove whose payment this is. The sender does.
+        const rivals = sameAddress.filter((o) => o.userId !== claimed.userId);
+        if (rivals.length === 0) return confirmExact(tx, s, t, claimed, events);
+        const owners = await senderOwners(tx, t);
+        if (owners.has(claimed.userId)) return confirmExact(tx, s, t, claimed, events);
+        const rightful = await pickOrder(tx, t, rivals.filter((o) => owners.has(o.userId)));
+        if (rightful) {
+          await hold(tx, claimed, HOLD.TXID_USED, events, `Claimed ${t.txid}, sent from ${t.fromAddress}, the wallet of ${rightful.id}`);
+          return confirmExact(tx, s, t, rightful, events);
+        }
+        // Nobody can be proven: leave the transfer unmatched for an admin to link.
+        await hold(tx, claimed, HOLD.SAME_AMOUNT, events, `Same amount open on ${rivals.map((o) => o.id).join(", ")}. Sender ${t.fromAddress} isn't linked to any of them. Link the transfer by hand.`);
+        return;
+      }
+      if (sameAddress.length > 0) {
         // Pays someone else's order exactly. The claimant is held: their TxID isn't theirs.
-        await hold(tx, claimed, HOLD.TXID_USED, events, `Claimed ${t.txid}, which pays ${exact.id}`);
-        return confirmExact(tx, s, t, exact, events);
+        await hold(tx, claimed, HOLD.TXID_USED, events, `Claimed ${t.txid}, which pays ${exact?.id ?? sameAddress.map((o) => o.id).join(" or ")}`);
+        if (exact) return confirmExact(tx, s, t, exact, events);
+        return;
       }
       if (t.blockTime < claimed.createdAt) {
         await linkTransfer(tx, t, claimed.id);
@@ -194,7 +242,14 @@ export async function ingestTransfers(transfers: ChainTransfer[], opts: IngestOp
           const exists = await tx.incomingTransfer.findUnique({
             where: { network_txid_transferPosition: { network: t.network, txid: t.txid, transferPosition: t.position } },
           });
-          if (exists) continue;
+          if (exists) {
+            // Ignored as the wrong token earlier, but the token setting has since been
+            // corrected (e.g. a test token registered late): give it a fresh match.
+            if (exists.status === "IGNORED_WRONG_TOKEN" && !wrongToken) {
+              fresh.push(await tx.incomingTransfer.update({ where: { id: exists.id }, data: { status: "UNMATCHED" } }));
+            }
+            continue;
+          }
           const row = await tx.incomingTransfer.create({ data: { ...toRow(t), status: wrongToken ? "IGNORED_WRONG_TOKEN" : "UNMATCHED" } });
           if (wrongToken) {
             await audit(SYSTEM, "IGNORED_WRONG_TOKEN_TRANSFER", {
@@ -279,6 +334,26 @@ export async function verifySubmittedTxid(orderId: string): Promise<MatchEvent[]
     return events;
   }
   return [...events, ...(await ingestTransfers(ours))];
+}
+
+/**
+ * "Re-check payment": look the order's TxID up on the blockchain again. Clears
+ * holds a fresh look can fix (a token setting corrected, a slow node), and runs
+ * the normal checks again, so it can't confirm anything matching wouldn't.
+ */
+export async function recheckPayment(orderId: string, actor: Actor, userId?: string): Promise<MatchEvent[]> {
+  const o = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!o || (userId && o.userId !== userId)) throw new AppError("Order not found", 404);
+  if (!o.submittedTxid) throw new AppError("Add the transaction ID of your payment first, then we can check it.", 409);
+  if (o.status === "ON_HOLD") {
+    if (!RECHECKABLE_HOLDS.includes(o.holdReason ?? "")) throw new AppError("This one needs our team to look at it. We'll update you here.", 409);
+    await prisma.$transaction((tx) =>
+      transition(tx, o.id, "PAYMENT_SUBMITTED", actor, { from: "ON_HOLD", publicMessage: "Checking the payment again.", data: { holdReason: null, holdMessage: null } }),
+    );
+  } else if (o.status !== "PAYMENT_SUBMITTED") {
+    throw new AppError("This payment has already been checked.", 409);
+  }
+  return verifySubmittedTxid(o.id);
 }
 
 async function storeOtherNetworkTransfers(net: NetworkCode, txid: string, s: Settings) {

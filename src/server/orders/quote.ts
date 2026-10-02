@@ -9,12 +9,11 @@ import { calculatePayout, D, Decimal, usdtForNetRupees } from "../money";
 import { payoutSnapshot } from "../payouts";
 import { notReadyMessage, onboardingState } from "../onboarding";
 import { getSettings, rateIsStale, tokenContractFor, type Settings } from "../settings";
-import { OPEN_QUOTE_STATUSES, transition } from "./stateMachine";
+import { transition } from "./stateMachine";
 
 export const QUOTE_TTL_MS = 15 * 60 * 1000;
 /** Payments up to 24 h after a quote expires are still matched to it (and held as late). */
 export const LATE_PAYMENT_WINDOW_MS = 24 * 3600_000;
-export const HIGH_DEMAND = "High demand, please try again in a few minutes.";
 
 export interface QuoteRequest {
   userId: string;
@@ -51,34 +50,6 @@ export async function limitProblem(tx: Tx, s: Settings, userId: string, amount: 
     return `This would take you over your monthly limit of ${s.limit_user_monthly_usdt} USDT.`;
   if (t.platformDay.plus(amount).gt(D(s.limit_platform_daily_usdt)))
     return "We've reached today's total limit. Please try again tomorrow.";
-  return null;
-}
-
-/** Pick a free 0.01–0.99 suffix so no two open orders on this network + address share an amount (spec 7.2). */
-/**
- * The payment amount for a new order: the base plus the smallest free 0.01–0.99,
- * so each open order on an address has its own exact amount and a payment can be
- * matched without a transaction ID. Smallest, not random, so the customer sends as
- * little extra as possible (they're paid for the full amount either way).
- */
-export async function pickUniqueAmount(tx: Tx, network: NetworkCode, depositAddress: string, base: Decimal): Promise<Decimal | null> {
-  const lo = base.plus("0.01");
-  const hi = base.plus("0.99");
-  const taken = await tx.order.findMany({
-    where: {
-      network,
-      depositAddress,
-      usdtAmount: { gte: lo.toString(), lte: hi.toString() },
-      // Expired quotes keep their amount for 24 h: a late payment must never land on someone else's new order.
-      OR: [{ status: { in: OPEN_QUOTE_STATUSES } }, { status: "EXPIRED", quoteExpiresAt: { gte: new Date(Date.now() - LATE_PAYMENT_WINDOW_MS) } }],
-    },
-    select: { usdtAmount: true },
-  });
-  const takenSet = new Set(taken.map((o) => D(o.usdtAmount).toFixed(2)));
-  for (let i = 1; i <= 99; i++) {
-    const cand = base.plus(new Decimal(i).div(100));
-    if (!takenSet.has(cand.toFixed(2))) return cand;
-  }
   return null;
 }
 
@@ -132,8 +103,8 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
       const pm = await tx.payoutMethod.findFirst({ where: { id: req.payoutMethodId, userId: req.userId, status: "APPROVED", deletedAt: null } });
       if (!pm) throw new AppError("Choose an approved payout method.");
 
-      const amount = await pickUniqueAmount(tx, req.network, depositAddress, base);
-      if (!amount) throw new AppError(HIGH_DEMAND, 409, "HIGH_DEMAND");
+      // Exactly what the user asked for. Orders with the same amount are told apart by the sender's wallet or TxID (see matching).
+      const amount = base;
       const problem = await limitProblem(tx, s, req.userId, amount);
       if (problem) throw new AppError(problem, 422, "LIMIT");
 
@@ -180,13 +151,13 @@ export const TXID_GRACE_MS = 2 * 3600_000;
 
 /**
  * Spec 8.4: move QUOTE_READY orders past expiry to EXPIRED. Orders whose
- * submitted TxID still can't be found 2 hours after expiry go on hold, so
+ * submitted TxID still can't be found 2 hours after expiry (and 2 hours after a re-check) go on hold, so
  * they don't sit open forever and keep their amount reserved.
  * Returns the ids that changed.
  */
 export async function expireQuotes(now = new Date()): Promise<string[]> {
   const { HOLD } = await import("../matching");
-  const stuck = await prisma.order.findMany({ where: { status: "PAYMENT_SUBMITTED", quoteExpiresAt: { lt: new Date(now.getTime() - TXID_GRACE_MS) } }, select: { id: true } });
+  const stuck = await prisma.order.findMany({ where: { status: "PAYMENT_SUBMITTED", quoteExpiresAt: { lt: new Date(now.getTime() - TXID_GRACE_MS) }, updatedAt: { lt: new Date(now.getTime() - TXID_GRACE_MS) } }, select: { id: true } });
   const changed: string[] = [];
   for (const o of stuck) {
     try {
