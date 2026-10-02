@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { AlertCircle, CheckCircle2, X } from "lucide-react";
 import { useConfirm } from "./Confirm";
 import { useStepUp } from "./StepUp";
 
@@ -38,16 +38,26 @@ export function ApiForm({
   const [busy, setBusy] = useState(false);
   const stepUp = useStepUp();
   const confirmer = useConfirm();
+  // "Saved" messages fade on their own; errors stay until closed or the next try.
+  useEffect(() => {
+    if (!ok) return;
+    const t = setTimeout(() => setOk(null), 5000);
+    return () => clearTimeout(t);
+  }, [ok]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget; // read before any await: React clears currentTarget afterwards
     if (confirm && !(await confirmer.ask(confirm))) return;
+    // Read the fields now: once busy, the fieldset is disabled and a disabled field is
+    // left out of FormData, so a retry after the 2FA prompt would send nothing else.
+    const fields = [...new FormData(form).entries()];
     setBusy(true);
     setError(null);
     setOk(null);
     const build = (totp?: string): RequestInit => {
-      const fd = new FormData(form);
+      const fd = new FormData();
+      for (const [k, v] of fields) fd.append(k, v);
       if (totp) fd.set("totp", totp);
       const hasFile = [...fd.values()].some((v) => v instanceof File);
       if (hasFile) return { method, body: fd };
@@ -99,13 +109,19 @@ export function ApiForm({
         {error && (
           <p role="alert" className="flex gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200 ring-inset">
             <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-            <span>{error}</span>
+            <span className="flex-1">{error}</span>
+            <button type="button" onClick={() => setError(null)} className="-my-1 -mr-1 grid size-7 shrink-0 place-items-center rounded-md opacity-60 hover:bg-black/10 hover:opacity-100" aria-label="Dismiss">
+              <X className="size-4" aria-hidden />
+            </button>
           </p>
         )}
         {ok && (
           <p role="status" className="flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 ring-1 ring-emerald-200 ring-inset">
             <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
-            <span>{ok}</span>
+            <span className="flex-1">{ok}</span>
+            <button type="button" onClick={() => setOk(null)} className="-my-1 -mr-1 grid size-7 shrink-0 place-items-center rounded-md opacity-60 hover:bg-black/10 hover:opacity-100" aria-label="Dismiss">
+              <X className="size-4" aria-hidden />
+            </button>
           </p>
         )}
       </fieldset>
