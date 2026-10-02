@@ -3,14 +3,20 @@ import type { NextConfig } from "next";
 // Content-Security-Policy. Next.js needs inline scripts/styles (no nonces here).
 // Google sign-in loads from apis.google.com and uses the Firebase auth domain
 // (<project>.firebaseapp.com) in a hidden frame. A custom auth domain must be added here.
+// "Pay with a wallet app" (WalletConnect/Reown) talks to its relay and API, shows wallet
+// logos from its image service, and loads its anti-phishing check in a frame; the wallet
+// also reads the BSC network directly.
+const WALLETCONNECT = "https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com https://*.web3modal.org https://*.web3modal.com";
+const WALLETCONNECT_WS = "wss://*.walletconnect.com wss://*.walletconnect.org wss://*.reown.com";
+const BSC_RPC = "https://bsc-testnet-rpc.publicnode.com https://bsc-dataseed.bnbchain.org";
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""} https://apis.google.com https://www.gstatic.com`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://lh3.googleusercontent.com",
-  "font-src 'self' data:",
-  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com",
-  "frame-src 'self' https://*.firebaseapp.com https://*.web.app https://accounts.google.com https://apis.google.com",
+  `img-src 'self' data: blob: https://lh3.googleusercontent.com ${WALLETCONNECT}`,
+  "font-src 'self' data: https://fonts.reown.com",
+  `connect-src 'self' https://*.googleapis.com https://*.firebaseio.com ${WALLETCONNECT} ${WALLETCONNECT_WS} ${BSC_RPC}`,
+  "frame-src 'self' https://*.firebaseapp.com https://*.web.app https://accounts.google.com https://apis.google.com https://verify.walletconnect.com https://verify.walletconnect.org",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
