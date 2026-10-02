@@ -14,6 +14,7 @@ import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { CopyButton } from "@/components/CopyButton";
 import { PayWithWallet } from "@/components/PayWithWallet";
+import { env } from "@/server/env";
 import { SupportPanel } from "@/components/SupportPanel";
 import { AutoRefresh, Countdown } from "@/components/Countdown";
 import { BackLink, Banner, NetworkBadge, Row, Section, StatusPill, Steps, Timeline } from "@/components/ui";
@@ -151,7 +152,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           {s.wallet_registration === "REQUIRED" && <Banner tone="warn">Send from a wallet listed in <Link href="/wallets" className="font-medium underline">Your wallets</Link>. Payments from other wallets are held for a check.</Banner>}
           {n === "BSC" && <Banner tone="warn">This is <b>not</b> an Ethereum (ERC-20) address, even though it looks similar.</Banner>}
 
-          <PayWithWallet orderId={o.id} network={n} mode={s.network_mode} token={tokenContractFor(s, n)} to={o.depositAddress} amount={D(o.usdtAmount).toFixed()} decimals={NETWORK_INFO[n].decimals} />
+          <PayWithWallet orderId={o.id} network={n} mode={s.network_mode} token={tokenContractFor(s, n)} to={o.depositAddress} amount={D(o.usdtAmount).toFixed()} decimals={NETWORK_INFO[n].decimals} wcProjectId={env.walletConnectProjectId ?? null} appName={s.brand_name} />
 
           <div>
             <p className="label">Exact amount (including decimals)</p>

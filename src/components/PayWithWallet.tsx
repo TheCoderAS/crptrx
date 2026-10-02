@@ -14,25 +14,26 @@ type TronWeb = {
   };
   trx: { sign: (tx: unknown) => Promise<unknown>; sendRawTransaction: (tx: unknown) => Promise<{ result?: boolean; txid?: string; code?: string }> };
 };
-// The wallet is set to our deposit address: the payment would go from us to us.
-const OWN_WALLET = "Your wallet is set to our deposit address, so this would send money to itself. Switch to the account you're paying from, then try again.";
-
 type Win = Window & { ethereum?: Eip1193; tronLink?: Eip1193; tronWeb?: TronWeb };
 
 const BSC_CHAIN = {
-  TEST: { chainId: "0x61", chainName: "BNB Smart Chain Testnet", rpcUrls: ["https://bsc-testnet-rpc.publicnode.com"], blockExplorerUrls: ["https://testnet.bscscan.com"], nativeCurrency: { name: "tBNB", symbol: "tBNB", decimals: 18 } },
-  LIVE: { chainId: "0x38", chainName: "BNB Smart Chain", rpcUrls: ["https://bsc-dataseed.bnbchain.org"], blockExplorerUrls: ["https://bscscan.com"], nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 } },
+  TEST: { id: 97, chainId: "0x61", chainName: "BNB Smart Chain Testnet", rpcUrls: ["https://bsc-testnet-rpc.publicnode.com"], blockExplorerUrls: ["https://testnet.bscscan.com"], nativeCurrency: { name: "tBNB", symbol: "tBNB", decimals: 18 } },
+  LIVE: { id: 56, chainId: "0x38", chainName: "BNB Smart Chain", rpcUrls: ["https://bsc-dataseed.bnbchain.org"], blockExplorerUrls: ["https://bscscan.com"], nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 } },
 };
 
+// The wallet is set to our deposit address: the payment would go from us to us.
+const OWN_WALLET = "Your wallet is set to our deposit address, so this would send money to itself. Switch to the account you're paying from, then try again.";
+
 /**
- * One-click payment from a browser wallet: opens MetaMask (BSC) or TronLink (Tron)
- * with the token, our address and the exact amount filled in, then records the
- * transaction on the order so nobody has to copy a transaction ID.
- * Shown only when such a wallet is installed; otherwise people copy the details.
+ * One-click payment. Uses the wallet in the browser (MetaMask, TronLink) when
+ * there is one; otherwise, if WalletConnect is set up, lets the customer pick a
+ * wallet app (on a phone) or scan a QR code (on a computer). Either way the
+ * token, our address and the exact amount are filled in, and the transaction is
+ * recorded on the order, so nobody copies a transaction ID.
  */
-export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mode: "TEST" | "LIVE"; token: string; to: string; amount: string; decimals: number }) {
+export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mode: "TEST" | "LIVE"; token: string; to: string; amount: string; decimals: number; wcProjectId?: string | null; appName: string }) {
   const router = useRouter();
-  const [available, setAvailable] = useState(false);
+  const [injected, setInjected] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,53 +41,78 @@ export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mod
     // TronLink injects a moment after load.
     const check = () => {
       const w = window as Win;
-      setAvailable(p.network === "BSC" ? !!w.ethereum : !!(w.tronLink || w.tronWeb));
+      setInjected(p.network === "BSC" ? !!w.ethereum : !!(w.tronLink || w.tronWeb));
     };
     check();
     const t = setTimeout(check, 1200);
     return () => clearTimeout(t);
   }, [p.network]);
 
-  if (!available) return null;
-  const walletName = p.network === "BSC" ? "MetaMask" : "TronLink";
+  if (!injected && !p.wcProjectId) return null;
+  const walletName = injected ? (p.network === "BSC" ? "MetaMask" : "TronLink") : "your wallet app";
+  const metadata = () => ({ name: p.appName, description: `Pay order ${p.orderId}`, url: window.location.origin, icons: [`${window.location.origin}/favicon.ico`] });
 
   async function pay() {
     setError(null);
     try {
       setBusy(`Opening ${walletName}…`);
-      const txid = p.network === "BSC" ? await payBsc() : await payTron();
-      setBusy("Recording your payment…");
-      const res = await fetch(`/api/orders/${p.orderId}/txid`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ txid }) });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        // The payment went through; the watcher still finds it by amount, so this isn't fatal.
-        setError(`Payment sent, but we couldn't attach it to the order (${d.error ?? res.status}). We'll still detect it automatically.`);
+      if (p.network === "BSC") {
+        const txid = injected ? await payBsc((window as Win).ethereum!, true) : await payBscWalletConnect();
+        await record(txid);
+      } else if (injected) {
+        await record(await payTron());
+      } else {
+        await payTronWalletConnect(); // the server records it
       }
       router.refresh();
     } catch (e) {
       const err = e as { code?: number; message?: string };
-      setError(err.code === 4001 || /reject|denied|cancel/i.test(err.message ?? "") ? "Cancelled in your wallet. Nothing was sent." : (err.message ?? "Couldn't open your wallet.").slice(0, 200));
+      setError(err.code === 4001 || /reject|denied|cancel|closed|reset/i.test(err.message ?? "") ? "Cancelled. Nothing was sent." : (err.message ?? "Couldn't open your wallet.").slice(0, 200));
     } finally {
       setBusy(null);
     }
   }
 
-  async function payBsc(): Promise<string> {
-    const eth = (window as Win).ethereum!;
+  async function record(txid: string) {
+    setBusy("Recording your payment…");
+    const res = await fetch(`/api/orders/${p.orderId}/txid`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ txid }) });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      // The payment went through; the watcher still finds it by amount, so this isn't fatal.
+      setError(`Payment sent, but we couldn't attach it to the order (${d.error ?? res.status}). We'll still detect it automatically.`);
+    }
+  }
+
+  async function payBsc(eth: Eip1193, canSwitch: boolean): Promise<string> {
     const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
     if (accounts[0]?.toLowerCase() === p.to.toLowerCase()) throw new Error(OWN_WALLET);
     const chain = BSC_CHAIN[p.mode];
-    if ((await eth.request({ method: "eth_chainId" })) !== chain.chainId) {
+    if (canSwitch && Number(await eth.request({ method: "eth_chainId" })) !== chain.id) {
+      const params = { chainId: chain.chainId, chainName: chain.chainName, rpcUrls: chain.rpcUrls, blockExplorerUrls: chain.blockExplorerUrls, nativeCurrency: chain.nativeCurrency };
       try {
         await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: chain.chainId }] });
       } catch (e) {
         if ((e as { code?: number }).code !== 4902) throw e;
-        await eth.request({ method: "wallet_addEthereumChain", params: [chain] });
+        await eth.request({ method: "wallet_addEthereumChain", params: [params] });
       }
     }
     const data = encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [p.to as `0x${string}`, parseUnits(p.amount, p.decimals)] });
-    setBusy("Confirm the payment in MetaMask…");
+    setBusy(`Confirm the payment in ${walletName}…`);
     return (await eth.request({ method: "eth_sendTransaction", params: [{ from: accounts[0], to: p.token, data }] })) as string;
+  }
+
+  /** WalletConnect for BSC: the code loads only now, on tap. */
+  async function payBscWalletConnect(): Promise<string> {
+    const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
+    const chain = BSC_CHAIN[p.mode];
+    const provider = await EthereumProvider.init({ projectId: p.wcProjectId!, chains: [chain.id], rpcMap: { [chain.id]: chain.rpcUrls[0] }, showQrModal: true, metadata: metadata() });
+    try {
+      await provider.connect();
+      // The wallet joined on the chain we asked for, so no network switch is needed.
+      return await payBsc(provider as unknown as Eip1193, false);
+    } finally {
+      provider.disconnect().catch(() => undefined);
+    }
   }
 
   async function payTron(): Promise<string> {
@@ -108,18 +134,48 @@ export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mod
     return r.txid ?? transaction.txID;
   }
 
+  /** WalletConnect for Tron: the wallet only signs; our server builds and sends the transfer. */
+  async function payTronWalletConnect() {
+    const { WalletConnectWallet, WalletConnectChainID } = await import("@tronweb3/walletconnect-tron");
+    const wallet = new WalletConnectWallet({
+      network: p.mode === "LIVE" ? WalletConnectChainID.Mainnet : WalletConnectChainID.Nile,
+      options: { projectId: p.wcProjectId!, metadata: metadata() },
+      allWallets: "SHOW",
+    });
+    try {
+      const { address } = await wallet.connect();
+      const step = async (body: Record<string, unknown>) => {
+        const res = await fetch(`/api/orders/${p.orderId}/tron-pay`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error ?? `Error ${res.status}`);
+        return d;
+      };
+      const { transaction } = await step({ step: "build", from: address });
+      setBusy("Confirm the payment in your wallet app…");
+      const signed = await wallet.signTransaction(transaction);
+      setBusy("Sending your payment…");
+      await step({ step: "send", signed });
+    } finally {
+      wallet.disconnect().catch(() => undefined);
+    }
+  }
+
   return (
     <div className="space-y-2">
       <button type="button" onClick={pay} disabled={!!busy} className="btn btn-lg bg-brand-gradient w-full text-white shadow-lg shadow-brand-600/20 hover:opacity-95">
         {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Wallet className="size-4" aria-hidden />}
-        {busy ?? `Pay ${p.amount} USDT with ${walletName}`}
+        {busy ?? (injected ? `Pay ${p.amount} USDT with ${walletName}` : `Pay ${p.amount} USDT with a wallet app`)}
       </button>
       {error && (
         <p role="alert" className="flex gap-2 text-sm text-rose-700">
           <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden /> {error}
         </p>
       )}
-      <p className="text-center text-xs text-slate-500">Opens your wallet with everything filled in. Or send it yourself using the details below.</p>
+      <p className="text-center text-xs text-slate-500">
+        {injected
+          ? "Opens your wallet with everything filled in. Or send it yourself using the details below."
+          : `Pick your wallet app (${p.network === "BSC" ? "MetaMask, Trust Wallet…" : "TronLink, Trust Wallet…"}); on a computer, scan the QR code with your phone. Or send it yourself using the details below.`}
+      </p>
     </div>
   );
 }

@@ -94,6 +94,10 @@ export const env = {
       return req("MSG91_OTP_TEMPLATE_ID");
     },
   },
+  /** WalletConnect (Reown) project ID: lets customers pay from any wallet app. Public by design; unset = only browser wallets. */
+  get walletConnectProjectId() {
+    return opt("WALLETCONNECT_PROJECT_ID");
+  },
   tron: {
     get testApiUrl() {
       return process.env.TRON_TEST_API_URL ?? "https://nile.trongrid.io";
