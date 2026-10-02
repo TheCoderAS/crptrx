@@ -1,4 +1,5 @@
 import { paymentProblem } from "@/server/orders/actions";
+import { Select } from "@/components/Select";
 import { isRegisteredWallet } from "@/server/matching";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -155,7 +156,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           <ApiForm action={act} className="space-y-2 rounded-lg bg-orange-50 p-3">
             <h3 className="font-semibold">Put on hold</h3>
             <input type="hidden" name="action" value="hold" />
-            <select name="reason" required aria-label="Hold reason" className="input">{s.hold_reasons.map((r) => <option key={r}>{r}</option>)}</select>
+            <Select name="reason" aria-label="Hold reason" options={s.hold_reasons.map((r) => ({ value: r, label: r }))} />
             <input name="message" aria-label="Message shown to the user" className="input" placeholder="Message shown to the user (optional)" />
             <input name="note" aria-label="Private note" className="input" placeholder="Private note (admins only)" />
             <button className="btn-secondary">Put on hold</button>

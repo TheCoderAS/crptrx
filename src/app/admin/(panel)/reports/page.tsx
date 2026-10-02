@@ -1,4 +1,5 @@
 import { Download, FileClock } from "lucide-react";
+import { Select } from "@/components/Select";
 import { PageHeader } from "@/components/ui";
 import { adminOrLogin } from "@/server/auth/pages";
 import { DownloadForm } from "@/components/DownloadForm";
@@ -13,11 +14,15 @@ export default async function Reports() {
       <DownloadForm action="/api/admin/reports" className="card space-y-4">
         <div>
           <label className="label" htmlFor="report-kind">Report</label>
-          <select id="report-kind" name="kind" className="input">
-            <option value="orders">Orders report</option>
-            <option value="tax">Tax report (per user per month, paid orders)</option>
-            <option value="audit">History log export</option>
-          </select>
+          <Select
+            id="report-kind"
+            name="kind"
+            options={[
+              { value: "orders", label: "Orders report", hint: "Every order in the period" },
+              { value: "tax", label: "Tax report", hint: "Per customer per month, paid orders" },
+              { value: "audit", label: "History log export", hint: "Logins, document views, admin actions" },
+            ]}
+          />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><label className="label" htmlFor="report-from">From (IST date)</label><input id="report-from" type="date" name="from" defaultValue={monthAgo} className="input" /></div>

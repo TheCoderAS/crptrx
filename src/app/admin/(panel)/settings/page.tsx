@@ -1,3 +1,4 @@
+import { Select } from "@/components/Select";
 import {
   ArrowLeftRight,
   BadgeCheck,
@@ -269,11 +270,7 @@ export default async function SettingsPage() {
                     <Switch name="payout_auto_approve_on_name_match" checked={s.payout_auto_approve_on_name_match} label="Auto-approve bank or UPI on name match" />
                   </SettingRow>
                   <SettingRow label="Customer sending wallets" htmlFor="wallet_registration" hint="Required: new orders need a saved wallet, and payments from other wallets are held. Exchange withdrawals will be held.">
-                    <select id="wallet_registration" name="wallet_registration" defaultValue={s.wallet_registration} className="input py-2 text-sm">
-                      <option value="OFF">Off</option>
-                      <option value="OPTIONAL">Optional</option>
-                      <option value="REQUIRED">Required</option>
-                    </select>
+                    <Select id="wallet_registration" name="wallet_registration" defaultValue={s.wallet_registration} className="text-sm" options={[{ value: "OFF", label: "Off" }, { value: "OPTIONAL", label: "Optional" }, { value: "REQUIRED", label: "Required" }]} />
                   </SettingRow>
                 </Group>
               </SettingsForm>

@@ -1,4 +1,5 @@
 import { KeyRound, Plus, ShieldAlert, ShieldCheck, Users } from "lucide-react";
+import { Select } from "@/components/Select";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { ApiForm } from "@/components/ApiForm";
@@ -35,7 +36,7 @@ export default async function Admins() {
             </div>
             <div>
               <label className="label" htmlFor="admin-role">Role</label>
-              <select id="admin-role" name="role" className="input"><option value="ADMIN">Admin</option><option value="SUPER_ADMIN">Super admin</option></select>
+              <Select id="admin-role" name="role" options={[{ value: "ADMIN", label: "Admin", hint: "Orders, reviews, customers, support" }, { value: "SUPER_ADMIN", label: "Super admin", hint: "Also settings, reports and admins" }]} />
               <p className="hint">Super admins can also change settings and manage admins.</p>
             </div>
           </ModalForm>

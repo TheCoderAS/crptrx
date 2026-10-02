@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { useConfirm } from "./Confirm";
 import { useStepUp } from "./StepUp";
 
 /**
@@ -36,14 +37,15 @@ export function ApiForm({
   const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const stepUp = useStepUp();
+  const confirmer = useConfirm();
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (confirm && !window.confirm(confirm)) return;
+    const form = e.currentTarget; // read before any await: React clears currentTarget afterwards
+    if (confirm && !(await confirmer.ask(confirm))) return;
     setBusy(true);
     setError(null);
     setOk(null);
-    const form = e.currentTarget;
     const build = (totp?: string): RequestInit => {
       const fd = new FormData(form);
       if (totp) fd.set("totp", totp);
@@ -108,6 +110,7 @@ export function ApiForm({
         )}
       </fieldset>
       {stepUp.prompt}
+      {confirmer.prompt}
     </form>
   );
 }

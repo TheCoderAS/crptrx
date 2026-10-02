@@ -1,4 +1,5 @@
 import { FlaskConical } from "lucide-react";
+import { Select } from "@/components/Select";
 import { redirect } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
 import { env } from "@/server/env";
@@ -22,7 +23,7 @@ export default async function DevTools() {
         <h2 className="h2">Simulate an incoming USDT payment</h2>
         <p className="muted">Pretends the watcher saw a final transfer, then runs the normal matching. Use the exact amount from an order to confirm it.</p>
         <div className="grid gap-3 sm:grid-cols-3">
-          <select name="network" aria-label="Network" className="input"><option value="TRON">Tron (TRC-20)</option><option value="BSC">BNB Smart Chain (BEP-20)</option></select>
+          <Select name="network" aria-label="Network" options={[{ value: "TRON", label: "Tron (TRC-20)" }, { value: "BSC", label: "BNB Smart Chain (BEP-20)" }]} />
           <input aria-label="e.g. 100.37" name="amount" required className="input" placeholder="e.g. 100.37" />
           <input aria-label="To address (default: active)" name="to" className="input" placeholder="To address (default: active)" />
         </div>

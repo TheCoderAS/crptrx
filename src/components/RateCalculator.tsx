@@ -47,8 +47,9 @@ export function RateCalculator(p: Props) {
         {out && !p.stale && (
           <dl className="space-y-1.5 text-sm">
             <div className="flex justify-between text-slate-500"><dt>Gross</dt><dd className="tabular-nums">{fmtInr(out.gross)}</dd></div>
-            <div className="flex justify-between text-slate-500"><dt>Tax held back ({p.taxPercent}%)</dt><dd className="tabular-nums">− {fmtInr(out.taxHeld)}</dd></div>
-            <div className="flex justify-between text-slate-500"><dt>Fee{p.gstEnabled ? " + GST" : ""}</dt><dd className="tabular-nums">− {fmtInr(out.fee.plus(out.gstOnFee))}</dd></div>
+            {out.taxHeld.gt(0) && <div className="flex justify-between text-slate-500"><dt>Tax held back ({p.taxPercent}%)</dt><dd className="tabular-nums">− {fmtInr(out.taxHeld)}</dd></div>}
+            {out.fee.gt(0) && <div className="flex justify-between text-slate-500"><dt>Platform fee ({p.feePercent}%)</dt><dd className="tabular-nums">− {fmtInr(out.fee)}</dd></div>}
+            {out.gstOnFee.gt(0) && <div className="flex justify-between text-slate-500"><dt>GST on fee ({p.gstPercent}%)</dt><dd className="tabular-nums">− {fmtInr(out.gstOnFee)}</dd></div>}
             <div className="flex items-baseline justify-between border-t border-slate-100 pt-3">
               <dt className="font-semibold text-slate-900">You receive</dt>
               <dd className="money text-2xl text-emerald-700">{fmtInr(out.net)}</dd>

@@ -75,9 +75,9 @@ export function SellForm(p: Props) {
 
         <section className="card">
           <StepTitle n={2} title="How much?" done={!!estimate && !outOfRange} />
-          <div className="mb-3 inline-grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+          <div className="mb-3 inline-grid grid-cols-2 gap-1 rounded-xl bg-slate-200/60 p-1 ring-1 ring-slate-200 ring-inset">
             {(["USDT", "INR"] as const).map((t) => (
-              <label key={t} className={`cursor-pointer rounded-lg px-4 py-2 text-sm font-medium transition focus-within:outline-2 focus-within:outline-brand-600 ${amountType === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>
+              <label key={t} className={`cursor-pointer rounded-lg px-4 py-2 text-sm font-medium transition focus-within:outline-2 focus-within:outline-brand-600 ${amountType === t ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300" : "text-slate-500 hover:text-slate-800"}`}>
                 <input type="radio" name="amountType" value={t} checked={amountType === t} onChange={() => setAmountType(t)} className="sr-only" />
                 {t === "USDT" ? "USDT to sell" : "₹ to receive"}
               </label>
@@ -131,8 +131,16 @@ export function SellForm(p: Props) {
           <div className="flex justify-between"><dt className="text-slate-500">Network</dt><dd className="font-medium">{network ? NETWORK_INFO[network].name : "—"}</dd></div>
           <div className="flex justify-between"><dt className="text-slate-500">You sell</dt><dd className="money">{estimate ? `≈ ${estimate.usdt} USDT` : "—"}</dd></div>
           <div className="flex justify-between"><dt className="text-slate-500">Gross</dt><dd className="tabular-nums">{estimate ? fmtInr(estimate.gross) : "—"}</dd></div>
-          <div className="flex justify-between"><dt className="text-slate-500">Tax held back ({p.taxPercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.taxHeld)}` : "—"}</dd></div>
-          <div className="flex justify-between"><dt className="text-slate-500">Fee{p.gstEnabled ? " + GST" : ""}</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.fee.plus(estimate.gstOnFee))}` : "—"}</dd></div>
+          {/* Lines that come to zero are left out. */}
+          {Number(p.taxPercent) > 0 && (
+            <div className="flex justify-between"><dt className="text-slate-500">Tax held back ({p.taxPercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.taxHeld)}` : "—"}</dd></div>
+          )}
+          {Number(p.feePercent) > 0 && (
+            <div className="flex justify-between"><dt className="text-slate-500">Platform fee ({p.feePercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.fee)}` : "—"}</dd></div>
+          )}
+          {p.gstEnabled && Number(p.gstPercent) > 0 && Number(p.feePercent) > 0 && (
+            <div className="flex justify-between"><dt className="text-slate-500">GST on fee ({p.gstPercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.gstOnFee)}` : "—"}</dd></div>
+          )}
         </dl>
         <div className="mt-4 flex items-baseline justify-between border-t border-slate-100 pt-4">
           <span className="font-semibold text-slate-900">You receive</span>
