@@ -53,13 +53,8 @@ The seeded test deposit addresses are random placeholders that nobody controls. 
 2. Check that **USDT token contracts** (Test mode) are the test tokens you will actually send. The pre-filled ones are commonly used test tokens and **must be confirmed by the owner**.
 3. Optional: add `TRONGRID_API_KEY` (TronGrid limits keyless use).
 
-### Using Supabase as the database
-Supabase is only the database here; the app and worker still run in Docker.
-1. Create a Supabase project in region **South Asia (Mumbai)**.
-2. Project Settings → Database → **Connect** → copy the **Session pooler** string. Put your database password in it, and add `?sslmode=require&connection_limit=5` to the end.
-3. Put it in `.env` as `DATABASE_URL=...` and run `docker compose up -d --build`. Tables are created on start.
-
-Every table has row-level security switched on, so Supabase's public data API can't read them. The app connects as the table owner and is unaffected.
+### Hosting: Supabase + Firebase + Render / your own server
+Step by step: **[docs/DEPLOY.md](docs/DEPLOY.md)**. Supabase holds the database and ID documents, Firebase does Google sign-in, and the app runs on Render (testing) or your own server (production).
 
 ---
 

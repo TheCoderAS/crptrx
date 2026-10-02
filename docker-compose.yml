@@ -31,7 +31,12 @@ x-app: &app
     # Email/SMS: "console" stores messages in the admin Test tools outbox.
     EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
     SMS_PROVIDER: ${SMS_PROVIDER:-console}
-    STORAGE_DRIVER: local
+    # ID documents: a private Docker volume by default, or a private Supabase bucket
+    # with STORAGE_DRIVER=supabase (see docs/DEPLOY.md).
+    STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+    SUPABASE_URL: ${SUPABASE_URL:-}
+    SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-kyc}
     # Blockchain data (testnets work without keys at low volume).
     TRONGRID_API_KEY: ${TRONGRID_API_KEY:-}
     BSC_TEST_RPC_URL: ${BSC_TEST_RPC_URL:-https://bsc-testnet-rpc.publicnode.com}
