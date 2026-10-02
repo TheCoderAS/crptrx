@@ -48,7 +48,7 @@ export default async function Orders({ searchParams }: { searchParams: Promise<{
   };
   return (
     <div className="space-y-4">
-      <PageHeader title="My orders" icon={<ListOrdered className="size-6" />} action={<Link href="/sell" className="btn bg-brand-gradient text-white hover:opacity-95">New sale</Link>} />
+      <PageHeader tab title="My orders" icon={<ListOrdered className="size-6" />} action={<Link href="/sell" className="btn bg-brand-gradient text-white hover:opacity-95">New sale</Link>} />
       {hasAny && (
         <ListToolbar placeholder="Order ID, TxID, UTR or amount" sorts={[...SORTS]} defaultSort="new">
           <FilterMenu items={[{ href: statusHref(), label: "All orders", active: !filter }, ...statuses.map((s) => ({ href: statusHref(s), label: statusLabel(s), active: filter === s }))]} />

@@ -117,18 +117,23 @@ export function StatusPill({ status, label }: { status: string; label?: string }
 // Layout helpers
 // ---------------------------------------------------------------------------
 
-export function PageHeader({ title, subtitle, action, eyebrow, icon, tile = "tile-blue" }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode; eyebrow?: ReactNode; icon?: ReactNode; tile?: string }) {
+/**
+ * Page title row. `tab`: the page is one of the mobile bottom-bar tabs, which
+ * already shows where you are, so on phones the title is for screen readers only.
+ */
+export function PageHeader({ title, subtitle, action, eyebrow, icon, tile = "tile-blue", tab }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode; eyebrow?: ReactNode; icon?: ReactNode; tile?: string; tab?: boolean }) {
+  const m = (cls: string) => (tab ? `${cls} max-md:hidden` : cls);
   return (
-    <div data-page-header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div data-page-header className={`flex flex-wrap items-center justify-between gap-3 ${tab ? "mb-6 max-md:mb-0" : "mb-6"}`}>
       <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-      {icon && <span className={`icon-tile ${tile} size-12 rounded-2xl shadow-lg`}>{icon}</span>}
+      {icon && <span className={m(`icon-tile ${tile} size-12 rounded-2xl shadow-lg`)}>{icon}</span>}
       <div className="min-w-0">
-        {eyebrow && <p className="eyebrow mb-1">{eyebrow}</p>}
-        <h1 className="h1">{title}</h1>
-        {subtitle && <p className="mt-1 text-[15px] text-slate-500">{subtitle}</p>}
+        {eyebrow && <p className={m("eyebrow mb-1")}>{eyebrow}</p>}
+        <h1 className={tab ? "h1 max-md:sr-only" : "h1"}>{title}</h1>
+        {subtitle && <p className={m("mt-1 text-[15px] text-slate-500")}>{subtitle}</p>}
       </div>
       </div>
-      {action}
+      {action && <div className={m("")}>{action}</div>}
     </div>
   );
 }
