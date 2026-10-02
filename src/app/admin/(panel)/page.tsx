@@ -25,8 +25,8 @@ export default async function Dashboard() {
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="What needs attention today." icon={<Gauge className="size-6" />} />
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <Stat label="KYC waiting" value={kyc} href="/admin/kyc" icon={<BadgeCheck className="size-5" />} tile="tile-violet" />
-        <Stat label="Payout methods waiting" value={pms} href="/admin/payout-methods" icon={<Landmark className="size-5" />} tile="tile-emerald" />
+        <Stat label="KYC waiting" value={kyc} href="/admin/reviews?tab=kyc" icon={<BadgeCheck className="size-5" />} tile="tile-violet" />
+        <Stat label="Payout methods waiting" value={pms} href="/admin/reviews?tab=payout" icon={<Landmark className="size-5" />} tile="tile-emerald" />
         <Stat label="Unmatched payments" value={unmatched} href="/admin/unmatched" icon={<AlertOctagon className="size-5" />} tile="tile-amber" />
         <Stat label="Open support messages" value={support} href="/admin/support" icon={<LifeBuoy className="size-5" />} tile="tile-rose" />
       </div>

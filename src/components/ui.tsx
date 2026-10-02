@@ -116,8 +116,8 @@ export function StatusPill({ status, label }: { status: string; label?: string }
 
 export function PageHeader({ title, subtitle, action, eyebrow, icon, tile = "tile-blue" }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode; eyebrow?: ReactNode; icon?: ReactNode; tile?: string }) {
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-4">
+    <div data-page-header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
       {icon && <span className={`icon-tile ${tile} size-12 rounded-2xl shadow-lg`}>{icon}</span>}
       <div className="min-w-0">
         {eyebrow && <p className="eyebrow mb-1">{eyebrow}</p>}

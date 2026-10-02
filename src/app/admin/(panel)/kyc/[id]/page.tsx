@@ -19,7 +19,7 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
   const docs = [["panDoc", "PAN card"], ["aadhaarFront", "Masked Aadhaar front"], ["aadhaarBack", "Masked Aadhaar back"], ["selfie", "Selfie with PAN"]];
   return (
     <div className="space-y-4">
-      <BackLink href="/admin/kyc">KYC queue</BackLink>
+      <BackLink href="/admin/reviews">Reviews</BackLink>
       <PageHeader title={s.fullName} icon={<ScanFace className="size-6" />} tile="tile-violet" action={<StatusPill status={s.status} />} />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="card">
@@ -51,7 +51,7 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
           <div className="mt-4 grid gap-4 lg:grid-cols-[auto_1fr] lg:items-start">
             <ApiForm action={`/api/admin/kyc/${s.id}`}>
               <input type="hidden" name="decision" value="APPROVED" />
-              <button className="btn w-full bg-emerald-600 px-6 text-white hover:bg-emerald-700 lg:w-auto">{needsCheck ? "Looks good" : "Approve"}</button>
+              <button className="btn w-full bg-emerald-600 px-6 text-white hover:brightness-110 lg:w-auto">{needsCheck ? "Looks good" : "Approve"}</button>
             </ApiForm>
             <div className="space-y-3">
               <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-end">

@@ -12,7 +12,7 @@ export default async function Admin2fa() {
   if (!admin) redirect("/admin/login");
   const s = await getSettings();
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-950 px-4 py-12">
+    <div className="theme-lock grid min-h-screen place-items-center bg-slate-950 px-4 py-12">
       <div className="w-full max-w-sm space-y-4">
         <div className="mb-4 flex justify-center"><Logo name={s.brand_name} src={logoSrc(s)} inverted size="lg" /></div>
         {!admin.totpEnabled && <TotpSetup />}

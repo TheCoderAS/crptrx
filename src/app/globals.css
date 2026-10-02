@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
+@import "./theme-dark.css";
 
 /* ---------------------------------------------------------------------------
    Design tokens. Deep blue for trust, emerald for money received, amber for
@@ -31,10 +32,10 @@
 }
 
 @layer components {
-  .btn-primary { @apply btn bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800; }
+  .btn-primary { @apply btn bg-brand-600 text-white shadow-sm hover:brightness-110 active:brightness-95; }
   .btn-secondary { @apply btn bg-white text-slate-800 shadow-sm ring-1 ring-slate-200 ring-inset hover:bg-slate-50 active:bg-slate-100; }
   .btn-ghost { @apply btn text-slate-600 hover:bg-slate-100 hover:text-slate-900; }
-  .btn-danger { @apply btn bg-rose-600 text-white shadow-sm hover:bg-rose-700; }
+  .btn-danger { @apply btn bg-rose-600 text-white shadow-sm hover:brightness-110 active:brightness-95; }
   .btn-lg { @apply px-5 py-3.5 text-base; }
 
   .card { @apply rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[var(--shadow-card)] sm:p-6; }
@@ -60,10 +61,28 @@
   .table tbody tr { @apply transition hover:bg-slate-50/70; }
 
   .chip { @apply inline-flex min-h-9 items-center rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-slate-200 ring-inset transition hover:bg-slate-50; }
-  .chip-active { @apply bg-slate-900 text-white ring-slate-900 hover:bg-slate-800; }
+  .chip-active { @apply bg-brand-600 text-white ring-brand-600 hover:brightness-110; }
 
   .kbd-code { @apply rounded-lg bg-slate-100 px-2 py-1 font-mono text-[13px] break-all text-slate-800; }
 }
+
+@layer components {
+  /* Dark theme: surfaces built with @apply bg-white (see theme-dark.css for the palette). */
+  :root[data-theme="dark"] :is(.card, .input, .btn-secondary, .chip) { background-color: var(--surface); }
+  :root[data-theme="dark"] .chip-active { background-color: var(--color-brand-600); }
+
+  /* Admin panel: denser than the customer site (more on screen, less scrolling). */
+  .admin-ui .card { padding: 1rem; border-radius: 0.875rem; }
+  .admin-ui .card-flat { padding: 0.75rem; }
+  .admin-ui .h1 { font-size: 1.25rem; line-height: 1.75rem; }
+  .admin-ui .h2 { font-size: 0.9375rem; }
+  .admin-ui .table th { padding: 0.5rem 0.75rem; font-size: 0.6875rem; }
+  .admin-ui .table td { padding: 0.5rem 0.75rem; }
+  .admin-ui .input { padding-top: 0.5rem; padding-bottom: 0.5rem; font-size: 0.875rem; }
+  .admin-ui .label { margin-bottom: 0.25rem; font-size: 0.8125rem; }
+  .admin-ui :is(.btn-primary, .btn-secondary, .btn-danger) { padding: 0.5rem 0.875rem; }
+}
+:root[data-theme="dark"] body { --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.03); }
 
 /* A spinner on the submit button while a form is sending. */
 form[aria-busy="true"] button:not([type="button"]) { @apply relative text-transparent; }
@@ -74,6 +93,13 @@ form[aria-busy="true"] button:not([type="button"])::after {
 }
 form[aria-busy="true"] .btn-secondary::after,
 form[aria-busy="true"] .btn-ghost::after { color: var(--color-slate-600); }
+
+
+/* Admin panel: page header is denser (overrides utility classes, so not layered). */
+.admin-ui [data-page-header] { margin-bottom: 1rem; }
+.admin-ui [data-page-header] .icon-tile { width: 2.25rem; height: 2.25rem; border-radius: 0.75rem; box-shadow: none; }
+.admin-ui [data-page-header] .icon-tile svg { width: 1.125rem; height: 1.125rem; }
+.admin-ui [data-page-header] p { font-size: 0.8125rem; margin-top: 0; }
 
 /* Reset in the base layer so a fieldset can still take card/padding classes. */
 @layer base {
@@ -94,14 +120,14 @@ body { @apply bg-slate-50 text-slate-900 antialiased; font-feature-settings: "cv
   color: transparent;
 }
 @utility bg-mesh {
-  background-color: #f8fafc;
+  background-color: var(--color-slate-50);
   background-image:
     radial-gradient(40rem 28rem at 10% -10%, color-mix(in srgb, var(--color-brand-500) 22%, transparent), transparent 60%),
     radial-gradient(34rem 24rem at 95% 0%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 60%),
     radial-gradient(30rem 22rem at 70% 110%, rgb(16 185 129 / 0.14), transparent 60%);
 }
 @utility bg-mesh-dark {
-  background-color: var(--color-brand-950);
+  background-color: var(--brand-ink, #0b1437);
   background-image:
     radial-gradient(36rem 26rem at 0% 0%, color-mix(in srgb, var(--color-brand-500) 45%, transparent), transparent 60%),
     radial-gradient(30rem 22rem at 100% 100%, rgb(16 185 129 / 0.28), transparent 60%),
@@ -113,11 +139,11 @@ body { @apply bg-slate-50 text-slate-900 antialiased; font-feature-settings: "cv
 @utility ring-gradient {
   border: 1px solid transparent;
   background:
-    linear-gradient(white, white) padding-box,
+    linear-gradient(var(--surface, #fff), var(--surface, #fff)) padding-box,
     linear-gradient(135deg, color-mix(in srgb, var(--color-brand-500) 55%, transparent), color-mix(in srgb, var(--color-accent) 35%, transparent), rgb(16 185 129 / 0.45)) border-box;
 }
 @utility bg-grid {
-  background-image: linear-gradient(rgb(15 23 42 / 0.05) 1px, transparent 1px), linear-gradient(90deg, rgb(15 23 42 / 0.05) 1px, transparent 1px);
+  background-image: linear-gradient(color-mix(in srgb, var(--color-slate-900) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--color-slate-900) 5%, transparent) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 

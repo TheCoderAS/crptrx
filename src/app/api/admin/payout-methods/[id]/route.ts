@@ -11,5 +11,5 @@ export const POST = api(async (req: Request, ctx: Ctx) => {
   const b = await body<{ decision: "APPROVED" | "DECLINED"; reason?: string }>(req);
   const pm = await reviewPayoutMethod(id, b.decision, b.reason, a.actor);
   await notifyPayoutMethod(pm.userId, b.decision === "APPROVED", b.reason);
-  return { redirect: "/admin/payout-methods" };
+  return { redirect: "/admin/reviews?tab=payout" };
 });

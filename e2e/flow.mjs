@@ -71,7 +71,7 @@ await expectText(user, "Submitted, under review");
 console.log("kyc submitted");
 
 // Admin: needs changes, then approve after resubmission
-await admin.goto(BASE + "/admin/kyc");
+await admin.goto(BASE + "/admin/reviews?tab=kyc");
 await admin.click("table a");
 await expectText(admin, "Test Kumar Sharma");
 const [doc] = await Promise.all([admin.waitForEvent("popup"), admin.click("text=PAN card")]);
@@ -80,7 +80,7 @@ console.log("doc view opened:", doc.url().includes("/api/files?") ? "signed link
 await doc.close();
 await admin.fill("#reason-changes", "Selfie is blurry");
 await admin.click("button:has-text('Ask for changes')");
-await admin.waitForURL("**/admin/kyc");
+await admin.waitForURL("**/admin/reviews");
 await user.reload();
 await expectText(user, "Selfie is blurry");
 await user.fill("#pan", "ABCDE1234F");
@@ -88,10 +88,10 @@ await user.setInputFiles("#selfie", OUT + "/doc.png");
 await user.check("input[name=maskedConfirmed]");
 await user.click("text=Submit for review");
 await expectText(user, "Submitted, under review");
-await admin.goto(BASE + "/admin/kyc");
+await admin.goto(BASE + "/admin/reviews?tab=kyc");
 await admin.click("table a");
 await admin.click("button:has-text('Approve')");
-await admin.waitForURL("**/admin/kyc");
+await admin.waitForURL("**/admin/reviews");
 console.log("kyc: needs changes -> resubmit -> approved");
 
 // 4. Payout method
@@ -102,11 +102,11 @@ await user.fill("#accountNumberConfirm", "123456789012");
 await user.fill("#ifsc", "HDFC0001234");
 await user.click("text=Save for review");
 await expectText(user, "Pending review");
-await admin.goto(BASE + "/admin/payout-methods");
-await expectText(admin, "Names differ");
+await admin.goto(BASE + "/admin/reviews?tab=payout");
+await expectText(admin, "ID says:");
 await shot(admin, "04-admin-payout-name-mismatch");
 await admin.click("button:has-text('Approve')");
-await expectText(admin, "Nothing waiting.");
+await expectText(admin, "All clear");
 console.log("payout method approved (mismatch highlighted)");
 
 // 5. Sell

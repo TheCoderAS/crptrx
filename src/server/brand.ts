@@ -62,5 +62,9 @@ export function themeCss(s: Pick<Settings, "brand_primary_color" | "brand_accent
   const a = HEX.test(s.brand_accent_color) ? s.brand_accent_color : "#7c3aed";
   const tint = (pct: number) => `color-mix(in oklab, ${p} ${pct}%, white)`;
   const shade = (pct: number) => `color-mix(in oklab, ${p} ${pct}%, black)`;
-  return `:root{--color-brand-50:${tint(7)};--color-brand-100:${tint(14)};--color-brand-200:${tint(28)};--color-brand-500:${tint(82)};--color-brand-600:${p};--color-brand-700:${shade(86)};--color-brand-800:${shade(72)};--color-brand-900:${shade(52)};--color-brand-950:${shade(32)};--color-accent:${a}}`;
+  const light = `--color-brand-50:${tint(7)};--color-brand-100:${tint(14)};--color-brand-200:${tint(28)};--color-brand-300:${tint(50)};--color-brand-500:${tint(82)};--color-brand-600:${p};--color-brand-700:${shade(86)};--color-brand-800:${shade(72)};--color-brand-900:${shade(52)};--color-brand-950:${shade(32)}`;
+  // Dark theme: light tints become deep shades and dark text shades become light (see scripts/gen-dark-theme.mjs).
+  const dark = `--color-brand-50:${shade(22)};--color-brand-100:${shade(32)};--color-brand-200:${shade(45)};--color-brand-300:${shade(65)};--color-brand-700:${tint(55)};--color-brand-800:${tint(35)};--color-brand-900:${tint(20)};--color-brand-950:${tint(10)}`;
+  const lock = ':root[data-theme="dark"] :is(.theme-lock,.bg-mesh-dark,.bg-brand-gradient)';
+  return `:root{${light};--color-accent:${a};--brand-ink:${shade(32)}}:root[data-theme="dark"]{${dark}}${lock}{${light}}`;
 }

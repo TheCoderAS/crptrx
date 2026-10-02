@@ -10,7 +10,7 @@ export default async function AdminLogin() {
   if (await currentAdmin()) redirect("/admin");
   const s = await getSettings();
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-950 px-4 py-12">
+    <div className="theme-lock grid min-h-screen place-items-center bg-slate-950 px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center"><Logo name={s.brand_name} src={logoSrc(s)} inverted size="lg" /></div>
         <ApiForm action="/api/admin/auth/login" className="card space-y-4 p-6 sm:p-8">

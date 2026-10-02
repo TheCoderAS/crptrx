@@ -7,6 +7,7 @@ import { companyName } from "@/server/contact";
 import { LogoutButton } from "@/components/LogoutButton";
 import { DesktopNav, MobileTabs } from "@/components/SiteNav";
 import { GuestNav } from "@/components/GuestNav";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             <div className="flex items-center gap-2">
               {nav && <DesktopNav />}
               {nav && <span className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />}
+              <ThemeToggle />
               <LogoutButton action="/api/auth/logout" />
             </div>
           ) : (

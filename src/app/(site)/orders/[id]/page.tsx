@@ -161,7 +161,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             </div>
             {qr && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={qr} alt={`QR code for the ${nw} deposit address`} className="mx-auto size-40 rounded-xl bg-white p-2 ring-1 ring-slate-200" />
+              <img src={qr} alt={`QR code for the ${nw} deposit address`} className="mx-auto size-40 rounded-xl bg-[#fff] p-2 ring-1 ring-slate-200" />
             )}
           </div>
 
