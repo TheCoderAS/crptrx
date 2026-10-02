@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { ApiForm } from "./ApiForm";
 
 /** Centered dialog: closes on Escape, the backdrop, or the X. Locks page scroll while open. */
-export function Modal({ open, onClose, title, description, children }: { open: boolean; onClose: () => void; title: ReactNode; description?: ReactNode; children: ReactNode }) {
+export function Modal({ open, onClose, title, description, children, wide }: { open: boolean; onClose: () => void; title: ReactNode; description?: ReactNode; children: ReactNode; wide?: boolean }) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -28,7 +28,7 @@ export function Modal({ open, onClose, title, description, children }: { open: b
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-[var(--shadow-float)] sm:max-w-lg sm:rounded-2xl sm:p-6"
+        className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-[var(--shadow-float)] ${wide ? "sm:max-w-4xl" : "sm:max-w-lg"} sm:rounded-2xl sm:p-6`}
       >
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>

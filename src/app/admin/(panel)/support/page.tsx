@@ -1,4 +1,5 @@
 import { LifeBuoy } from "lucide-react";
+import { DocPreview } from "@/components/DocPreview";
 import type { Prisma } from "@prisma/client";
 import { PageHeader } from "@/components/ui";
 import { pickSort } from "@/lib/sort";
@@ -36,7 +37,7 @@ export default async function Support({ searchParams }: { searchParams: Promise<
         <div key={m.id} id={m.id} className="card space-y-2">
           <p className="text-sm"><b>{m.user.email}</b> · {fmtIST(m.createdAt)} {m.orderId && <>· <Link className="underline" href={`/admin/orders/${m.orderId}`}>{m.orderId}</Link></>}</p>
           <p className="whitespace-pre-wrap">{m.message}</p>
-          {m.attachmentKey && <a className="text-sm underline" target="_blank" rel="noreferrer" href={`/api/admin/support/${m.id}/file`}>Open attachment</a>}
+          {m.attachmentKey && <div className="max-w-xs"><DocPreview docs={[{ label: "Attachment", href: `/api/admin/support/${m.id}/file` }]} /></div>}
           {!m.handled ? <ApiForm action={`/api/admin/support/${m.id}`}><button className="btn-secondary">Mark handled</button></ApiForm> : <p className="muted">Handled</p>}
         </div>
       ))}

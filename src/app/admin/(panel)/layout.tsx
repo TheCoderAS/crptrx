@@ -8,7 +8,7 @@ import { getSettings } from "@/server/settings";
 import { delayedNetworks } from "@/server/watcher";
 import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
-import { AdminNav, type AdminNavItem } from "@/components/AdminNav";
+import { AdminMobileNav, AdminNav, type AdminNavItem } from "@/components/AdminNav";
 import { LogoutButton } from "@/components/LogoutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Banner, Logo } from "@/components/ui";
@@ -43,21 +43,26 @@ export default async function Panel({ children }: { children: React.ReactNode })
       : []),
     ...(sup && env.devToolsEnabled && s.network_mode === "TEST" ? ([{ href: "/admin/dev", label: "Test tools", icon: "FlaskConical" }] as AdminNavItem[]) : []),
   ];
+  const mode = <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold tracking-wide ${s.network_mode === "LIVE" ? "bg-rose-500 text-white" : "bg-amber-400 text-amber-950"}`}>{s.network_mode}</span>;
+  const who = (
+    <>
+      <p className="truncate text-sm font-medium text-white">{admin.name}</p>
+      <p className="truncate text-xs text-slate-400">{admin.email} · {sup ? "Super admin" : "Admin"}</p>
+      <div className="mt-2 -ml-3 flex items-center justify-between"><LogoutButton action="/api/admin/auth/logout" dark /><ThemeToggle dark /></div>
+    </>
+  );
   return (
     <div className="admin-ui lg:flex">
-      <aside className="theme-lock border-white/5 bg-slate-950 lg:sticky lg:border-r lg:top-0 lg:flex lg:h-screen lg:w-56 lg:shrink-0 lg:flex-col">
+      <AdminMobileNav items={items} brand={<span className="flex items-center gap-2"><Link href="/admin"><Logo name={s.brand_name} src={logoSrc(s)} inverted /></Link>{mode}</span>} badge={mode} footer={who} />
+      <aside className="theme-lock sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-white/5 bg-slate-950 lg:flex">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <Link href="/admin"><Logo name={s.brand_name} src={logoSrc(s)} inverted /></Link>
-          <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold tracking-wide ${s.network_mode === "LIVE" ? "bg-rose-500 text-white" : "bg-amber-400 text-amber-950"}`}>{s.network_mode}</span>
+          {mode}
         </div>
-        <div className="px-2 pb-3 lg:flex-1 lg:overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-2 pb-3">
           <AdminNav items={items} />
         </div>
-        <div className="hidden border-t border-white/10 p-4 lg:block">
-          <p className="truncate text-sm font-medium text-white">{admin.name}</p>
-          <p className="truncate text-xs text-slate-400">{admin.email} · {sup ? "Super admin" : "Admin"}</p>
-          <div className="mt-2 -ml-3 flex items-center justify-between"><LogoutButton action="/api/admin/auth/logout" dark /><ThemeToggle dark /></div>
-        </div>
+        <div className="border-t border-white/10 p-4">{who}</div>
       </aside>
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-6xl space-y-2 px-4 pt-4 empty:hidden sm:px-6">
@@ -73,10 +78,7 @@ export default async function Panel({ children }: { children: React.ReactNode })
           ))}
         </div>
         <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6">{children}</main>
-        <div className="flex items-center justify-between px-4 pb-6 text-xs text-slate-400 sm:px-8 lg:justify-center">
-          <span>Sessions end after 30 minutes without activity.</span>
-          <span className="flex items-center gap-1 lg:hidden"><ThemeToggle /><LogoutButton action="/api/admin/auth/logout" /></span>
-        </div>
+        <p className="px-4 pb-6 text-center text-xs text-slate-400">Sessions end after 30 minutes without activity.</p>
       </div>
     </div>
   );

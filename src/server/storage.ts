@@ -11,13 +11,13 @@ import { AppError } from "./errors";
 // Either way, files are opened only through the app's own 5-minute signed links.
 
 export const LINK_TTL_SEC = 5 * 60;
-export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_FILE_BYTES = 200 * 1024; // photos are shrunk in the browser to fit (src/lib/shrinkImage.ts)
 const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "application/pdf": "pdf" };
 
 /** Check size and real file type from the first bytes, not the name. */
 export function checkUpload(buf: Buffer, declared: string): string {
   if (buf.length === 0) throw new AppError("The file is empty.");
-  if (buf.length > MAX_FILE_BYTES) throw new AppError("Each file must be 5 MB or smaller.");
+  if (buf.length > MAX_FILE_BYTES) throw new AppError("Each file must be 200 KB or smaller.");
   const sniffed =
     buf[0] === 0xff && buf[1] === 0xd8 ? "image/jpeg" : buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? "image/png" : buf.subarray(0, 5).toString() === "%PDF-" ? "application/pdf" : null;
   if (!sniffed || !TYPES[sniffed]) throw new AppError("Only JPG, PNG or PDF files are allowed.");
