@@ -344,3 +344,27 @@ describe("payments from our own wallet", () => {
     expect((await orderById(order.id)).holdReason).toBe(HOLD.FROM_US);
   });
 });
+
+describe("unmatched payments say why", () => {
+  const reason = async () => (await prisma.incomingTransfer.findFirstOrThrow()).unmatchedReason;
+
+  it("names the orders when several share the amount", async () => {
+    const a = await makeOrder("TRON", "100");
+    const b = await makeOrder("TRON", "100");
+    await ingestTransfers([transfer("TRON", "100")]);
+    const r = await reason();
+    expect(r).toContain(a.order.id);
+    expect(r).toContain(b.order.id);
+  });
+
+  it("says when no order has the amount", async () => {
+    await makeOrder("TRON", "100");
+    await ingestTransfers([transfer("TRON", "77")]);
+    expect(await reason()).toMatch(/No open order for exactly 77 USDT/);
+  });
+
+  it("says when it came from our own wallet", async () => {
+    await ingestTransfers([transfer("TRON", "100", { from: ADDR.TRON })]);
+    expect(await reason()).toMatch(/our own deposit address/);
+  });
+});

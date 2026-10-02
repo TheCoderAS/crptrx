@@ -235,6 +235,8 @@ model IncomingTransfer {
   status           TransferStatus @default(UNMATCHED)
   matchedOrderId   String?
   handlingNote     String?
+  /// Why the app couldn't match it to an order on its own (shown to admins).
+  unmatchedReason  String?
   raw              Json
   createdAt        DateTime       @default(now())
 

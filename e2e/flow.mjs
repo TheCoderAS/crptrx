@@ -142,6 +142,16 @@ console.log("payment simulated and matched");
 await user.goto(orderUrl);
 await expectText(user, "Payment received");
 
+// A payment no order matches lands in Unmatched with its reason.
+await admin.goto(BASE + "/admin/dev");
+await admin.fill("input[name=amount]", "77.77");
+await admin.click("button:has-text('Simulate')");
+await expectText(admin, "no order matched");
+await admin.goto(BASE + "/admin/unmatched");
+await expectText(admin, "No open order for exactly 77.77 USDT");
+await shot(admin, "07b-admin-unmatched");
+console.log("unmatched payment explains why");
+
 // 7. Admin workflow
 await admin.goto(`${BASE}/admin/orders/${orderId}`);
 await admin.click("button:has-text('Start review')");
