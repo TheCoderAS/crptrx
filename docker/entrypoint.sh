@@ -68,11 +68,11 @@ case "${1:-web}" in
   all)
     migrate
     seed
-    # One container, two processes sharing the database limit: website 4
-    # connections, watcher 3. Old and new copies
-    # overlapping during a redeploy still stay under Supabase's 15.
-    ( while true; do DB_POOL_SIZE="${DB_POOL_SIZE_WORKER:-3}" $WORKER; echo "worker exited, restarting in 5s" >&2; sleep 5; done ) &
-    export DB_POOL_SIZE="${DB_POOL_SIZE_WEB:-4}"
+    # One container, two processes sharing the database limit: website 3
+    # connections, watcher 2. Old and new copies
+    # overlapping during a redeploy still use at most 10 of Supabase's 15.
+    ( while true; do DB_POOL_SIZE="${DB_POOL_SIZE_WORKER:-2}" $WORKER; echo "worker exited, restarting in 5s" >&2; sleep 5; done ) &
+    export DB_POOL_SIZE="${DB_POOL_SIZE_WEB:-3}"
     exec $WEB
     ;;
   migrate) migrate ;;
