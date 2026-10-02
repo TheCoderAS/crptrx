@@ -68,4 +68,31 @@ describe("Supabase Storage driver", () => {
       server.close();
     }
   });
+
+  it("creates the private bucket once if the project doesn't have it yet", async () => {
+    const { createServer } = await import("node:http");
+    let bucket: Record<string, unknown> | null = null;
+    const server = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        if (req.url === "/storage/v1/bucket") {
+          bucket = JSON.parse(Buffer.concat(chunks).toString());
+          return res.writeHead(200).end("{}");
+        }
+        if (!bucket) return res.writeHead(400, { "content-type": "application/json" }).end('{"statusCode":"404","error":"Bucket not found","message":"Bucket not found"}');
+        res.writeHead(200).end("{}");
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, r));
+    const port = (server.address() as { port: number }).port;
+    Object.assign(process.env, { STORAGE_DRIVER: "supabase", SUPABASE_URL: `http://127.0.0.1:${port}`, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_STORAGE_BUCKET: "kyc" });
+    try {
+      await expect(putFile("kyc/user1", PNG, "image/png")).resolves.toMatch(/\.png$/);
+      expect(bucket).toMatchObject({ id: "kyc", public: false });
+    } finally {
+      for (const k of ["STORAGE_DRIVER", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_STORAGE_BUCKET"]) delete process.env[k];
+      server.close();
+    }
+  });
 });

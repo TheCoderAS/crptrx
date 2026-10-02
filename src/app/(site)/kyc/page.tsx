@@ -7,7 +7,7 @@ import { ContactLinks } from "@/components/ContactLinks";
 import { contactChannels } from "@/server/contact";
 import { ApiForm } from "@/components/ApiForm";
 import { FileTile } from "@/components/FileTile";
-import { Banner, PageHeader, Row, Section, StatusPill } from "@/components/ui";
+import { BackLink, Banner, PageHeader, Row, Section, StatusPill } from "@/components/ui";
 import { fmtIST } from "@/lib/time";
 
 export const metadata = { title: "Identity check", robots: { index: false, follow: false } };
@@ -29,6 +29,7 @@ export default async function Kyc() {
 
   return (
     <div className="space-y-6">
+      <BackLink href="/account">Account</BackLink>
       <PageHeader title="Identity check" subtitle={notNeeded ? undefined : "Required by law. About 3 minutes."} icon={<ScanFace className="size-6" />} tile="tile-violet" action={<StatusPill status={user.kycStatus} />} />
 
       {notNeeded && (
@@ -50,7 +51,7 @@ export default async function Kyc() {
           <div>
             <p className="font-semibold text-slate-900">{state.title}</p>
             <p className="mt-0.5 text-sm text-slate-600">{state.body}</p>
-            {user.kycStatus === "APPROVED" && <Link href="/payout-methods" className="btn-primary mt-3">Add bank or UPI</Link>}
+            {user.kycStatus === "APPROVED" && <Link href="/payout-methods?add=1" className="btn-primary mt-3">Add bank or UPI</Link>}
             {user.kycStatus === "DECLINED" && <div className="mt-3"><ContactLinks channels={contactChannels(s)} /></div>}
           </div>
         </div>

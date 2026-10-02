@@ -1,16 +1,29 @@
 "use client";
-import { useState } from "react";
-import { Landmark, Smartphone } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Landmark, Plus, Smartphone } from "lucide-react";
 import { ApiForm } from "./ApiForm";
+import { Modal } from "./Modal";
 
-export function PayoutMethodForm({ first, kycRequired = true }: { first?: boolean; kycRequired?: boolean }) {
+/** "Add bank or UPI" button that opens the form in a dialog. */
+export function AddPayoutMethod({ kycRequired = true, autoOpen = false, className = "btn-primary" }: { kycRequired?: boolean; autoOpen?: boolean; className?: string }) {
+  const [open, setOpen] = useState(autoOpen);
+  const close = useCallback(() => setOpen(false), []);
+  return (
+    <>
+      <button type="button" className={className} onClick={() => setOpen(true)}>
+        <Plus className="size-4" aria-hidden /> Add bank or UPI
+      </button>
+      <Modal open={open} onClose={close} title="Add bank or UPI" description={kycRequired ? "It must be in the same name as your PAN." : "It must be in your own name."}>
+        <PayoutMethodForm onSaved={close} />
+      </Modal>
+    </>
+  );
+}
+
+function PayoutMethodForm({ onSaved }: { onSaved: () => void }) {
   const [type, setType] = useState<"BANK" | "UPI">("BANK");
   return (
-    <ApiForm action="/api/payout-methods" className="card space-y-5" resetOnSuccess>
-      <div>
-        <h2 className="h2">{first ? "Add where you want to be paid" : "Add another"}</h2>
-        <p className="mt-0.5 text-sm text-slate-500">{kycRequired ? "It must be in the same name as your PAN." : "It must be in your own name."}</p>
-      </div>
+    <ApiForm action="/api/payout-methods" className="space-y-5" onSuccess={onSaved}>
       <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Payout type">
         {([["BANK", "Bank account", Landmark], ["UPI", "UPI ID", Smartphone]] as const).map(([t, label, Icon]) => (
           <label key={t} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition focus-within:outline-2 focus-within:outline-brand-600 ${type === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>

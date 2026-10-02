@@ -34,7 +34,7 @@ export default async function Dashboard() {
       href: "/kyc",
       cta: user.kycStatus === "NEEDS_CHANGES" ? "Fix now" : "Start",
     },
-    payout: { icon: Landmark, tile: "tile-emerald", label: "Add your bank account or UPI", detail: "In your own name. Payouts go only here.", href: "/payout-methods", cta: "Add" },
+    payout: { icon: Landmark, tile: "tile-emerald", label: "Add your bank account or UPI", detail: "In your own name. Payouts go only here.", href: "/payout-methods?add=1", cta: "Add" },
     wallet: { icon: Wallet, tile: "tile-amber", label: "Add the wallet you send from", detail: "Payments are matched to your wallets.", href: "/wallets", cta: "Add" },
   };
   const steps = o.steps.map((x) => {

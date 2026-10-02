@@ -30,6 +30,24 @@ function supabaseObjectUrl(key: string) {
   const base = env.storage.supabaseUrl.replace(/\/+$/, "");
   return `${base}/storage/v1/object/${encodeURIComponent(env.storage.supabaseBucket)}/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
+/** Creates the storage bucket as PRIVATE. Returns false if Supabase refused. */
+async function createPrivateBucket(): Promise<boolean> {
+  const base = env.storage.supabaseUrl.replace(/\/+$/, "");
+  const name = env.storage.supabaseBucket;
+  const res = await fetch(`${base}/storage/v1/bucket`, {
+    method: "POST",
+    headers: { ...supabaseHeaders(), "content-type": "application/json" },
+    body: JSON.stringify({ id: name, name, public: false, file_size_limit: MAX_FILE_BYTES, allowed_mime_types: Object.keys(TYPES) }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const body = res.ok ? "" : await res.text().catch(() => "");
+  if (res.ok || /already exists/i.test(body)) {
+    console.log(`[storage] created private bucket "${name}"`);
+    return true;
+  }
+  console.error(`[storage] couldn't create bucket "${name}": HTTP ${res.status} ${body}`);
+  return false;
+}
 const supabaseHeaders = () => ({ authorization: `Bearer ${env.storage.supabaseKey}`, apikey: env.storage.supabaseKey });
 
 const localPath = (key: string) => {
@@ -42,14 +60,22 @@ const localPath = (key: string) => {
 export async function putFile(prefix: string, buf: Buffer, contentType: string): Promise<string> {
   const key = `${prefix}/${new Date().toISOString().slice(0, 10)}/${randomToken(16)}.${TYPES[contentType]}`;
   if (env.storage.driver === "supabase") {
-    const res = await fetch(supabaseObjectUrl(key), {
-      method: "POST",
-      headers: { ...supabaseHeaders(), "content-type": contentType, "x-upsert": "false" },
-      body: new Uint8Array(buf),
-      signal: AbortSignal.timeout(30_000),
-    });
+    const upload = () =>
+      fetch(supabaseObjectUrl(key), {
+        method: "POST",
+        headers: { ...supabaseHeaders(), "content-type": contentType, "x-upsert": "false" },
+        body: new Uint8Array(buf),
+        signal: AbortSignal.timeout(30_000),
+      });
+    let res = await upload();
+    let detail = res.ok ? "" : await res.text().catch(() => "");
+    // A fresh Supabase project has no bucket yet: create it (private) once, then retry.
+    if (!res.ok && /bucket not found/i.test(detail) && (await createPrivateBucket())) {
+      res = await upload();
+      detail = res.ok ? "" : await res.text().catch(() => "");
+    }
     if (!res.ok) {
-      console.error(`[storage] upload failed: HTTP ${res.status} ${await res.text().catch(() => "")}`);
+      console.error(`[storage] upload to bucket "${env.storage.supabaseBucket}" failed: HTTP ${res.status} ${detail}`);
       throw new AppError("We couldn't save your file. Please try again.", 502);
     }
   } else {

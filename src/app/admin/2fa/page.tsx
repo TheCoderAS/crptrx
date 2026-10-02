@@ -18,7 +18,7 @@ export default async function Admin2fa() {
         {!admin.totpEnabled && <TotpSetup />}
         <ApiForm action="/api/admin/auth/totp" className="card space-y-4 p-6 sm:p-8">
           <div>
-            <h1 className="text-lg font-semibold">Two-step login</h1>
+            <h1 className="text-lg font-semibold text-slate-900">Two-step login</h1>
             <p className="text-sm text-slate-500">Step 2 of 2: enter the 6-digit code from your authenticator app.</p>
           </div>
           <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required autoFocus className="input py-3 text-center font-mono text-2xl tracking-[0.5em]" aria-label="6-digit code" />

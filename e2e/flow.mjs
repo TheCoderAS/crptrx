@@ -94,8 +94,8 @@ await admin.click("button:has-text('Approve')");
 await admin.waitForURL("**/admin/reviews");
 console.log("kyc: needs changes -> resubmit -> approved");
 
-// 4. Payout method
-await user.goto(BASE + "/payout-methods");
+// 4. Payout method (the link opens the add dialog)
+await user.goto(BASE + "/payout-methods?add=1");
 await user.fill("#holderName", "Test K Sharma");
 await user.fill("#accountNumber", "123456789012");
 await user.fill("#accountNumberConfirm", "123456789012");

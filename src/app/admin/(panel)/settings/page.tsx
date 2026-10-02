@@ -277,8 +277,13 @@ export default async function SettingsPage() {
             content: (
               <>
                 <section className="card flex flex-wrap items-center gap-4 p-4 sm:p-4">
-                  <Logo name={s.brand_name} src={logoSrc(s)} size="lg" />
-                  <span className="theme-lock rounded-lg bg-slate-900 px-3 py-2"><Logo name={s.brand_name} src={logoSrc(s)} inverted /></span>
+                  {/* How the logo looks in the light header and on dark areas, whichever theme the admin uses. */}
+                  {([["On light", "bg-white ring-1 ring-slate-200", false], ["On dark", "bg-slate-900", true]] as const).map(([label, bg, inverted]) => (
+                    <figure key={label} className="text-center">
+                      <span className={`theme-lock flex h-14 items-center rounded-lg px-3 ${bg}`}><Logo name={s.brand_name} src={logoSrc(s)} inverted={inverted} /></span>
+                      <figcaption className="mt-1 text-[11px] text-slate-500">{label}</figcaption>
+                    </figure>
+                  ))}
                   <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
                     <ApiForm action="/api/admin/brand/logo" className="flex items-center gap-2" resetOnSuccess>
                       <input id="logo" name="logo" type="file" required aria-label="Logo file (PNG, JPG or SVG, up to 300 KB)" accept="image/png,image/jpeg,image/svg+xml" className="max-w-52 text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:font-medium file:text-brand-700" />
