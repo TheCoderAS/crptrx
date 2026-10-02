@@ -57,13 +57,16 @@ Buy a **VPS** (Namecheap: a VPS plan, not shared hosting). Shared hosting can't 
    ```
    then `sudo systemctl reload caddy`. Caddy gets the HTTPS certificate on its own.
 3. Namecheap → Domain → Advanced DNS → **A record** `@` → your server's IP.
-4. Create `/opt/crptrx/.env` from `.env.example`. Set:
-   - `APP_URL=https://yourdomain.in`, `SECURE_COOKIES=true`, `TRUSTED_PROXY_HOPS=1`
-   - Supabase and Firebase values as above
-   - `ENCRYPTION_KEY`: make one with `openssl rand -hex 32`, and **save a copy offline**
-   - `DEV_LOGIN_ENABLED=false`, `DEV_TOOLS_ENABLED=false`, `AUTO_GENERATE_SECRETS=false`
-   - real email and SMS providers (Resend, MSG91)
-5. GitHub → repo Settings → Environments → **New environment** `production`: add secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` and variable `DEPLOY_PATH=/opt/crptrx`.
+4. Nothing to put on the server: the app settings live in GitHub (next step).
+5. GitHub → repo Settings → Environments → **New environment** `production`:
+   - secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, and variable `DEPLOY_PATH=/opt/crptrx`
+   - secret **`APP_ENV`**: paste the whole `.env` (copy `.env.example`, fill it in). Must include:
+     - `APP_URL=https://yourdomain.in`, `SECURE_COOKIES=true`, `TRUSTED_PROXY_HOPS=1`
+     - Supabase and Firebase values as above
+     - `ENCRYPTION_KEY`: make one with `openssl rand -hex 32` and **save a copy offline** (GitHub won't show it again)
+     - `DEV_LOGIN_ENABLED=false`, `DEV_TOOLS_ENABLED=false`, `AUTO_GENERATE_SECRETS=false`
+     - real email and SMS providers (Resend, MSG91)
+   - Every deploy writes it to the server, so to change a setting: edit the secret, then deploy.
 6. To release: GitHub → **Actions → Deploy → Run workflow** → environment `production`. Production never deploys by itself; you choose when.
    If the image is private on GitHub, run `docker login ghcr.io` on the server once (with a GitHub token that has `read:packages`).
 7. Add the domain to Firebase **Authorized domains**.
