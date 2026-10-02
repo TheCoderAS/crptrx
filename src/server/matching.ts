@@ -141,6 +141,9 @@ async function confirmExact(tx: Tx, s: Settings, t: IncomingTransfer, order: Ord
 async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchEvent[], siblings: IncomingTransfer[]) {
   const a = getAdapter(t.network as NetworkCode);
   const to = a.normalizeAddress(t.toAddress);
+  // Left unmatched: record why, so the admin list can say it.
+  const unmatched = (reason: string) => tx.incomingTransfer.update({ where: { id: t.id }, data: { unmatchedReason: reason } });
+  const ids = (os: Order[]) => os.map((o) => o.id).join(", ");
 
   // Sent from one of our own deposit addresses (e.g. paying from the company
   // wallet by mistake, or moving funds): never a customer's payment. Stays
@@ -149,6 +152,7 @@ async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchE
   if (ours.has(a.normalizeAddress(t.fromAddress))) {
     const claimed = await tx.order.findFirst({ where: { submittedTxid: t.txid, status: "PAYMENT_SUBMITTED" } });
     if (claimed) await hold(tx, claimed, HOLD.FROM_US, events, `Sent from our deposit address ${t.fromAddress}`);
+    await unmatched("Sent from our own deposit address, so it isn't a customer's payment. Don't link it to an order.");
     return;
   }
 
@@ -176,6 +180,7 @@ async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchE
     if (claimed.network !== t.network) {
       await hold(tx, claimed, HOLD.OTHER_NETWORK, events, `Transfer ${t.network} ${t.txid}#${t.transferPosition}`);
       if (exact) return confirmExact(tx, s, t, exact, events);
+      await unmatched(`Claimed by ${claimed.id}, which is an order on ${claimed.network}, not ${t.network}.`);
       return; // transfer stays unmatched for an admin to link by hand
     }
     if (a.normalizeAddress(claimed.depositAddress) === to) {
@@ -193,13 +198,15 @@ async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchE
           return confirmExact(tx, s, t, rightful, events);
         }
         // Nobody can be proven: leave the transfer unmatched for an admin to link.
-        await hold(tx, claimed, HOLD.SAME_AMOUNT, events, `Same amount open on ${rivals.map((o) => o.id).join(", ")}. Sender ${t.fromAddress} isn't linked to any of them. Link the transfer by hand.`);
+        await hold(tx, claimed, HOLD.SAME_AMOUNT, events, `Same amount open on ${ids(rivals)}. Sender ${t.fromAddress} isn't linked to any of them. Link the transfer by hand.`);
+        await unmatched(`Claimed by ${claimed.id}, but ${ids(rivals)} ${rivals.length === 1 ? "is" : "are"} open for the same amount, and the sending wallet isn't linked to any of these customers.`);
         return;
       }
       if (sameAddress.length > 0) {
         // Pays someone else's order exactly. The claimant is held: their TxID isn't theirs.
         await hold(tx, claimed, HOLD.TXID_USED, events, `Claimed ${t.txid}, which pays ${exact?.id ?? sameAddress.map((o) => o.id).join(" or ")}`);
         if (exact) return confirmExact(tx, s, t, exact, events);
+        await unmatched(`${ids(sameAddress)} ${sameAddress.length === 1 ? "is" : "are"} open for exactly this amount and the sending wallet isn't linked to any of them. ${claimed.id} also claimed it with a different amount.`);
         return;
       }
       if (t.blockTime < claimed.createdAt) {
@@ -220,6 +227,11 @@ async function matchOne(tx: Tx, s: Settings, t: IncomingTransfer, events: MatchE
 
   // 2) Exact amount.
   if (exact) return confirmExact(tx, s, t, exact, events);
+  await unmatched(
+    sameAddress.length > 1
+      ? `${sameAddress.length} orders are open for exactly ${D(t.amount).toFixed()} USDT (${ids(sameAddress)}) and the sending wallet isn't linked to any of these customers, so we can't tell whose it is.`
+      : `No open order for exactly ${D(t.amount).toFixed()} USDT to this address. An order counts only if it was created before the payment and expired less than 24 hours earlier.`,
+  );
   // 3) No match: stays UNMATCHED for the admin list.
 }
 
