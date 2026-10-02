@@ -1,5 +1,6 @@
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
+import { env } from "@/server/env";
 import { putFile, readSignedFile, signedUrl } from "@/server/storage";
 
 process.env.STORAGE_LOCAL_DIR = `${tmpdir()}/usdt-test-uploads`;
@@ -18,6 +19,19 @@ describe("private file links", () => {
 });
 
 describe("Supabase Storage driver", () => {
+  it("is used whenever Supabase is configured, even without STORAGE_DRIVER", () => {
+    try {
+      process.env.SUPABASE_URL = "https://example.supabase.co";
+      expect(env.storage.driver).toBe("supabase");
+      process.env.STORAGE_DRIVER = "local";
+      expect(env.storage.driver).toBe("local");
+    } finally {
+      delete process.env.SUPABASE_URL;
+      delete process.env.STORAGE_DRIVER;
+    }
+    expect(env.storage.driver).toBe("local");
+  });
+
   it("uploads and reads back through Supabase's storage API with the server key", async () => {
     const { createServer } = await import("node:http");
     const store = new Map<string, Buffer>();
