@@ -53,8 +53,9 @@ export const env = {
     },
   },
   storage: {
+    /** Supabase whenever it's configured, so a missing STORAGE_DRIVER can't send files to a disk that's wiped on redeploy. */
     get driver() {
-      return (process.env.STORAGE_DRIVER ?? "local") as "local" | "supabase";
+      return (process.env.STORAGE_DRIVER ?? (process.env.SUPABASE_URL ? "supabase" : "local")) as "local" | "supabase";
     },
     get localDir() {
       return process.env.STORAGE_LOCAL_DIR ?? "./.data/uploads";

@@ -31,6 +31,12 @@ if [ -z "$APP_URL" ]; then
     exit 1
   fi
 fi
+# Say where uploads go, so a misconfigured host shows up in the first log lines.
+if [ "${STORAGE_DRIVER:-}" = "supabase" ] || { [ -z "${STORAGE_DRIVER:-}" ] && [ -n "$SUPABASE_URL" ]; }; then
+  echo "Uploads: Supabase Storage, bucket ${SUPABASE_STORAGE_BUCKET:-kyc}"
+else
+  echo "Uploads: this server's disk (${STORAGE_LOCAL_DIR:-./.data/uploads}). On Render this is wiped on every redeploy; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY." >&2
+fi
 
 migrate() {
   # Retry while the database starts up. prisma migrate deploy is safe to run from several containers.
