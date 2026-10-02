@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { CheckCircle2, Clock, Download, PauseCircle, RefreshCw, ShieldAlert, ShieldCheck, StickyNote, XCircle } from "lucide-react";
 import { paymentProblem } from "@/server/orders/actions";
 import { isRegisteredWallet, RECHECKABLE_HOLDS } from "@/server/matching";
+import { allKnownDepositAddresses } from "@/server/deposit";
+import { getAdapter } from "@/server/networks";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { D, fmtInr, fmtUsdt } from "@/server/money";
@@ -32,6 +34,33 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
     prisma.admin.findMany({ select: { id: true, name: true } }),
     o.senderAddress ? isRegisteredWallet(prisma, o.userId, o.network as NetworkCode, o.senderAddress) : Promise.resolve(false),
   ]);
+  // Payments that arrived but weren't matched and could be this order's: the TxID
+  // the customer gave, or the exact amount on the same network in the last 7 days.
+  const linkable = !o.txid && ["QUOTE_READY", "EXPIRED", "PAYMENT_SUBMITTED", "ON_HOLD"].includes(o.status);
+  const [possible, ourAddrs] = linkable
+    ? await Promise.all([
+        prisma.incomingTransfer.findMany({
+          where: {
+            status: { in: ["UNMATCHED", "MANUAL_HANDLING"] },
+            OR: [...(o.submittedTxid ? [{ txid: o.submittedTxid }] : []), { network: o.network, amount: o.usdtAmount, blockTime: { gte: new Date(o.createdAt.getTime() - 3600_000) } }],
+          },
+          orderBy: { blockTime: "desc" },
+          take: 10,
+        }),
+        allKnownDepositAddresses(o.network as NetworkCode),
+      ])
+    : [[], []];
+  const ours = new Set(ourAddrs.map((x) => getAdapter(o.network as NetworkCode).normalizeAddress(x)));
+  // The customer's own wallets: registered on their account, or used to pay an earlier order.
+  const norm = (x: string) => getAdapter(o.network as NetworkCode).normalizeAddress(x);
+  const [myWallets, myPast] = possible.length
+    ? await Promise.all([
+        prisma.userWallet.findMany({ where: { userId: o.userId, network: o.network, deletedAt: null }, select: { address: true } }),
+        prisma.order.findMany({ where: { userId: o.userId, network: o.network, senderAddress: { not: null } }, select: { senderAddress: true }, distinct: ["senderAddress"] }),
+      ])
+    : [[], []];
+  const registered = new Set(myWallets.map((w) => norm(w.address)));
+  const usedBefore = new Set(myPast.map((p) => norm(p.senderAddress!)));
   const payProblem = paymentProblem(o);
   const adminName = (aid: string | null) => admins.find((a) => a.id === aid)?.name ?? aid ?? "";
   const n = o.network as NetworkCode;
@@ -105,6 +134,48 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
         <div className="min-w-0 space-y-4 lg:col-span-2">
           {/* The one thing to do next. Changes with the order's status. */}
           <section className="card space-y-4 ring-2 ring-brand-600/15">
+            {possible.length > 0 && (
+              <div className="space-y-2 rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200 ring-inset">
+                <p className="text-sm font-semibold text-amber-900">{possible.length === 1 ? "A payment that may be this order's arrived but wasn't matched" : `${possible.length} payments that may be this order's arrived but weren't matched`}</p>
+                <p className="text-xs text-amber-900/80">Check the sender and amount, then confirm the one that belongs to this order. The order moves to &ldquo;Payment received&rdquo;.</p>
+                <ul className="space-y-2">
+                  {possible.map((t) => {
+                    const fromUs = ours.has(norm(t.fromAddress));
+                    const theirTx = !!o.submittedTxid && t.txid.toLowerCase() === o.submittedTxid.toLowerCase();
+                    return (
+                      <li key={t.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-white p-3 ring-1 ring-amber-200">
+                        <div className="min-w-0 flex-1 text-sm">
+                          <p className="font-medium text-slate-900">
+                            {fmtUsdt(t.amount)} USDT · {fmtIST(t.blockTime)}
+                            {theirTx && <span className="ml-2 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">TxID the customer gave</span>}
+                          </p>
+                          <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                            <span className="min-w-0 truncate">From <span className="font-mono">{t.fromAddress}</span></span>
+                            {registered.has(norm(t.fromAddress)) ? (
+                              <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">Customer&apos;s registered wallet</span>
+                            ) : usedBefore.has(norm(t.fromAddress)) ? (
+                              <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">Customer paid from it before</span>
+                            ) : (
+                              !ours.has(norm(t.fromAddress)) && <span className="rounded-md bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">Not linked to this customer</span>
+                            )}
+                          </p>
+                          <p className="truncate text-xs">{txLink(t.txid, t.network as NetworkCode)}</p>
+                          {fromUs && <p className="mt-1 text-xs font-medium text-rose-700">Sent from our own deposit wallet. Not a customer payment: don&apos;t confirm it.</p>}
+                          {!fromUs && t.unmatchedReason && <p className="mt-1 text-xs text-slate-500">Not matched automatically: {t.unmatchedReason}</p>}
+                        </div>
+                        {!fromUs && (
+                          <ModalForm button="Confirm for this order" buttonClassName="btn-primary min-h-9 px-3 text-sm" title={`Confirm this payment for ${o.id}?`} description={`${fmtUsdt(t.amount)} USDT from ${t.fromAddress}. The order moves to Payment received.`} action={`/api/admin/transfers/${t.id}`} submitLabel="Confirm payment">
+                            <input type="hidden" name="action" value="link" />
+                            <input type="hidden" name="orderId" value={o.id} />
+                            <div><label className="label" htmlFor={`why-${t.id}`}>Why it&apos;s this order&apos;s (logged)</label><textarea id={`why-${t.id}`} name="note" required rows={2} className="input" placeholder="e.g. Customer confirmed the sending wallet; amount and time match" /></div>
+                          </ModalForm>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
             {(o.status === "QUOTE_READY" || o.status === "EXPIRED") && (
               <NextStep icon={<Clock className="size-5" />} tile="tile-slate" title={o.status === "EXPIRED" ? "Quote expired without a payment" : "Waiting for the customer to pay"}>
                 Nothing to do yet. A payment that arrives is matched automatically{o.status === "EXPIRED" ? " for 24 hours after expiry" : ""}.

@@ -42,6 +42,16 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
     prisma.order.findMany({ where, orderBy: [ORDER_BY[sort], { createdAt: "asc" }], include: { user: true }, skip: (pageNo - 1) * PER_PAGE, take: PER_PAGE }),
     prisma.order.count({ where }),
   ]);
+  // Orders without a payment that an unmatched payment could belong to (same TxID, or same network + exact amount).
+  const waiting = orders.filter((o) => !o.txid && ["QUOTE_READY", "EXPIRED", "PAYMENT_SUBMITTED", "ON_HOLD"].includes(o.status));
+  const loose = waiting.length
+    ? await prisma.incomingTransfer.findMany({
+        where: { status: { in: ["UNMATCHED", "MANUAL_HANDLING"] }, blockTime: { gte: new Date(Date.now() - 8 * 86400_000) }, OR: waiting.flatMap((o) => [{ network: o.network, amount: o.usdtAmount }, ...(o.submittedTxid ? [{ txid: o.submittedTxid }] : [])]) },
+        select: { network: true, amount: true, txid: true, blockTime: true },
+      })
+    : [];
+  const maybePaid = (o: (typeof orders)[number]) =>
+    waiting.includes(o) && loose.some((t) => (o.submittedTxid && t.txid.toLowerCase() === o.submittedTxid.toLowerCase()) || (t.network === o.network && fmtUsdt(t.amount) === fmtUsdt(o.usdtAmount) && t.blockTime.getTime() >= o.createdAt.getTime() - 3600_000));
   const pages = Math.max(1, Math.ceil(total / PER_PAGE));
   const pageHref = (n: number) => `/admin/orders?${new URLSearchParams({ ...(status ? { status } : {}), ...(q ? { q } : {}), ...(sortParam ? { sort } : {}), page: String(n) })}`;
   const statusHref = (s?: string) => `/admin/orders?${new URLSearchParams({ ...(s ? { status: s } : {}), ...(q ? { q } : {}) })}`;
@@ -74,7 +84,7 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
                   <td>{o.user.email}</td>
                   <td>{fmtUsdt(o.usdtAmount)} <NetworkBadge network={o.network} /></td>
                   <td>{fmtInr(o.net)}</td>
-                  <td><StatusPill status={o.status} />{o.holdReason && o.status === "ON_HOLD" && <div className="text-xs text-orange-800">{o.holdReason}</div>}</td>
+                  <td><StatusPill status={o.status} />{o.holdReason && o.status === "ON_HOLD" && <div className="text-xs text-orange-800">{o.holdReason}</div>}{maybePaid(o) && <div className="mt-1"><Link href={`/admin/orders/${o.id}`} className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-300">Possible payment found</Link></div>}</td>
                 </tr>
               ))}
             </tbody>

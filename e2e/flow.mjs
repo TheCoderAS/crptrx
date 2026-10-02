@@ -192,6 +192,30 @@ const r = await user.request.get(`${BASE}/api/orders/${orderId}/receipt`);
 console.log("receipt", r.status(), r.headers()["content-type"], (await r.body()).length, "bytes");
 fs.writeFileSync(OUT + "/receipt.pdf", await r.body());
 
+// 9. A payment that wasn't matched shows up on the order, and the admin confirms it there.
+await admin.goto(BASE + "/admin/dev");
+await admin.fill("input[name=amount]", "55");
+await admin.click("button:has-text('Simulate')");
+await expectText(admin, "no order matched"); // arrives before the order exists
+await user.goto(BASE + "/sell");
+await user.click("label:has-text('Tron (TRC-20)')");
+await user.fill("input[name=amount]", "55");
+await user.click("button:has-text('Get my quote'):visible");
+await user.waitForURL("**step=quote");
+await user.click("text=Confirm and get deposit address");
+await expectText(user, "Deposit address");
+const order2 = user.url().split("/orders/")[1];
+await admin.goto(`${BASE}/admin/orders?status=QUOTE_READY`);
+await expectText(admin, "Possible payment found");
+await admin.goto(`${BASE}/admin/orders/${order2}`);
+await expectText(admin, "may be this order's");
+await shot(admin, "10-admin-possible-payment");
+await admin.click("button:has-text('Confirm for this order')");
+await admin.fill("[role=dialog] textarea[name=note]", "Customer confirmed the wallet; amount matches");
+await admin.click("[role=dialog] button:has-text('Confirm payment')");
+await expectText(admin, "Start review");
+console.log("unmatched payment confirmed from the order page");
+
 // Audit log shows doc views
 await admin.goto(BASE + "/admin/audit?action=KYC_DOC");
 await expectText(admin, "KYC_DOC_VIEWED");
