@@ -48,8 +48,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <Row k="USDT" v={`${amount} USDT`} />
         <Row k="Rate" v={`${fmtInr(o.rate)} per USDT`} />
         <Row k="Gross" v={fmtInr(o.gross)} />
-        <Row k={`Tax held back (${D(o.taxPercent).toString()}%)`} v={`− ${fmtInr(o.taxHeld)}`} />
-        <Row k={`Platform fee (${D(o.feePercent).toString()}%)`} v={`− ${fmtInr(o.fee)}`} />
+        {D(o.taxHeld).gt(0) && <Row k={`Tax held back (${D(o.taxPercent).toString()}%)`} v={`− ${fmtInr(o.taxHeld)}`} />}
+        {D(o.fee).gt(0) && <Row k={`Platform fee (${D(o.feePercent).toString()}%)`} v={`− ${fmtInr(o.fee)}`} />}
         {D(o.gstOnFee).gt(0) && <Row k={`GST on fee (${D(o.gstPercent).toString()}%)`} v={`− ${fmtInr(o.gstOnFee)}`} />}
         <Row strong k="You receive" v={<span className="text-emerald-700">{fmtInr(o.net)}</span>} />
         <Row k="Paid to" v={maskedPayout(snap)} />

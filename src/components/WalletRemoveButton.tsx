@@ -1,11 +1,13 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useConfirm } from "./Confirm";
 
 export function WalletRemoveButton({ id }: { id: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const confirmer = useConfirm();
   return (
     <span className="flex shrink-0 flex-col items-end">
       <button
@@ -13,7 +15,7 @@ export function WalletRemoveButton({ id }: { id: string }) {
         disabled={busy}
         className="btn-ghost min-h-10 px-3 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
         onClick={async () => {
-          if (!window.confirm("Remove this wallet?")) return;
+          if (!(await confirmer.ask("Remove this wallet? You can add it again later."))) return;
           setBusy(true);
           setErr(null);
           try {
@@ -30,6 +32,7 @@ export function WalletRemoveButton({ id }: { id: string }) {
         {busy ? "Removing…" : "Remove"}
       </button>
       {err && <span role="alert" className="text-xs text-rose-700">{err}</span>}
+      {confirmer.prompt}
     </span>
   );
 }

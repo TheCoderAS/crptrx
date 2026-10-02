@@ -21,8 +21,11 @@ fs.writeFileSync(OUT + "/doc.png", png());
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const admin = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
-// Accept the confirmation dialogs on admin actions (decline, mismatched names, mark paid).
-admin.on("dialog", (d) => d.accept());
+// Confirmations are in-app dialogs: press their confirm button when one appears.
+const confirmIfAsked = async (p) => {
+  const ok = p.locator("[data-confirm-ok]");
+  try { await ok.waitFor({ timeout: 2000 }); await ok.click(); } catch { /* this action didn't ask */ }
+};
 const user = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
 const shot = (p, n) => p.screenshot({ path: `${OUT}/${n}.png`, fullPage: true });
 const expectText = async (p, t) => { await p.getByText(t, { exact: false }).first().waitFor({ timeout: 15000 }); };
@@ -109,6 +112,7 @@ await admin.goto(BASE + "/admin/reviews?tab=payout");
 await expectText(admin, "ID says:");
 await shot(admin, "04-admin-payout-name-mismatch");
 await admin.click("button:has-text('Approve')");
+await confirmIfAsked(admin);
 await expectText(admin, "All clear");
 console.log("payout method approved (mismatch highlighted)");
 
@@ -130,7 +134,7 @@ console.log("order", orderId, "amount", amount);
 
 // 6. Simulated payment
 await admin.goto(BASE + "/admin/dev");
-await admin.selectOption("select[name=network]", "TRON");
+// Network defaults to Tron in the (in-app) dropdown.
 await admin.fill("input[name=amount]", amount);
 await admin.click("button:has-text('Simulate')");
 await expectText(admin, "CONFIRMED");
@@ -147,15 +151,18 @@ await admin.check("input[value=CLEAN]");
 await admin.click("text=Save wallet check");
 await expectText(admin, "CLEAN");
 await admin.click("button:has-text('Approve')");
+await confirmIfAsked(admin);
 await expectText(admin, "Mark as paid");
 const net = (await admin.getByText(/Amount paid \(must be/).innerText()).match(/must be ([\d.]+)/)[1];
 await admin.fill("input[name=utr]", "HDFCN52026092812");
 await admin.fill("input[name=amount]", (Number(net) + 1).toFixed(2));
 await admin.click("button:has-text('Mark as paid')");
+await confirmIfAsked(admin);
 await expectText(admin, "must equal");
 console.log("wrong paid amount blocked");
 await admin.fill("input[name=amount]", net);
 await admin.click("button:has-text('Mark as paid')");
+await confirmIfAsked(admin);
 // The 2FA code from login covers 15 minutes; after that the app asks for a code once.
 if (await admin.getByText("Confirm it's you").isVisible({ timeout: 2000 }).catch(() => false)) {
   await admin.fill("input[aria-label='2FA code']", await freshCode(secret));

@@ -24,9 +24,9 @@ function PayoutMethodForm({ onSaved }: { onSaved: () => void }) {
   const [type, setType] = useState<"BANK" | "UPI">("BANK");
   return (
     <ApiForm action="/api/payout-methods" className="space-y-5" onSuccess={onSaved}>
-      <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Payout type">
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-200/60 p-1 ring-1 ring-slate-200 ring-inset" role="radiogroup" aria-label="Payout type">
         {([["BANK", "Bank account", Landmark], ["UPI", "UPI ID", Smartphone]] as const).map(([t, label, Icon]) => (
-          <label key={t} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition focus-within:outline-2 focus-within:outline-brand-600 ${type === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+          <label key={t} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition focus-within:outline-2 focus-within:outline-brand-600 ${type === t ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300" : "text-slate-500 hover:text-slate-800"}`}>
             <input type="radio" name="type" value={t} checked={type === t} onChange={() => setType(t)} className="sr-only" />
             <Icon className="size-4" aria-hidden /> {label}
           </label>

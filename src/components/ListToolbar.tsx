@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Select } from "./Select";
 import { useRef, type ReactNode } from "react";
 import { ArrowDownUp, Search, X } from "lucide-react";
 
@@ -49,13 +50,14 @@ export function ListToolbar({ placeholder, sorts, defaultSort, children }: { pla
           </button>
         )}
       </form>
-      <label className="relative">
-        <span className="sr-only">Sort</span>
-        <ArrowDownUp className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
-        <select value={sort} onChange={(e) => go({ sort: e.target.value })} className="input w-auto py-2.5 pr-9 pl-9 text-sm font-medium">
-          {sorts.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-      </label>
+      <Select
+        aria-label="Sort"
+        value={sort}
+        onChange={(v) => go({ sort: v })}
+        options={sorts}
+        icon={<ArrowDownUp className="size-4" aria-hidden />}
+        className="w-52 max-w-full text-sm font-medium"
+      />
       {children}
     </div>
   );

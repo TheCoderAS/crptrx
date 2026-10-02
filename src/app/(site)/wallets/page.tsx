@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Select } from "@/components/Select";
 import { Wallet } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { getSettings } from "@/server/settings";
@@ -57,9 +58,7 @@ export default async function Wallets() {
           <div className="grid gap-4 sm:grid-cols-[12rem_1fr]">
             <div>
               <label className="label" htmlFor="network">Network</label>
-              <select id="network" name="network" className="input" defaultValue={networks[0]}>
-                {networks.map((n) => <option key={n} value={n}>{NETWORK_INFO[n].name}</option>)}
-              </select>
+              <Select id="network" name="network" defaultValue={networks[0]} options={networks.map((n) => ({ value: n, label: NETWORK_INFO[n].name }))} />
             </div>
             <div className="min-w-0">
               <label className="label" htmlFor="address">Wallet address</label>
