@@ -6,7 +6,7 @@ services:
   - type: web
     name: crptrx-test
     runtime: docker
-    plan: starter # the free plan sleeps when idle, which pauses payment detection
+    plan: free # 512 MB is enough. It sleeps after 15 min without visits; see docs/DEPLOY.md for keeping it awake.
     region: singapore # closest Render region to India
     dockerCommand: entrypoint all
     healthCheckPath: /api/health
