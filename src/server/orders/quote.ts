@@ -55,7 +55,13 @@ export async function limitProblem(tx: Tx, s: Settings, userId: string, amount: 
 }
 
 /** Pick a free 0.01–0.99 suffix so no two open orders on this network + address share an amount (spec 7.2). */
-export async function pickUniqueAmount(tx: Tx, network: NetworkCode, depositAddress: string, base: Decimal, rand = Math.random): Promise<Decimal | null> {
+/**
+ * The payment amount for a new order: the base plus the smallest free 0.01–0.99,
+ * so each open order on an address has its own exact amount and a payment can be
+ * matched without a transaction ID. Smallest, not random, so the customer sends as
+ * little extra as possible (they're paid for the full amount either way).
+ */
+export async function pickUniqueAmount(tx: Tx, network: NetworkCode, depositAddress: string, base: Decimal): Promise<Decimal | null> {
   const lo = base.plus("0.01");
   const hi = base.plus("0.99");
   const taken = await tx.order.findMany({
@@ -69,13 +75,11 @@ export async function pickUniqueAmount(tx: Tx, network: NetworkCode, depositAddr
     select: { usdtAmount: true },
   });
   const takenSet = new Set(taken.map((o) => D(o.usdtAmount).toFixed(2)));
-  const free: Decimal[] = [];
   for (let i = 1; i <= 99; i++) {
     const cand = base.plus(new Decimal(i).div(100));
-    if (!takenSet.has(cand.toFixed(2))) free.push(cand);
+    if (!takenSet.has(cand.toFixed(2))) return cand;
   }
-  if (free.length === 0) return null;
-  return free[Math.floor(rand() * free.length)];
+  return null;
 }
 
 export async function nextOrderId(tx: Tx, now = new Date()): Promise<{ id: string; seq: number }> {

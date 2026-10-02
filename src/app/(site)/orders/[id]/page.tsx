@@ -7,11 +7,12 @@ import { prisma } from "@/server/db";
 import { D, fmtInr, fmtUsdt } from "@/server/money";
 import { userStatusText } from "@/server/orders/messages";
 import { maskedPayout, payoutLast4, type PayoutSnapshot } from "@/server/payouts";
-import { getSettings } from "@/server/settings";
+import { getSettings, tokenContractFor } from "@/server/settings";
 import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { CopyButton } from "@/components/CopyButton";
+import { PayWithWallet } from "@/components/PayWithWallet";
 import { SupportPanel } from "@/components/SupportPanel";
 import { AutoRefresh, Countdown } from "@/components/Countdown";
 import { BackLink, Banner, NetworkBadge, Row, Section, StatusPill, Steps, Timeline } from "@/components/ui";
@@ -140,13 +141,17 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           {s.wallet_registration === "REQUIRED" && <Banner tone="warn">Send from a wallet listed in <Link href="/wallets" className="font-medium underline">Your wallets</Link>. Payments from other wallets are held for a check.</Banner>}
           {n === "BSC" && <Banner tone="warn">This is <b>not</b> an Ethereum (ERC-20) address, even though it looks similar.</Banner>}
 
+          <PayWithWallet orderId={o.id} network={n} mode={s.network_mode} token={tokenContractFor(s, n)} to={o.depositAddress} amount={D(o.usdtAmount).toFixed()} decimals={NETWORK_INFO[n].decimals} />
+
           <div>
             <p className="label">Exact amount (including decimals)</p>
             <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 ring-inset">
               <span className="money text-2xl text-slate-900 sm:text-3xl">{amount} USDT</span>
               <CopyButton text={D(o.usdtAmount).toFixed()} />
             </div>
-            <p className="mt-1.5 text-sm font-medium text-rose-700">Send the exact amount shown, including decimals.</p>
+            <p className="mt-1.5 text-sm text-slate-600">
+              <b className="text-rose-700">Send exactly this amount.</b> The extra cents make it unique to your order, so we recognise your payment automatically. You&apos;re paid for the full amount.
+            </p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
@@ -166,13 +171,21 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             )}
           </div>
 
-          <ApiForm action={`/api/orders/${o.id}/txid`} className="space-y-2 border-t border-slate-100 pt-5">
-            <label className="label" htmlFor="txid">Already sent? Paste the transaction ID <span className="font-normal text-slate-500">(optional, speeds things up)</span></label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input id="txid" name="txid" required className="input font-mono text-sm" placeholder={n === "BSC" ? "0x…" : "64-character transaction ID"} autoComplete="off" />
-              <button className="btn-primary">I&apos;ve sent it</button>
-            </div>
-          </ApiForm>
+          <div className="flex items-start gap-3 rounded-xl bg-emerald-50 p-3.5 text-sm text-emerald-900 ring-1 ring-emerald-200 ring-inset">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-hidden />
+            <p>No need to come back and confirm. We detect your payment on the blockchain automatically, usually within a few minutes, and this page updates by itself.</p>
+          </div>
+
+          <details className="group border-t border-slate-100 pt-4">
+            <summary className="cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900">Paid, but it&apos;s not showing after 10 minutes?</summary>
+            <ApiForm action={`/api/orders/${o.id}/txid`} className="mt-3 space-y-2">
+              <label className="label" htmlFor="txid">Paste the transaction ID from your wallet or exchange</label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input id="txid" name="txid" required className="input font-mono text-sm" placeholder={n === "BSC" ? "0x…" : "64-character transaction ID"} autoComplete="off" />
+                <button className="btn-primary">Check this payment</button>
+              </div>
+            </ApiForm>
+          </details>
         </section>
       )}
 

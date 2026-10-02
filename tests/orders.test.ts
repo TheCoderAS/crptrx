@@ -37,13 +37,16 @@ describe("quotes (spec 4.4, 7.1, 7.2)", () => {
     const a = await makeOrder("TRON", "100");
     const b = await makeOrder("TRON", "100");
     expect(D(a.order.usdtAmount).eq(D(b.order.usdtAmount))).toBe(false);
+    // As little extra as possible: the smallest free cents, in order.
+    expect(D(a.order.usdtAmount).toFixed(2)).toBe("100.01");
+    expect(D(b.order.usdtAmount).toFixed(2)).toBe("100.02");
   });
 
   it("the same amount may be open on the other network at the same time", async () => {
     await makeOrder("TRON", "100");
     const u = await makeUser();
     // Force the same suffix on BSC as TRON is allowed.
-    const bscPick = await pickUniqueAmount(prisma, "BSC", ADDR.BSC, D(100), () => 0);
+    const bscPick = await pickUniqueAmount(prisma, "BSC", ADDR.BSC, D(100));
     expect(bscPick!.toFixed(2)).toBe("100.01");
     await createQuote({ userId: u.user.id, network: "BSC", amountType: "USDT", amount: "100", payoutMethodId: u.pm.id }, u.actor);
   });
