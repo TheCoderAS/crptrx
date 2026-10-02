@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Dismissible } from "./Dismissible";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Info, ShieldAlert } from "lucide-react";
 import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
@@ -149,7 +150,8 @@ export function Section({ title, description, action, children, className = "" }
   );
 }
 
-export function Banner({ tone = "info", title, children }: { tone?: "info" | "warn" | "danger" | "ok"; title?: ReactNode; children: ReactNode }) {
+/** A notice with an × to hide it (remembered per browser until its text changes). */
+export function Banner({ tone = "info", title, children, id }: { tone?: "info" | "warn" | "danger" | "ok"; title?: ReactNode; children: ReactNode; id?: string }) {
   const c = {
     info: ["bg-brand-50 text-brand-900 ring-brand-200", Info, "text-brand-600"],
     warn: ["bg-amber-50 text-amber-900 ring-amber-200", AlertTriangle, "text-amber-600"],
@@ -158,13 +160,15 @@ export function Banner({ tone = "info", title, children }: { tone?: "info" | "wa
   }[tone] as [string, typeof Info, string];
   const Icon = c[1];
   return (
-    <div className={`flex gap-3 rounded-xl p-3.5 text-sm ring-1 ring-inset ${c[0]}`} role={tone === "danger" ? "alert" : undefined}>
-      <Icon className={`mt-0.5 size-4 shrink-0 ${c[2]}`} aria-hidden />
-      <div className="min-w-0 leading-relaxed">
-        {title && <p className="font-semibold">{title}</p>}
-        {children}
+    <Dismissible id={id}>
+      <div className={`flex gap-3 rounded-xl p-3.5 text-sm ring-1 ring-inset ${c[0]}`} role={tone === "danger" ? "alert" : undefined}>
+        <Icon className={`mt-0.5 size-4 shrink-0 ${c[2]}`} aria-hidden />
+        <div className="min-w-0 leading-relaxed">
+          {title && <p className="font-semibold">{title}</p>}
+          {children}
+        </div>
       </div>
-    </div>
+    </Dismissible>
   );
 }
 

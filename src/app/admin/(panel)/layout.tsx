@@ -66,13 +66,19 @@ export default async function Panel({ children }: { children: React.ReactNode })
           {delayed.map((n) => (
             <Banner key={n} tone="danger" title={`Network check delayed: ${NETWORK_INFO[n].name}`}>Payments on this network are not being confirmed. See Dashboard → Blockchain checks.</Banner>
           ))}
-          {changes.map((c) => (
-            <Banner key={c.id} tone="warn" title={`Deposit address change: ${NETWORK_INFO[c.network as NetworkCode].name} (${c.networkMode})`}>
-              <span className="font-mono text-xs break-all">{c.newAddress}</span> ·{" "}
-              {c.cancelledAt ? `cancelled ${fmtIST(c.cancelledAt)}` : c.appliedAt ? `took effect ${fmtIST(c.appliedAt)}` : `takes effect ${fmtIST(c.effectiveAt)}`}
-              {!c.cancelledAt && !c.appliedAt && <> · <Link className="font-semibold underline" href="/admin/settings#address">Review or cancel</Link></>}
-            </Banner>
-          ))}
+          {/* Cancelled changes need no warning. Waiting ones stay until they apply; applied
+              ones (shown for 24 h so every admin notices) can be dismissed. */}
+          {changes
+            .filter((c) => !c.cancelledAt)
+            .map((c) => {
+              const banner = (
+                <Banner tone="warn" title={`Deposit address ${c.appliedAt ? "changed" : "change pending"}: ${NETWORK_INFO[c.network as NetworkCode].name} (${c.networkMode})`}>
+                  <span className="font-mono text-xs break-all">{c.newAddress}</span> · {c.appliedAt ? `took effect ${fmtIST(c.appliedAt)}` : `takes effect ${fmtIST(c.effectiveAt)}`}
+                  {c.appliedAt ? <> · <Link className="font-semibold underline" href="/admin/settings">Not you? Check it</Link></> : <> · <Link className="font-semibold underline" href="/admin/settings#address">Review or cancel</Link></>}
+                </Banner>
+              );
+              return <div key={c.id}>{banner}</div>;
+            })}
         </div>
         <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6">{children}</main>
         <p className="px-4 pb-6 text-center text-xs text-slate-400">Sessions end after 30 minutes without activity.</p>

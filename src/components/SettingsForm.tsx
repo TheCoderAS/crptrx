@@ -29,10 +29,13 @@ export function SettingsForm({ children, action = "/api/admin/settings" }: { chi
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    // Built once, before the fieldset is disabled (disabled fields are left out of FormData),
+    // so the retry after the 2FA prompt still carries every setting.
+    const base = JSON.parse(body()) as Record<string, unknown>;
     setBusy(true);
     setMsg(null);
     try {
-      const send = (totp?: string) => fetch(action, { method: "POST", headers: { "content-type": "application/json" }, body: body(totp) });
+      const send = (totp?: string) => fetch(action, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(totp ? { ...base, totp } : base) });
       let res = await send();
       let data = await res.json().catch(() => ({}));
       let prompted = false;

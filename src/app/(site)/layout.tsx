@@ -5,6 +5,7 @@ import { currentUser } from "@/server/auth/session";
 import { getSettings, isRealValue } from "@/server/settings";
 import { companyName } from "@/server/contact";
 import { Suspense } from "react";
+import { Dismissible } from "@/components/Dismissible";
 import { LivePulse } from "@/components/LivePulse";
 import { NavProgress } from "@/components/NavProgress";
 import { LogoutButton } from "@/components/LogoutButton";
@@ -27,7 +28,9 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       {user && <LivePulse url="/api/me/pulse" everyMs={30_000} />}
       <Suspense fallback={null}><NavProgress /></Suspense>
       {s.network_mode === "TEST" && (
-        <div className="bg-amber-100 px-4 py-1.5 text-center text-xs font-medium text-amber-900">Test mode: test networks only. No real USDT or rupees move.</div>
+        <Dismissible id="test-mode-strip">
+          <div className="bg-amber-100 px-4 py-1.5 text-center text-xs font-medium text-amber-900">Test mode: test networks only. No real USDT or rupees move.</div>
+        </Dismissible>
       )}
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 backdrop-blur">
         <div className={`mx-auto flex h-16 ${width} items-center justify-between gap-3 px-4`}>
