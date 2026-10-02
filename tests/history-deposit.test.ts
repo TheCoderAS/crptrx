@@ -57,7 +57,23 @@ describe("deposit address protection (spec 10.3, M8)", () => {
     if (flipped !== good && flipped.toLowerCase() !== flipped) await expect(requestAddressChange("BSC", flipped, SUPER)).rejects.toThrow();
   });
 
-  it("takes effect only after 1 hour, and the cancel link works", async () => {
+  it("applies at once by default (no wait set)", async () => {
+    const newAddr = randBsc();
+    const r = await requestAddressChange("BSC", newAddr, SUPER);
+    expect(r.immediate).toBe(true);
+    expect(await getActiveDepositAddress("BSC")).toBe(newAddr);
+  });
+
+  it("the first address applies at once even with a wait set", async () => {
+    await writeSetting("address_change_delay_minutes", 60, { type: "SYSTEM", id: null });
+    await writeSetting("deposit_address", { TEST: { TRON: ADDR.TRON, BSC: "" }, LIVE: { TRON: "", BSC: "" } }, { type: "SYSTEM", id: null });
+    const newAddr = randBsc();
+    expect((await requestAddressChange("BSC", newAddr, SUPER)).immediate).toBe(true);
+    expect(await getActiveDepositAddress("BSC")).toBe(newAddr);
+  });
+
+  it("with a 60-minute wait: takes effect only after it, and the cancel link works", async () => {
+    await writeSetting("address_change_delay_minutes", 60, { type: "SYSTEM", id: null });
     const newAddr = randBsc();
     const { change, token } = await requestAddressChange("BSC", newAddr, SUPER);
     expect(change.effectiveAt.getTime() - Date.now()).toBeGreaterThan(59 * 60_000);
@@ -76,7 +92,7 @@ describe("deposit address protection (spec 10.3, M8)", () => {
 
   it("old orders keep their saved address", async () => {
     const { order } = await makeOrder("TRON");
-    await requestAddressChange("TRON", randTron(), SUPER);
+    await requestAddressChange("TRON", randTron(), SUPER); // instant by default
     await applyDueAddressChanges(new Date(Date.now() + 61 * 60_000));
     expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).depositAddress).toBe(ADDR.TRON);
   });

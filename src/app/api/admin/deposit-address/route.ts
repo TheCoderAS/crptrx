@@ -1,6 +1,6 @@
 import { api, body } from "@/server/http";
 import { adminCtx, recheck2fa } from "@/server/auth/guard";
-import { ADDRESS_CHANGE_DELAY_MS, requestAddressChange } from "@/server/deposit";
+import { requestAddressChange } from "@/server/deposit";
 import { env } from "@/server/env";
 import { AppError } from "@/server/errors";
 import { notifyAllAdmins } from "@/server/notify";
@@ -14,11 +14,18 @@ export const POST = api(async (req: Request) => {
   // The confirmation step makes the admin re-type the network code, so the wrong field can't be changed by mistake.
   if (String(b.confirmNetwork ?? "").trim().toUpperCase() !== b.network) throw new AppError(`Type ${b.network} to confirm which network you are changing.`);
   await recheck2fa(a, b.totp, "deposit_address");
-  const { change, token } = await requestAddressChange(b.network, String(b.address ?? ""), a.actor, a.ip);
+  const { change, token, immediate } = await requestAddressChange(b.network, String(b.address ?? ""), a.actor, a.ip);
   const name = NETWORK_INFO[b.network].name;
+  if (immediate) {
+    await notifyAllAdmins(
+      `SECURITY: ${name} deposit address set`,
+      `${a.admin.name} (${a.admin.email}) set the ${name} deposit address (${change.networkMode} mode).\n\nOld: ${change.oldAddress ?? "(none)"}\nNew: ${change.newAddress}\n\nIt is active now. If you did not expect this, sign in and set the correct address.`,
+    );
+    return { message: `Saved. The ${name} address is active now.` };
+  }
   await notifyAllAdmins(
     `SECURITY: ${name} deposit address change requested`,
-    `${a.admin.name} (${a.admin.email}) asked to change the ${name} deposit address (${change.networkMode} mode).\n\nOld: ${change.oldAddress ?? "(none)"}\nNew: ${change.newAddress}\n\nIt takes effect at ${fmtIST(change.effectiveAt)} (in ${ADDRESS_CHANGE_DELAY_MS / 60000} minutes).\n\nIf you did not expect this, cancel it now:\n${env.appUrl}/admin/address-change/cancel?token=${token}`,
+    `${a.admin.name} (${a.admin.email}) asked to change the ${name} deposit address (${change.networkMode} mode).\n\nOld: ${change.oldAddress ?? "(none)"}\nNew: ${change.newAddress}\n\nIt takes effect at ${fmtIST(change.effectiveAt)} (in ${Math.round((change.effectiveAt.getTime() - Date.now()) / 60000)} minutes).\n\nIf you did not expect this, cancel it now:\n${env.appUrl}/admin/address-change/cancel?token=${token}`,
   );
   return { message: `Requested. The new ${name} address takes effect at ${fmtIST(change.effectiveAt)}. All admins were emailed a cancel link.` };
 });

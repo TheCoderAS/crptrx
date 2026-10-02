@@ -81,6 +81,9 @@ export const SETTING_DEFAULTS = {
   bsc_initial_lookback_blocks: 200,
   tron_initial_lookback_seconds: 3600,
   admin_ip_allowlist: [] as string[],
+  // Wait before a NEW deposit address replaces the current one, so other admins can cancel a
+  // change made from a stolen admin login. 0 = instant. Recommended for Live: 60.
+  address_change_delay_minutes: 0,
   sms_notifications_enabled: false,
 };
 
@@ -136,6 +139,7 @@ export const SETTING_LABELS: Partial<Record<string, string>> = {
   bsc_scan_range: "BSC blocks per request",
   bsc_initial_lookback_blocks: "BSC look-back blocks",
   tron_initial_lookback_seconds: "Tron look-back seconds",
+  address_change_delay_minutes: "Wait before a new deposit address applies",
 };
 
 /** Keys an admin may edit through the generic settings screen (deposit address has its own flow). */
@@ -189,6 +193,7 @@ export const EDITABLE_KEYS: SettingKey[] = [
   "bsc_initial_lookback_blocks",
   "tron_initial_lookback_seconds",
   "admin_ip_allowlist",
+  "address_change_delay_minutes",
   "sms_notifications_enabled",
 ];
 
@@ -229,6 +234,11 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
     "bsc_initial_lookback_blocks",
     "tron_initial_lookback_seconds",
   ];
+  if (key === "address_change_delay_minutes") {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0 || n > 1440) throw new AppError(`${SETTING_LABELS[key]}: enter whole minutes from 0 (instant) to 1440`);
+    return n;
+  }
   if (intKeys.includes(key)) {
     const n = Number(value);
     if (!Number.isInteger(n) || n < 1) throw new AppError(`${SETTING_LABELS[key] ?? key}: enter a whole number of 1 or more`);

@@ -6,7 +6,7 @@ import { refreshAutoRate } from "@/server/rateFeed";
 
 // Settings that can let money go to the wrong place or lock admins out.
 // Everything else saves without a 2FA code.
-const SENSITIVE: SettingKey[] = ["test_token_contract", "admin_ip_allowlist"];
+const SENSITIVE: SettingKey[] = ["test_token_contract", "admin_ip_allowlist", "address_change_delay_minutes"];
 
 /**
  * Save one group of settings. Nested fields arrive as "key.SUB" (e.g.

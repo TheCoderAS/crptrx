@@ -19,9 +19,19 @@ export function api<A extends unknown[]>(fn: (...args: A) => Promise<unknown>) {
   };
 }
 
+/** Reads an upload form. A cut-off or broken body becomes a clear message instead of a 500. */
+export async function formData(req: Request): Promise<FormData> {
+  try {
+    return await req.formData();
+  } catch (e) {
+    console.error(`[upload] unreadable form body (content-length ${req.headers.get("content-length") ?? "?"}): ${(e as Error).message}`);
+    throw new AppError("We couldn't read your upload. Each file must be 200 KB or smaller (JPG, PNG or PDF). Please try again.", 413, "UPLOAD_UNREADABLE");
+  }
+}
+
 export async function body<T = Record<string, unknown>>(req: Request): Promise<T> {
   const ct = req.headers.get("content-type") ?? "";
   if (ct.includes("application/json")) return (await req.json().catch(() => ({}))) as T;
-  if (ct.includes("form")) return Object.fromEntries((await req.formData()).entries()) as T;
+  if (ct.includes("form")) return Object.fromEntries((await formData(req)).entries()) as T;
   return {} as T;
 }

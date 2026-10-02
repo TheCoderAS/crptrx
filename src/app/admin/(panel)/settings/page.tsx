@@ -203,15 +203,23 @@ export default async function SettingsPage() {
             alert: pending.length > 0,
             content: (
               <>
-                <Banner tone="warn">A wrong address sends payments to someone else. Changes take effect after 1 hour and every admin gets a cancel link.</Banner>
-                {NETWORK_CODES.map((n) => (
+                <Banner tone="warn">
+                  A wrong address sends payments to someone else. Every admin is emailed about each change.{" "}
+                  {s.address_change_delay_minutes > 0
+                    ? `Replacing an address takes effect after ${s.address_change_delay_minutes} minutes, so the others can cancel it; setting the first one applies at once.`
+                    : "Changes apply at once. For Live, set a wait under Holds & access so a stolen admin login can't redirect payments instantly."}
+                </Banner>
+                {NETWORK_CODES.map((n) => {
+                  const current = s.deposit_address[mode][n];
+                  const waits = !!current && s.address_change_delay_minutes > 0; // same rule as addressChangeDelayMs()
+                  return (
                   <section key={n} className="card space-y-3 p-4 sm:p-4">
                     <div className="flex items-center gap-2">
                       <NetworkMark network={n} size={22} />
                       <h2 className="flex-1 text-sm font-semibold text-slate-900">{NETWORK_INFO[n].name}</h2>
                       <span className="text-xs text-slate-500">{mode === "LIVE" ? "Live" : "Test"}</span>
                     </div>
-                    <p className="rounded-lg bg-slate-50 px-3 py-2 font-mono text-xs break-all text-slate-800">{s.deposit_address[mode][n] || "Not set"}</p>
+                    <p className="rounded-lg bg-slate-50 px-3 py-2 font-mono text-xs break-all text-slate-800">{current || "Not set"}</p>
                     {pending.filter((p) => p.network === n && p.networkMode === mode).map((p) => (
                       <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
                         <span className="flex-1">Changing to <code className="break-all">{p.newAddress}</code> at {fmtIST(p.effectiveAt)}</span>
@@ -219,16 +227,17 @@ export default async function SettingsPage() {
                       </div>
                     ))}
                     <details className="group">
-                      <summary className="cursor-pointer text-sm font-medium text-brand-700">Change address</summary>
-                      <ApiForm action="/api/admin/deposit-address" className="mt-2 grid gap-2 sm:grid-cols-[1fr_9rem_auto]" confirm={`Change the ${NETWORK_INFO[n].name} deposit address? It takes effect in 1 hour.`}>
+                      <summary className="cursor-pointer text-sm font-medium text-brand-700">{current ? "Change address" : "Set address"}</summary>
+                      <ApiForm action="/api/admin/deposit-address" className="mt-2 grid gap-2 sm:grid-cols-[1fr_9rem_auto]" confirm={waits ? `Change the ${NETWORK_INFO[n].name} deposit address? It takes effect in ${s.address_change_delay_minutes} minutes.` : `Set the ${NETWORK_INFO[n].name} deposit address? It applies at once.`}>
                         <input type="hidden" name="network" value={n} />
                         <input name="address" aria-label={`New ${n} deposit address`} required className="input py-2 font-mono text-sm" placeholder={n === "TRON" ? "T…" : "0x…"} />
                         <input name="confirmNetwork" aria-label="Type the network to confirm" required className="input py-2 text-sm" placeholder={`Type ${n}`} />
-                        <button className="btn-danger">Request</button>
+                        <button className="btn-danger">{waits ? "Request" : "Save"}</button>
                       </ApiForm>
                     </details>
                   </section>
-                ))}
+                  );
+                })}
               </>
             ),
           },
@@ -349,6 +358,15 @@ export default async function SettingsPage() {
                 <Group title="Hold reasons" icon={<ShieldAlert />} tile="tile-amber" note="One per line; shown to customers">
                   <SettingRow label="Reasons" htmlFor="hold_reasons" wide>
                     <textarea id="hold_reasons" name="hold_reasons" rows={6} className="input text-sm" defaultValue={s.hold_reasons.join("\n")} />
+                  </SettingRow>
+                </Group>
+                <Group title="Deposit address safety" icon={<Wallet />} tile="tile-violet" note="Changing it asks for your 2FA code">
+                  <SettingRow
+                    label="Wait before a new address applies"
+                    htmlFor="address_change_delay_minutes"
+                    hint="0 = instant. With a wait, every admin is emailed a cancel link first, so a stolen admin login can't redirect customer payments straight away. Recommended for Live: 60."
+                  >
+                    <UnitInput name="address_change_delay_minutes" value={s.address_change_delay_minutes} unit="min" type="number" />
                   </SettingRow>
                 </Group>
                 <Group title="Admin IP allow-list" icon={<LockKeyhole />} tile="tile-rose" note="Empty = any address. Changing it asks for your 2FA code">

@@ -1,4 +1,4 @@
-import { api } from "@/server/http";
+import { api, formData } from "@/server/http";
 import { requireUser } from "@/server/auth/session";
 import { prisma } from "@/server/db";
 import { AppError } from "@/server/errors";
@@ -10,7 +10,7 @@ import { env } from "@/server/env";
 export const POST = api(async (req: Request) => {
   const user = await requireUser();
   await rateLimit(`support:${user.id}`, 5, 3600);
-  const fd = await req.formData();
+  const fd = await formData(req);
   const message = String(fd.get("message") ?? "").trim();
   if (message.length < 5) throw new AppError("Please describe the problem.");
   if (message.length > 4000) throw new AppError("Please keep the message under 4000 characters.");
