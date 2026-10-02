@@ -6,7 +6,7 @@ import { listWallets, MAX_WALLETS_PER_NETWORK } from "@/server/wallets";
 import { NETWORK_CODES, NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { ApiForm } from "@/components/ApiForm";
 import { WalletRemoveButton } from "@/components/WalletRemoveButton";
-import { Banner, EmptyState, NetworkBadge, PageHeader, Section } from "@/components/ui";
+import { BackLink, Banner, EmptyState, NetworkBadge, PageHeader, Section } from "@/components/ui";
 
 export const metadata = { title: "Your wallets", robots: { index: false, follow: false } };
 
@@ -17,6 +17,7 @@ export default async function Wallets() {
   const networks = NETWORK_CODES.filter((n) => s.network_enabled[n]);
   return (
     <div className="space-y-6">
+      <BackLink href="/account">Account</BackLink>
       <PageHeader
         title="Your wallets"
         subtitle={mode === "REQUIRED" ? "Send USDT only from a wallet listed here." : "The wallets you send USDT from."}

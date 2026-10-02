@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Info, ShieldAlert } from "lucide-react";
 import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
@@ -247,11 +248,14 @@ export function Timeline({ events }: { events: { id: string; toStatus: string; c
   );
 }
 
+/** "← Orders": the way back from a detail screen to the list it came from. */
 export function BackLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <a href={href} className="mb-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
-      <ArrowLeft className="size-4" aria-hidden /> {children}
-    </a>
+    <div className="-mb-1">
+      <Link href={href} className="-ml-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
+        <ArrowLeft className="size-4" aria-hidden /> {children}
+      </Link>
+    </div>
   );
 }
 

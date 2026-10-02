@@ -15,7 +15,7 @@ export default async function AdminLogin() {
         <div className="mb-8 flex justify-center"><Logo name={s.brand_name} src={logoSrc(s)} inverted size="lg" /></div>
         <ApiForm action="/api/admin/auth/login" className="card space-y-4 p-6 sm:p-8">
           <div>
-            <h1 className="text-lg font-semibold">Admin sign-in</h1>
+            <h1 className="text-lg font-semibold text-slate-900">Admin sign-in</h1>
             <p className="text-sm text-slate-500">Step 1 of 2: password</p>
           </div>
           <div>

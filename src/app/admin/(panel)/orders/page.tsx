@@ -6,6 +6,7 @@ import { prisma } from "@/server/db";
 import { fmtInr, fmtUsdt } from "@/server/money";
 import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
 import { fmtIST } from "@/lib/time";
+import { FilterMenu } from "@/components/FilterMenu";
 import { NetworkBadge, PageHeader, StatusPill, statusLabel } from "@/components/ui";
 
 // Everything waiting on an admin: new payments, reviews, holds and approved orders still to be paid.
@@ -26,22 +27,23 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
   ]);
   const pages = Math.max(1, Math.ceil(total / PER_PAGE));
   const pageHref = (n: number) => `/admin/orders?${new URLSearchParams({ ...(status ? { status } : {}), ...(q ? { q } : {}), page: String(n) })}`;
-  const tab = (key: string, label: string, active: boolean) => (
-    <Link key={key} href={`/admin/orders?status=${key}`} className={`chip ${active ? "chip-active" : "bg-white"}`}>{label}</Link>
-  );
   return (
     <div className="space-y-4">
       <PageHeader title="Orders" subtitle={queue ? "Waiting on you, oldest first." : `${total} order${total === 1 ? "" : "s"}, newest first.`} icon={<ListOrdered className="size-6" />} />
-      <div className="flex flex-wrap gap-2">
-        <Link href="/admin/orders" className={`chip ${!status ? "chip-active" : "bg-white"}`}>Work waiting</Link>
-        {all.map((s) => tab(s, statusLabel(s), status === s))}
-        {tab("ALL", "All", status === "ALL")}
+      <div className="flex flex-wrap items-center gap-2">
+        <form className="flex min-w-0 flex-1 gap-2">
+          <input type="hidden" name="status" value={status ?? "ALL"} />
+          <input name="q" defaultValue={q} aria-label="Search orders" className="input max-w-md" placeholder="Order ID, TxID, UTR or email" />
+          <button className="btn-secondary">Search</button>
+        </form>
+        <FilterMenu
+          items={[
+            { href: "/admin/orders", label: "Work waiting", active: !status },
+            { href: "/admin/orders?status=ALL", label: "All orders", active: status === "ALL" },
+            ...all.map((s) => ({ href: `/admin/orders?status=${s}`, label: statusLabel(s), active: status === s })),
+          ]}
+        />
       </div>
-      <form className="flex gap-2">
-        <input type="hidden" name="status" value={status ?? "ALL"} />
-        <input name="q" defaultValue={q} aria-label="Search orders" className="input max-w-md" placeholder="Order ID, TxID, UTR or email" />
-        <button className="btn-secondary">Search</button>
-      </form>
       <div className="card overflow-x-auto">
         {orders.length === 0 ? <p className="muted">No orders.</p> : (
           <table className="table">

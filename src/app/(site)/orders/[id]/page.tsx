@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
-import { ArrowLeft, CheckCircle2, Download, Hourglass, PauseCircle, XCircle } from "lucide-react";
+import { CheckCircle2, Download, Hourglass, PauseCircle, XCircle } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { D, fmtInr, fmtUsdt } from "@/server/money";
@@ -14,7 +14,7 @@ import { ApiForm } from "@/components/ApiForm";
 import { CopyButton } from "@/components/CopyButton";
 import { SupportPanel } from "@/components/SupportPanel";
 import { AutoRefresh, Countdown } from "@/components/Countdown";
-import { Banner, NetworkBadge, Row, Section, StatusPill, Steps, Timeline } from "@/components/ui";
+import { BackLink, Banner, NetworkBadge, Row, Section, StatusPill, Steps, Timeline } from "@/components/ui";
 
 export const metadata = { title: "Order", robots: { index: false, follow: false } };
 
@@ -96,7 +96,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       {["QUOTE_READY", "PAYMENT_SUBMITTED"].includes(o.status) && <AutoRefresh />}
       {["PAYMENT_CONFIRMED", "UNDER_REVIEW", "APPROVED"].includes(o.status) && <AutoRefresh everyMs={60_000} />}
       <div className="flex items-center justify-between gap-3">
-        <Link href="/orders" className="btn-ghost -ml-3 px-3"><ArrowLeft className="size-4" aria-hidden /> Orders</Link>
+        <BackLink href="/orders">Orders</BackLink>
         <span className="text-xs text-slate-500">{o.id}</span>
       </div>
 

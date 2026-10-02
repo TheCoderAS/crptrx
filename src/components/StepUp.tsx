@@ -36,7 +36,7 @@ function StepUpDialog({ error, onDone }: { error: string | null; onDone: (code: 
     return () => window.removeEventListener("keydown", esc);
   }, [onDone]);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="stepup-title">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="stepup-title">
       {/* A div, not a form: this can open inside another form. */}
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-[var(--shadow-float)]">
         <span className="icon-tile tile-blue"><ShieldCheck className="size-5" aria-hidden /></span>

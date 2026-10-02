@@ -38,10 +38,13 @@ export function DownloadForm({ action, children, className }: { action: string; 
     }
   }
   return (
-    <form onSubmit={submit} className={className}>
-      <fieldset disabled={busy} className="contents">{children}</fieldset>
+    <form onSubmit={submit} aria-busy={busy}>
+      {/* Layout classes go on the fieldset: a display:contents wrapper breaks space-y-* spacing. */}
+      <fieldset disabled={busy} className={className}>
+        {children}
+        {err && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200 ring-inset">{err}</p>}
+      </fieldset>
       {stepUp.prompt}
-      {err && <p role="alert" className="mt-2 rounded bg-red-50 p-2 text-sm text-red-800">{err}</p>}
     </form>
   );
 }
