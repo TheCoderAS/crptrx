@@ -41,6 +41,15 @@ migrate() {
   echo "Could not run migrations" >&2; exit 1
 }
 
+seed() {
+  # Retry: during a redeploy the old copy may still hold database connections for a moment.
+  for i in $(seq 1 10); do
+    if npx tsx prisma/seed.ts; then return 0; fi
+    echo "Seed failed, retrying ($i/10)..."; sleep 3
+  done
+  echo "Could not seed the database" >&2; exit 1
+}
+
 # Start node directly (no npx/npm wrapper processes): saves ~200 MB, which
 # matters on small hosts such as Render's free 512 MB plan.
 WEB="node node_modules/next/dist/bin/next start -p ${PORT:-3000}"
@@ -49,7 +58,7 @@ WORKER="node --import tsx src/worker/index.ts"
 case "${1:-web}" in
   web)
     migrate
-    npx tsx prisma/seed.ts
+    seed
     exec $WEB
     ;;
   worker)
@@ -58,12 +67,15 @@ case "${1:-web}" in
     ;;
   all)
     migrate
-    npx tsx prisma/seed.ts
-    # Blockchain watcher in the background, restarted if it ever exits.
-    ( while true; do $WORKER; echo "worker exited, restarting in 5s" >&2; sleep 5; done ) &
+    seed
+    # One container, two processes sharing the database limit: website 3
+    # connections, watcher 2. Old and new copies
+    # overlapping during a redeploy still use at most 10 of Supabase's 15.
+    ( while true; do DB_POOL_SIZE="${DB_POOL_SIZE_WORKER:-2}" $WORKER; echo "worker exited, restarting in 5s" >&2; sleep 5; done ) &
+    export DB_POOL_SIZE="${DB_POOL_SIZE_WEB:-3}"
     exec $WEB
     ;;
   migrate) migrate ;;
-  seed) npx tsx prisma/seed.ts ;;
+  seed) seed ;;
   *) exec "$@" ;;
 esac
