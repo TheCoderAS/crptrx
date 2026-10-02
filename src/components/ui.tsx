@@ -24,7 +24,8 @@ export function Logo({ name, inverted, size = "md", src }: { name: string; inver
         </svg>
       </span>
       )}
-      <span className={`truncate font-semibold tracking-tight whitespace-nowrap ${size === "lg" ? "text-xl" : "text-[17px]"} ${inverted ? "text-white" : "text-slate-900"}`}>{name}</span>
+      {/* Nudged down: the line box keeps room for descenders, so capitals sit above the mark's middle. */}
+      <span className={`translate-y-[1.5px] truncate leading-tight font-semibold tracking-tight whitespace-nowrap ${size === "lg" ? "text-xl" : "text-[17px]"} ${inverted ? "text-white" : "text-slate-900"}`}>{name}</span>
     </span>
   );
 }
@@ -251,7 +252,7 @@ export function Timeline({ events }: { events: { id: string; toStatus: string; c
 /** "← Orders": the way back from a detail screen to the list it came from. */
 export function BackLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <div className="-mb-1">
+    <div className="pb-1">
       <Link href={href} className="-ml-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
         <ArrowLeft className="size-4" aria-hidden /> {children}
       </Link>

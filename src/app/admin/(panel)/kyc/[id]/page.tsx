@@ -1,4 +1,5 @@
 import { ScanFace } from "lucide-react";
+import { DocPreview } from "@/components/DocPreview";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -37,10 +38,8 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
         </div>
         <div className="card space-y-2">
           <h2 className="h2">Documents</h2>
-          <p className="muted">Each opens a private link valid for 5 minutes. Every view is logged with your name.</p>
-          {docs.map(([k, label]) => (
-            <a key={k} href={`/api/admin/kyc/${s.id}/doc?doc=${k}`} target="_blank" rel="noreferrer" className="btn-secondary w-full justify-start">{label}</a>
-          ))}
+          <p className="muted">Opens here, on a private link valid for 5 minutes. Every view is logged with your name.</p>
+          <DocPreview docs={docs.map(([k, label]) => ({ label, href: `/api/admin/kyc/${s.id}/doc?doc=${k}` }))} />
           <Banner tone="warn">Decline if the Aadhaar is NOT masked (all 12 digits visible). We must never keep a full Aadhaar number.</Banner>
         </div>
       </div>

@@ -10,7 +10,7 @@ const csp = [
   "img-src 'self' data: blob: https://lh3.googleusercontent.com",
   "font-src 'self' data:",
   "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com",
-  "frame-src https://*.firebaseapp.com https://*.web.app https://accounts.google.com https://apis.google.com",
+  "frame-src 'self' https://*.firebaseapp.com https://*.web.app https://accounts.google.com https://apis.google.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -31,7 +31,19 @@ const config: NextConfig = {
   serverExternalPackages: ["@prisma/client", "bcryptjs"],
   experimental: { serverActions: { bodySizeLimit: "25mb" } },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/((?!api/files$).*)", headers: securityHeaders },
+      // Private files open inside the app's own preview (PDFs in a frame), so only
+      // our own pages may frame them. The page itself runs nothing.
+      {
+        source: "/api/files",
+        headers: [
+          { key: "Content-Security-Policy", value: "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          ...securityHeaders.filter((h) => !["Content-Security-Policy", "X-Frame-Options"].includes(h.key)),
+        ],
+      },
+    ];
   },
 };
 

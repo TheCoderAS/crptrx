@@ -1,10 +1,20 @@
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { env } from "@/server/env";
-import { putFile, readSignedFile, signedUrl } from "@/server/storage";
+import { checkUpload, putFile, readSignedFile, signedUrl } from "@/server/storage";
 
 process.env.STORAGE_LOCAL_DIR = `${tmpdir()}/usdt-test-uploads`;
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(8)]);
+
+describe("upload limits", () => {
+  it("takes JPG, PNG and PDF up to 200 KB, nothing bigger", () => {
+    const png = (size: number) => Buffer.concat([PNG.subarray(0, 8), Buffer.alloc(size - 8)]);
+    expect(checkUpload(png(200 * 1024), "image/png")).toBe("image/png");
+    expect(() => checkUpload(png(200 * 1024 + 1), "image/png")).toThrow(/200 KB/);
+    expect(checkUpload(Buffer.from("%PDF-1.4 test"), "application/pdf")).toBe("application/pdf");
+    expect(() => checkUpload(Buffer.from("GIF89a....."), "image/gif")).toThrow(/JPG, PNG or PDF/);
+  });
+});
 
 describe("private file links", () => {
   it("opens through the app's own signed link, and only with a valid signature", async () => {

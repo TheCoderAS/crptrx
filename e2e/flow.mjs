@@ -74,10 +74,13 @@ console.log("kyc submitted");
 await admin.goto(BASE + "/admin/reviews?tab=kyc");
 await admin.click("table a");
 await expectText(admin, "Test Kumar Sharma");
-const [doc] = await Promise.all([admin.waitForEvent("popup"), admin.click("text=PAN card")]);
-await doc.waitForLoadState();
-console.log("doc view opened:", doc.url().includes("/api/files?") ? "signed link" : doc.url());
-await doc.close();
+// Documents open in an in-app viewer, on a signed link that actually loads.
+await admin.click("button:has-text('PAN card')");
+const docImg = admin.locator("[role=dialog] img");
+await docImg.waitFor();
+await admin.waitForFunction(() => { const i = document.querySelector("[role=dialog] img"); return i && i.complete && i.naturalWidth > 0; });
+console.log("doc view opened:", (await docImg.getAttribute("src")).startsWith("/api/files?") ? "signed link, in app" : await docImg.getAttribute("src"));
+await admin.keyboard.press("Escape");
 await admin.fill("#reason-changes", "Selfie is blurry");
 await admin.click("button:has-text('Ask for changes')");
 await admin.waitForURL("**/admin/reviews");
