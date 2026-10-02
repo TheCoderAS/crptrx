@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { brandName } from "@/lib/brand";
+import { THEME_SCRIPT } from "@/components/ThemeToggle";
 import { themeCss } from "@/server/brand";
 import { getSettings, SETTING_DEFAULTS } from "@/server/settings";
 import { siteUrl } from "@/lib/seo";
@@ -37,8 +38,10 @@ export async function generateViewport(): Promise<Viewport> {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const s = await brandSettings();
   return (
-    <html lang="en-IN">
+    // data-theme is set by THEME_SCRIPT before React loads, hence suppressHydrationWarning.
+    <html lang="en-IN" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         {/* Admin-chosen colours (Settings → Brand) */}
         <style dangerouslySetInnerHTML={{ __html: themeCss(s) }} />
       </head>
