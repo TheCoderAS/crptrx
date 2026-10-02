@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { adminCounts } from "@/server/adminCounts";
 import { CheckCircle2, ClipboardCheck, TriangleAlert } from "lucide-react";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
@@ -23,11 +24,8 @@ type Sort = (typeof SORTS)[number]["value"];
 
 export default async function Reviews({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; sort?: string }> }) {
   await adminOrLogin();
-  const [kycCount, payoutCount, autoCount] = await Promise.all([
-    prisma.kycSubmission.count({ where: { status: "SUBMITTED" } }),
-    prisma.payoutMethod.count({ where: { status: "PENDING", deletedAt: null } }),
-    prisma.kycSubmission.count({ where: AUTO_TO_CHECK }),
-  ]);
+  // Shared with the admin menu's counts (one query per page render).
+  const { kycSubmitted: kycCount, payout: payoutCount, kycAuto: autoCount } = await adminCounts();
   const sp = await searchParams;
   const requested = sp.tab as Tab | undefined;
   // Open the first tab that has work in it.

@@ -135,6 +135,7 @@ model KycSubmission {
   reviewer Admin? @relation(fields: [reviewerId], references: [id])
 
   @@index([status, submittedAt])
+  @@index([userId, submittedAt])
   @@map("kyc_submissions")
 }
 
@@ -160,6 +161,7 @@ model PayoutMethod {
   reviewer Admin? @relation(fields: [reviewerId], references: [id])
 
   @@index([status, createdAt])
+  @@index([userId])
   @@map("payout_methods")
 }
 
@@ -298,6 +300,7 @@ model SupportMessage {
   order Order? @relation(fields: [orderId], references: [id])
   user  User   @relation(fields: [userId], references: [id])
 
+  @@index([handled, createdAt])
   @@map("support_messages")
 }
 

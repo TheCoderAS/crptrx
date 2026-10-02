@@ -1,4 +1,5 @@
 import { cookies, headers } from "next/headers";
+import { cache } from "react";
 import type { Admin, User } from "@prisma/client";
 import { randomToken, sha256 } from "../crypto";
 import { prisma } from "../db";
@@ -51,7 +52,11 @@ export async function createSession(subjectType: "USER" | "ADMIN", subjectId: st
   await setCookie(subjectType === "ADMIN" ? ADMIN_COOKIE : USER_COOKIE, token, maxMs);
 }
 
-async function loadSession(cookieName: string, subjectType: string, idleMs: number) {
+// One session lookup per page render, shared by the layout and the page (React
+// cache; outside rendering, e.g. in API routes, it reads fresh every time).
+const loadSession = cache(loadSessionUncached);
+
+async function loadSessionUncached(cookieName: string, subjectType: string, idleMs: number) {
   const token = (await cookies()).get(cookieName)?.value;
   if (!token) return null;
   const s = await prisma.session.findUnique({ where: { id: sha256(token) } });
@@ -94,7 +99,8 @@ export async function markAdminStepUp() {
   if (token) await prisma.session.update({ where: { id: sha256(token) }, data: { stepUpAt: new Date() } });
 }
 
-export async function currentUser(): Promise<User | null> {
+export const currentUser = cache(currentUserUncached);
+async function currentUserUncached(): Promise<User | null> {
   const s = await loadSession(USER_COOKIE, "USER", USER_IDLE_MS);
   if (!s) return null;
   const u = await prisma.user.findUnique({ where: { id: s.subjectId } });
@@ -121,7 +127,8 @@ export async function pendingAdmin(): Promise<Admin | null> {
   return a && a.status === "ACTIVE" ? a : null;
 }
 
-export async function currentAdmin(): Promise<Admin | null> {
+export const currentAdmin = cache(currentAdminUncached);
+async function currentAdminUncached(): Promise<Admin | null> {
   const s = await loadSession(ADMIN_COOKIE, "ADMIN", ADMIN_IDLE_MS);
   if (!s || s.stage !== "FULL") return null;
   const a = await prisma.admin.findUnique({ where: { id: s.subjectId } });

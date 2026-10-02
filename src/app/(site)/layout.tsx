@@ -4,6 +4,9 @@ import { BadgeCheck, Lock, ShieldCheck } from "lucide-react";
 import { currentUser } from "@/server/auth/session";
 import { getSettings, isRealValue } from "@/server/settings";
 import { companyName } from "@/server/contact";
+import { Suspense } from "react";
+import { LivePulse } from "@/components/LivePulse";
+import { NavProgress } from "@/components/NavProgress";
 import { LogoutButton } from "@/components/LogoutButton";
 import { DesktopNav, MobileTabs } from "@/components/SiteNav";
 import { GuestNav } from "@/components/GuestNav";
@@ -21,6 +24,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
   const width = user ? "max-w-4xl" : "max-w-5xl";
   return (
     <div className="flex min-h-screen flex-col">
+      {user && <LivePulse url="/api/me/pulse" everyMs={30_000} />}
+      <Suspense fallback={null}><NavProgress /></Suspense>
       {s.network_mode === "TEST" && (
         <div className="bg-amber-100 px-4 py-1.5 text-center text-xs font-medium text-amber-900">Test mode: test networks only. No real USDT or rupees move.</div>
       )}

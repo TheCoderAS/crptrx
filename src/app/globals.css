@@ -160,3 +160,10 @@ body { @apply bg-slate-50 text-slate-900 antialiased; font-feature-settings: "cv
 @keyframes float-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 .animate-float { animation: float-y 6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .animate-float { animation: none; } }
+
+/* Top progress bar while the next page loads (NavProgress). */
+@keyframes nav-progress {
+  from { width: 0; }
+  10% { width: 35%; }
+  to { width: 90%; }
+}

@@ -44,7 +44,7 @@ export function Countdown({ until, variant = "inline" }: { until: string; varian
 export function AutoRefresh({ everyMs = 15000 }: { everyMs?: number }) {
   const router = useRouter();
   useEffect(() => {
-    const t = setInterval(() => router.refresh(), everyMs);
+    const t = setInterval(() => document.visibilityState === "visible" && router.refresh(), everyMs); // not while the tab is hidden
     return () => clearInterval(t);
   }, [everyMs, router]);
   return null;
