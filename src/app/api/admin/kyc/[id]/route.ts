@@ -9,5 +9,5 @@ export const POST = api(async (req: Request, ctx: Ctx) => {
   const { id } = await ctx.params;
   const b = await body<{ decision: "APPROVED" | "NEEDS_CHANGES" | "DECLINED"; reason?: string }>(req);
   await reviewKyc(id, b.decision, b.reason, a.actor);
-  return { redirect: "/admin/reviews" };
+  return { redirect: "/admin/reviews?tab=kyc" };
 });

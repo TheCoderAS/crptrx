@@ -10,7 +10,7 @@ export const ALLOWED_NEXT: Record<OrderStatus, OrderStatus[]> = {
   PAYMENT_SUBMITTED: ["PAYMENT_CONFIRMED", "ON_HOLD"],
   PAYMENT_CONFIRMED: ["UNDER_REVIEW", "ON_HOLD"],
   UNDER_REVIEW: ["APPROVED", "ON_HOLD"],
-  ON_HOLD: ["UNDER_REVIEW", "CLOSED_MANUAL"],
+  ON_HOLD: ["UNDER_REVIEW", "CLOSED_MANUAL", "PAYMENT_SUBMITTED"], // the last: re-checking a payment we couldn't find
   APPROVED: ["PAID", "ON_HOLD"],
   PAID: [],
   CLOSED_MANUAL: [],

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ChevronDown, Clock3, Mail, Network, PauseCircle, Percent, TimerReset, UserCheck, Wallet } from "lucide-react";
 import { getSettings } from "@/server/settings";
+import { NETWORK_CODES, NETWORK_INFO } from "@/lib/networks";
 import { JsonLd } from "@/components/JsonLd";
 import { ContactLinks } from "@/components/ContactLinks";
 import { contactChannels } from "@/server/contact";
@@ -15,14 +16,17 @@ export const metadata: Metadata = {
 export default async function Help() {
   const s = await getSettings();
   const channels = contactChannels(s);
+  const on = NETWORK_CODES.filter((n) => s.network_enabled[n]);
   const faqs: { icon: typeof Network; tile: string; q: string; a: string; extra?: React.ReactNode }[] = [
     {
       icon: Network, tile: "tile-blue", q: "Which network should I use?",
-      a: "Tron (TRC-20) or BNB Smart Chain (BEP-20). Pick the one your wallet or exchange supports, and choose the same network when you withdraw. On Binance, BEP-20 is usually easiest.",
-      extra: <div className="mt-3 flex flex-wrap gap-2"><NetworkBadge network="TRON" /><NetworkBadge network="BSC" /></div>,
+      a: on.length === 1
+        ? `We accept ${NETWORK_INFO[on[0]].name} right now. Choose the same network when you withdraw from your wallet or exchange.`
+        : "Tron (TRC-20) or BNB Smart Chain (BEP-20). Pick the one your wallet or exchange supports, and choose the same network when you withdraw. On Binance, BEP-20 is usually easiest.",
+      extra: <div className="mt-3 flex flex-wrap gap-2">{on.map((n) => <NetworkBadge key={n} network={n} />)}</div>,
     },
     { icon: PauseCircle, tile: "tile-rose", q: "I sent USDT on Ethereum or another network by mistake", a: "BNB Smart Chain addresses look exactly like Ethereum, Polygon and Arbitrum addresses, but those networks are different and we can't see payments on them. Contact support right away with your transaction ID. Recovery is manual and not guaranteed." },
-    { icon: Wallet, tile: "tile-violet", q: "Why is my amount something like 100.37 instead of 100?", a: "The few extra cents identify your payment. Send the exact amount shown, including decimals. From an exchange, make sure the amount that arrives is exact, since some exchanges deduct their fee." },
+    { icon: Wallet, tile: "tile-violet", q: "How do you know the payment is mine?", a: "We match it by the exact amount and the wallet it came from. Paying with the wallet button on your order, or adding your wallet under Account, gets it matched fastest. From an exchange, make sure the amount that arrives is exact, since some exchanges deduct their fee." },
     { icon: Clock3, tile: "tile-emerald", q: "How long does it take?", a: `The blockchain confirms your payment in minutes. Our team then does a safety check (${s.business_hours_text}), usually within ${s.review_hours} business hours, and pays you by bank transfer or UPI.` },
     { icon: Percent, tile: "tile-amber", q: "What are the fees and tax?", a: `${s.tax_percent}% of the gross amount is held back as TDS, as the law requires, and reported against your PAN. The platform fee is ${s.fee_percent}%${s.gst_enabled ? ` plus ${s.gst_percent}% GST on the fee` : ""}. Your quote shows every amount before you send.` },
     { icon: TimerReset, tile: "tile-slate", q: "What if my quote expires?", a: "If we don't receive your payment within 15 minutes, the quote expires and nothing is charged. If you already sent it, we'll still find it and contact you to re-confirm the rate." },

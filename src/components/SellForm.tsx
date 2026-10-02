@@ -28,7 +28,9 @@ function StepTitle({ n, title, done }: { n: number; title: string; done: boolean
 }
 
 export function SellForm(p: Props) {
-  const [network, setNetwork] = useState<NetworkCode | null>(null);
+  // Paused networks aren't shown at all; with only one left, it's picked for them.
+  const networks = NETWORK_CODES.filter((n) => p.available[n]);
+  const [network, setNetwork] = useState<NetworkCode | null>(networks.length === 1 ? networks[0] : null);
   const [amountType, setAmountType] = useState<"USDT" | "INR">("USDT");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState(p.methods.find((m) => m.isDefault)?.id ?? p.methods[0]?.id);
@@ -49,21 +51,21 @@ export function SellForm(p: Props) {
     <ApiForm action="/api/quotes" className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
       <div className="space-y-6">
         <section className="card">
-          <StepTitle n={1} title="Which network will you send on?" done={!!network} />
-          <div className="grid gap-3 sm:grid-cols-2">
-            {NETWORK_CODES.map((n) => {
-              const on = p.available[n];
+          <StepTitle n={1} title={networks.length === 1 ? "Send on this network" : "Which network will you send on?"} done={!!network} />
+          {networks.length === 0 && <p className="text-sm text-slate-600">Selling is paused right now. Please check back soon.</p>}
+          <div className={`grid gap-3 ${networks.length > 1 ? "sm:grid-cols-2" : ""}`}>
+            {networks.map((n) => {
               const picked = network === n;
               return (
                 <label
                   key={n}
-                  className={`relative flex cursor-pointer gap-3 rounded-xl p-4 ring-1 transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-600 ${picked ? "bg-brand-50/60 ring-2 ring-brand-600" : "ring-slate-200 hover:ring-slate-300"} ${!on ? "cursor-not-allowed opacity-50" : ""}`}
+                  className={`relative flex cursor-pointer gap-3 rounded-xl p-4 ring-1 transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-600 ${picked ? "bg-brand-50/60 ring-2 ring-brand-600" : "ring-slate-200 hover:ring-slate-300"}`}
                 >
-                  <input type="radio" name="network" value={n} required disabled={!on} checked={picked} onChange={() => setNetwork(n)} className="sr-only" />
+                  <input type="radio" name="network" value={n} required checked={picked} onChange={() => setNetwork(n)} className="sr-only" />
                   <NetworkMark network={n} size={36} />
                   <span className="min-w-0">
                     <span className="block font-semibold text-slate-900">{NETWORK_INFO[n].name}</span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{on ? NETWORK_INFO[n].hint : "Paused right now. Please use the other network."}</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{NETWORK_INFO[n].hint}</span>
                   </span>
                   {picked && <Check className="absolute top-3 right-3 size-4 text-brand-600" aria-hidden />}
                 </label>

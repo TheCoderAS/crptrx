@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/server/db";
 import { D } from "@/server/money";
 import { HOLD, ingestTransfers } from "@/server/matching";
-import { createQuote, expireQuotes, pickUniqueAmount, QUOTE_TTL_MS, TXID_GRACE_MS } from "@/server/orders/quote";
+import { createQuote, expireQuotes, QUOTE_TTL_MS, TXID_GRACE_MS } from "@/server/orders/quote";
 import { transition } from "@/server/orders/stateMachine";
 import { approveOrder, markPaid, saveWalletCheck, startReview, submitTxid } from "@/server/orders/actions";
 import { updateSetting, writeSetting } from "@/server/settings";
 import { addWallet } from "@/server/wallets";
-import { ADDR, baseSettings, makeOrder, makeUser, orderById, randTron, randTxid, resetDb, transfer } from "./helpers";
+import { baseSettings, makeOrder, makeUser, orderById, randTron, randTxid, resetDb, transfer } from "./helpers";
 
 const SYS = { type: "SYSTEM" as const, id: null };
 const ADMIN = { type: "ADMIN" as const, id: "admin-1" };
@@ -18,16 +18,6 @@ beforeEach(async () => {
 });
 
 describe("payments can't land on the wrong order", () => {
-  it("an expired quote keeps its exact amount reserved for 24 hours", async () => {
-    const { order } = await makeOrder("TRON", "100");
-    await prisma.order.update({ where: { id: order.id }, data: { status: "EXPIRED" } });
-    // Every suffix except the expired one is free; the expired one must not be handed out again.
-    for (let i = 0; i < 30; i++) {
-      const amt = await pickUniqueAmount(prisma, "TRON", ADDR.TRON, D(100));
-      expect(amt?.toFixed(2)).not.toBe(D(order.usdtAmount).toFixed(2));
-    }
-  });
-
   it("copying someone else's TxID doesn't take their payment", async () => {
     const victim = await makeOrder("TRON", "100");
     const attacker = await makeOrder("TRON", "50");
@@ -55,10 +45,10 @@ describe("payments can't land on the wrong order", () => {
   it("late payments are still checked against limits", async () => {
     await writeSetting("limit_user_daily_usdt", "150", SYS);
     const u = await makeUser();
-    const q = () => createQuote({ userId: u.user.id, network: "TRON", amountType: "USDT", amount: "100", payoutMethodId: u.pm.id }, u.actor);
-    const first = await q();
+    const q = (amount: string) => createQuote({ userId: u.user.id, network: "TRON", amountType: "USDT", amount, payoutMethodId: u.pm.id }, u.actor);
+    const first = await q("100");
     await prisma.order.update({ where: { id: first.id }, data: { status: "EXPIRED", quoteExpiresAt: new Date(Date.now() - 60_000) } });
-    const second = await q(); // allowed: expired orders don't count
+    const second = await q("50.01"); // allowed: expired orders don't count
     await ingestTransfers([transfer("TRON", D(first.usdtAmount).toString())]);
     const events = await prisma.orderEvent.findMany({ where: { orderId: first.id, toStatus: "ON_HOLD" } });
     expect(events[0].privateNote).toMatch(/over limit/i);

@@ -1,7 +1,8 @@
 import { api, body } from "@/server/http";
 import { adminCtx, recheck2fa } from "@/server/auth/guard";
 import { AppError } from "@/server/errors";
-import { notifyOrder } from "@/server/notify";
+import { notifyMatchEvents, notifyOrder } from "@/server/notify";
+import { recheckPayment } from "@/server/matching";
 import { addNote, approveOrder, closeManual, markPaid, putOnHold, releaseHold, saveWalletCheck, startReview } from "@/server/orders/actions";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -36,6 +37,9 @@ export const POST = api(async (req: Request, ctx: Ctx) => {
       break;
     case "close_manual":
       await closeManual(id, { resolutionNote: b.resolutionNote, returnTxid: b.returnTxid }, a.actor);
+      break;
+    case "recheck":
+      await notifyMatchEvents(await recheckPayment(id, a.actor));
       break;
     case "note":
       await addNote(id, b.note, a.actor);

@@ -105,12 +105,12 @@ export default async function Home() {
       </section>
 
       {/* Networks */}
-      <section aria-labelledby="networks" className="grid gap-4 sm:grid-cols-2">
+      <section aria-labelledby="networks" className={`grid gap-4 ${s.network_enabled.TRON && s.network_enabled.BSC ? "sm:grid-cols-2" : ""}`}>
         <h2 id="networks" className="sr-only">Supported networks</h2>
         {[
           { n: "TRON", name: "Tron · TRC-20", body: "Low fees. Popular on Indian exchanges.", grad: "from-red-500/10 via-white to-white", ring: "ring-red-100" },
           { n: "BSC", name: "BNB Smart Chain · BEP-20", body: "Easiest for Binance users.", grad: "from-amber-400/15 via-white to-white", ring: "ring-amber-100" },
-        ].map((x) => (
+        ].filter((x) => s.network_enabled[x.n as "TRON" | "BSC"]).map((x) => (
           <div key={x.n} className={`flex items-center gap-4 rounded-3xl bg-gradient-to-br ${x.grad} p-5 ring-1 ${x.ring}`}>
             <NetworkMark network={x.n} size={48} />
             <div>

@@ -28,13 +28,13 @@ export default async function Reviews({ searchParams }: { searchParams: Promise<
   const { kycSubmitted: kycCount, payout: payoutCount, kycAuto: autoCount } = await adminCounts();
   const sp = await searchParams;
   const requested = sp.tab as Tab | undefined;
-  // Open the first tab that has work in it.
-  const tab: Tab = requested ?? (kycCount ? "kyc" : payoutCount ? "payout" : autoCount ? "auto" : "kyc");
+  // Default: every identity check. The other tabs are the queues, with their counts.
+  const tab: Tab = requested && ["kyc", "payout", "auto", "history"].includes(requested) ? requested : "history";
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: "kyc", label: "Identity", count: kycCount },
+    { id: "history", label: "All identity" },
+    { id: "kyc", label: "Identity to review", count: kycCount },
     { id: "payout", label: "Bank & UPI", count: payoutCount },
     { id: "auto", label: "Auto-approved", count: autoCount },
-    { id: "history", label: "History" },
   ];
   const defaultSort: Sort = tab === "history" ? "new" : "old";
   const sort = pickSort(sp.sort, SORTS.map((s) => s.value), defaultSort);
@@ -43,13 +43,13 @@ export default async function Reviews({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-4">
       <PageHeader title="Reviews" subtitle="Everything waiting for a person to check." icon={<ClipboardCheck className="size-5" />} tile="tile-violet" />
-      <nav className="flex gap-1 border-b border-slate-200" aria-label="Review queues">
+      <nav className="flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Review queues">
         {tabs.map((t) => (
           <Link
             key={t.id}
             href={`/admin/reviews?tab=${t.id}`}
             aria-current={tab === t.id ? "page" : undefined}
-            className={`relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${tab === t.id ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-900"}`}
+            className={`relative -mb-px flex shrink-0 items-center gap-1.5 border-b-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition ${tab === t.id ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-900"}`}
           >
             {t.label}
             {!!t.count && <span className="rounded-full bg-amber-400 px-1.5 text-[11px] font-bold text-amber-950 tabular-nums">{t.count}</span>}

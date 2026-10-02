@@ -13,6 +13,8 @@ import { NetworkBadge, PageHeader, StatusPill, statusLabel } from "@/components/
 
 // Everything waiting on an admin: new payments, reviews, holds and approved orders still to be paid.
 const WORK: OrderStatus[] = ["PAYMENT_CONFIRMED", "UNDER_REVIEW", "ON_HOLD", "APPROVED"];
+// Every order not finished yet, including ones not paid yet.
+const ACTIVE: OrderStatus[] = ["QUOTE_READY", "PAYMENT_SUBMITTED", ...WORK];
 const PER_PAGE = 50;
 const SORTS = [
   { value: "old", label: "Oldest first" },
@@ -27,8 +29,11 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
   await adminOrLogin();
   const { status, q, page, sort: sortParam } = await searchParams;
   const all = Object.keys(ALLOWED_NEXT) as OrderStatus[];
-  const chosen = all.includes(status as OrderStatus) ? [status as OrderStatus] : status === "ALL" || q?.trim() ? all : WORK; // a search looks through every order
-  const queue = !status && !q?.trim(); // the work queue is oldest first; every other list newest first
+  const searching = !!q?.trim();
+  // Default: every order. A search also looks through every order.
+  const chosen = searching ? all : all.includes(status as OrderStatus) ? [status as OrderStatus] : status === "WORK" ? WORK : status === "ACTIVE" ? ACTIVE : all;
+  const active = status === "ACTIVE" && !searching;
+  const queue = status === "WORK" && !searching; // the "needs action" queue is oldest first; every other list newest first
   const defaultSort: Sort = queue ? "old" : "new";
   const sort = pickSort(sortParam, SORTS.map((s) => s.value), defaultSort);
   const where = { status: { in: chosen }, ...(q ? { OR: [{ id: { contains: q.trim(), mode: "insensitive" as const } }, { txid: q.trim().toLowerCase() }, { submittedTxid: q.trim().toLowerCase() }, { utr: q.trim().toUpperCase() }, { user: { email: { contains: q.trim(), mode: "insensitive" as const } } }] } : {}) };
@@ -42,12 +47,17 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
   const statusHref = (s?: string) => `/admin/orders?${new URLSearchParams({ ...(s ? { status: s } : {}), ...(q ? { q } : {}) })}`;
   return (
     <div className="space-y-4">
-      <PageHeader title="Orders" subtitle={queue ? `Waiting on you: ${total} order${total === 1 ? "" : "s"}.` : `${total} order${total === 1 ? "" : "s"}.`} icon={<ListOrdered className="size-6" />} />
+      <PageHeader
+        title="Orders"
+        subtitle={active ? `${total} in progress, including unpaid.` : queue ? `Waiting on you: ${total} order${total === 1 ? "" : "s"}.` : `${total} order${total === 1 ? "" : "s"}.`}
+        icon={<ListOrdered className="size-6" />}
+      />
       <ListToolbar placeholder="Order ID, TxID, UTR or email" sorts={[...SORTS]} defaultSort={defaultSort}>
         <FilterMenu
           items={[
-            { href: statusHref(), label: "Work waiting", active: queue },
-            { href: statusHref("ALL"), label: "All orders", active: status === "ALL" || (!status && !queue) },
+            { href: statusHref(), label: "All orders", active: !status || searching },
+            { href: statusHref("ACTIVE"), label: "In progress", active },
+            { href: statusHref("WORK"), label: "Needs action", active: queue },
             ...all.map((s) => ({ href: statusHref(s), label: statusLabel(s), active: status === s })),
           ]}
         />
