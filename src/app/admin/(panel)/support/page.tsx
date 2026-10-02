@@ -1,20 +1,37 @@
 import { LifeBuoy } from "lucide-react";
-import { FilterChips, PageHeader } from "@/components/ui";
+import type { Prisma } from "@prisma/client";
+import { PageHeader } from "@/components/ui";
+import { pickSort } from "@/lib/sort";
+import { FilterMenu } from "@/components/FilterMenu";
+import { ListToolbar } from "@/components/ListToolbar";
+
+const SORTS = [
+  { value: "old", label: "Oldest first" },
+  { value: "new", label: "Newest first" },
+] as const;
 import Link from "next/link";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 
-export default async function Support({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
+export default async function Support({ searchParams }: { searchParams: Promise<{ all?: string; q?: string; sort?: string }> }) {
   await adminOrLogin();
-  const { all } = await searchParams;
-  const msgs = await prisma.supportMessage.findMany({ where: all ? {} : { handled: false }, orderBy: { createdAt: "asc" }, include: { user: true }, take: 200 });
+  const { all, q: rawQ, sort: sortParam } = await searchParams;
+  const q = rawQ?.trim();
+  const sort = pickSort(sortParam, SORTS.map((s) => s.value), "old");
+  const search: Prisma.SupportMessageWhereInput = q
+    ? { OR: [{ message: { contains: q, mode: "insensitive" } }, { user: { email: { contains: q, mode: "insensitive" } } }, { orderId: { contains: q, mode: "insensitive" } }] }
+    : {};
+  const msgs = await prisma.supportMessage.findMany({ where: { ...(all ? {} : { handled: false }), ...search }, orderBy: { createdAt: sort === "new" ? "desc" : "asc" }, include: { user: true }, take: 200 });
+  const allHref = (on: boolean) => `/admin/support?${new URLSearchParams({ ...(on ? { all: "1" } : {}), ...(q ? { q } : {}), ...(sort !== "old" ? { sort } : {}) })}`;
   return (
     <div className="space-y-4">
       <PageHeader title="Support" icon={<LifeBuoy className="size-6" />} tile="tile-rose" />
-      <FilterChips items={[{ href: "/admin/support", label: "Open", active: !all }, { href: "/admin/support?all=1", label: "All", active: !!all }]} />
-      {msgs.length === 0 && <p className="muted">No messages.</p>}
+      <ListToolbar placeholder="Email, order ID or message text" sorts={[...SORTS]} defaultSort="old">
+        <FilterMenu items={[{ href: allHref(false), label: "Open", active: !all }, { href: allHref(true), label: "All messages", active: !!all }]} />
+      </ListToolbar>
+      {msgs.length === 0 && <p className="muted">{q ? "Nothing matches your search." : "No messages."}</p>}
       {msgs.map((m) => (
         <div key={m.id} id={m.id} className="card space-y-2">
           <p className="text-sm"><b>{m.user.email}</b> · {fmtIST(m.createdAt)} {m.orderId && <>· <Link className="underline" href={`/admin/orders/${m.orderId}`}>{m.orderId}</Link></>}</p>

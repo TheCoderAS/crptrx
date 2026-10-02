@@ -259,13 +259,3 @@ export function BackLink({ href, children }: { href: string; children: ReactNode
   );
 }
 
-/** A row of filter chips (scrolls sideways on small screens). */
-export function FilterChips({ items }: { items: { href: string; label: string; active: boolean }[] }) {
-  return (
-    <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-      {items.map((i) => (
-        <a key={i.href} href={i.href} className={`chip shrink-0 ${i.active ? "chip-active" : "bg-white"}`}>{i.label}</a>
-      ))}
-    </div>
-  );
-}

@@ -5,19 +5,40 @@ import { fmtUsdt } from "@/server/money";
 import { explorerTxUrl, type Mode, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
-import { FilterChips, NetworkBadge, PageHeader, StatusPill } from "@/components/ui";
+import type { Prisma } from "@prisma/client";
+import { pickSort } from "@/lib/sort";
+import { FilterMenu } from "@/components/FilterMenu";
+import { ListToolbar } from "@/components/ListToolbar";
+import { NetworkBadge, PageHeader, StatusPill } from "@/components/ui";
 import { getSettings } from "@/server/settings";
 
-export default async function Unmatched({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
+const SORTS = [
+  { value: "new", label: "Newest first" },
+  { value: "old", label: "Oldest first" },
+  { value: "high", label: "Amount: high to low" },
+  { value: "low", label: "Amount: low to high" },
+] as const;
+type Sort = (typeof SORTS)[number]["value"];
+const ORDER_BY: Record<Sort, Prisma.IncomingTransferOrderByWithRelationInput> = { new: { blockTime: "desc" }, old: { blockTime: "asc" }, high: { amount: "desc" }, low: { amount: "asc" } };
+
+export default async function Unmatched({ searchParams }: { searchParams: Promise<{ show?: string; q?: string; sort?: string }> }) {
   await adminOrLogin();
-  const { show } = await searchParams;
+  const { show, q: rawQ, sort: sortParam } = await searchParams;
+  const q = rawQ?.trim();
+  const sort = pickSort(sortParam, SORTS.map((s) => s.value), "new");
+  const search: Prisma.IncomingTransferWhereInput = q
+    ? { OR: [{ txid: { contains: q, mode: "insensitive" } }, { fromAddress: { contains: q, mode: "insensitive" } }, { toAddress: { contains: q, mode: "insensitive" } }, ...(/^\d+(\.\d+)?$/.test(q) ? [{ amount: q }] : [])] }
+    : {};
+  const showHref = (v?: string) => `/admin/unmatched?${new URLSearchParams({ ...(v ? { show: v } : {}), ...(q ? { q } : {}), ...(sort !== "new" ? { sort } : {}) })}`;
   const status = show === "manual" ? "MANUAL_HANDLING" : show === "ignored" ? "IGNORED_WRONG_TOKEN" : "UNMATCHED";
-  const [rows, s] = await Promise.all([prisma.incomingTransfer.findMany({ where: { status }, orderBy: { blockTime: "desc" }, take: 200 }), getSettings()]);
+  const [rows, s] = await Promise.all([prisma.incomingTransfer.findMany({ where: { status, ...search }, orderBy: [ORDER_BY[sort], { blockTime: "desc" }], take: 200 }), getSettings()]);
   return (
     <div className="space-y-4">
       <PageHeader title="Unmatched payments" subtitle="USDT that arrived but didn't match an order." icon={<AlertOctagon className="size-6" />} tile="tile-amber" />
-      <FilterChips items={[{ href: "/admin/unmatched", label: "Waiting", active: status === "UNMATCHED" }, { href: "/admin/unmatched?show=manual", label: "Manual handling", active: status === "MANUAL_HANDLING" }, { href: "/admin/unmatched?show=ignored", label: "Wrong token", active: status === "IGNORED_WRONG_TOKEN" }]} />
-      {rows.length === 0 && <p className="muted">Nothing here.</p>}
+      <ListToolbar placeholder="TxID, wallet address or amount" sorts={[...SORTS]} defaultSort="new">
+        <FilterMenu items={[{ href: showHref(), label: "Waiting", active: status === "UNMATCHED" }, { href: showHref("manual"), label: "Manual handling", active: status === "MANUAL_HANDLING" }, { href: showHref("ignored"), label: "Wrong token", active: status === "IGNORED_WRONG_TOKEN" }]} />
+      </ListToolbar>
+      {rows.length === 0 && <p className="muted">{q ? "Nothing matches your search." : "Nothing here."}</p>}
       {rows.map((t) => (
         <div key={t.id} className="card space-y-2">
           <div className="flex flex-wrap items-center gap-2">

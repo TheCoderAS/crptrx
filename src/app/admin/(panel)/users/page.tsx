@@ -4,31 +4,39 @@ import type { Prisma } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fmtIST } from "@/lib/time";
+import { pickSort } from "@/lib/sort";
+import { ListToolbar } from "@/components/ListToolbar";
 import { EmptyState, PageHeader, StatusPill } from "@/components/ui";
 
 const PER_PAGE = 50;
+const SORTS = [
+  { value: "new", label: "Newest first" },
+  { value: "old", label: "Oldest first" },
+  { value: "email", label: "Email A–Z" },
+  { value: "orders", label: "Most orders" },
+] as const;
+type Sort = (typeof SORTS)[number]["value"];
+const ORDER_BY: Record<Sort, Prisma.UserOrderByWithRelationInput> = { new: { createdAt: "desc" }, old: { createdAt: "asc" }, email: { email: "asc" }, orders: { orders: { _count: "desc" } } };
 
-export default async function Customers({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
+export default async function Customers({ searchParams }: { searchParams: Promise<{ q?: string; page?: string; sort?: string }> }) {
   await adminOrLogin();
-  const { q, page } = await searchParams;
+  const { q, page, sort: sortParam } = await searchParams;
+  const sort = pickSort(sortParam, SORTS.map((s) => s.value), "new");
   const term = q?.trim();
   const where: Prisma.UserWhereInput = term
     ? { OR: [{ email: { contains: term, mode: "insensitive" } }, { mobile: { contains: term.replace(/\s/g, "") } }, { displayName: { contains: term, mode: "insensitive" } }, { id: term }, { kycSubmissions: { some: { fullName: { contains: term, mode: "insensitive" } } } }] }
     : {};
   const pageNo = Math.max(1, Number(page) || 1);
   const [users, total] = await Promise.all([
-    prisma.user.findMany({ where, orderBy: { createdAt: "desc" }, skip: (pageNo - 1) * PER_PAGE, take: PER_PAGE, include: { _count: { select: { orders: true } } } }),
+    prisma.user.findMany({ where, orderBy: [ORDER_BY[sort], { createdAt: "desc" }], skip: (pageNo - 1) * PER_PAGE, take: PER_PAGE, include: { _count: { select: { orders: true } } } }),
     prisma.user.count({ where }),
   ]);
   const pages = Math.max(1, Math.ceil(total / PER_PAGE));
-  const href = (n: number) => `/admin/users?${new URLSearchParams({ ...(term ? { q: term } : {}), page: String(n) })}`;
+  const href = (n: number) => `/admin/users?${new URLSearchParams({ ...(term ? { q: term } : {}), ...(sort !== "new" ? { sort } : {}), page: String(n) })}`;
   return (
     <div className="space-y-4">
-      <PageHeader title="Customers" subtitle={`${total} ${total === 1 ? "account" : "accounts"}, newest first.`} icon={<UserRound className="size-6" />} tile="tile-blue" />
-      <form className="flex gap-2">
-        <input name="q" defaultValue={term} aria-label="Search customers" className="input max-w-md" placeholder="Email, mobile, name on ID" />
-        <button className="btn-secondary">Search</button>
-      </form>
+      <PageHeader title="Customers" subtitle={`${total} ${total === 1 ? "account" : "accounts"}.`} icon={<UserRound className="size-6" />} tile="tile-blue" />
+      <ListToolbar placeholder="Email, mobile, name on ID" sorts={[...SORTS]} defaultSort="new" />
       <div className="card overflow-x-auto">
         {users.length === 0 ? (
           <EmptyState icon={<UserRound className="size-6" />} title="No customers found">{term ? "Try part of the email or the mobile number." : "Sign-ups will appear here."}</EmptyState>

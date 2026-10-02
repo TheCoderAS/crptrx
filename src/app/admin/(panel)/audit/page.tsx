@@ -2,14 +2,28 @@ import { ScrollText } from "lucide-react";
 import { PageHeader } from "@/components/ui";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
+import type { Prisma } from "@prisma/client";
 import { fmtIST } from "@/lib/time";
+import { pickSort } from "@/lib/sort";
+import { ListToolbar } from "@/components/ListToolbar";
 
-export default async function Audit({ searchParams }: { searchParams: Promise<{ action?: string; page?: string }> }) {
+const SORTS = [
+  { value: "new", label: "Newest first" },
+  { value: "old", label: "Oldest first" },
+] as const;
+
+export default async function Audit({ searchParams }: { searchParams: Promise<{ q?: string; action?: string; page?: string; sort?: string }> }) {
   await adminOrLogin();
-  const { action, page } = await searchParams;
-  const p = Math.max(0, Number(page ?? 0) || 0);
+  const sp = await searchParams;
+  const q = (sp.q ?? sp.action)?.trim(); // ?action= kept for old links
+  const sort = pickSort(sp.sort, SORTS.map((s) => s.value), "new");
+  const p = Math.max(0, Number(sp.page ?? 0) || 0);
+  // Search the action name (e.g. KYC_DOC), the target ID, or the IP.
+  const where: Prisma.AuditLogWhereInput = q
+    ? { OR: [{ action: { contains: q.toUpperCase().replace(/\s+/g, "_") } }, { targetId: { contains: q, mode: "insensitive" } }, { ip: { startsWith: q } }] }
+    : {};
   const [rows, admins] = await Promise.all([
-    prisma.auditLog.findMany({ where: action ? { action: { contains: action.toUpperCase() } } : {}, orderBy: { createdAt: "desc" }, skip: p * 100, take: 100 }),
+    prisma.auditLog.findMany({ where, orderBy: { createdAt: sort === "old" ? "asc" : "desc" }, skip: p * 100, take: 100 }),
     prisma.admin.findMany({ select: { id: true, name: true } }),
   ]);
   const who = (t: string, id: string | null) => (t === "ADMIN" ? admins.find((a) => a.id === id)?.name ?? id : t === "USER" ? `user ${id?.slice(0, 8)}` : "system");
@@ -17,7 +31,7 @@ export default async function Audit({ searchParams }: { searchParams: Promise<{ 
     <div className="space-y-4">
       <PageHeader title="Audit log" icon={<ScrollText className="size-6" />} tile="tile-slate" />
       <p className="muted">Permanent record of logins, document views, admin actions, settings changes and exports. Entries can&apos;t be edited or deleted.</p>
-      <form className="flex gap-2"><input aria-label="Filter by action, e.g. KYC_DOC" name="action" defaultValue={action} className="input max-w-xs" placeholder="Filter by action, e.g. KYC_DOC" /><button className="btn-secondary">Filter</button></form>
+      <ListToolbar placeholder="Action (e.g. KYC_DOC), target ID or IP" sorts={[...SORTS]} defaultSort="new" />
       <div className="card overflow-x-auto">
         <table className="table">
           <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Target</th><th>Details</th><th>IP</th></tr></thead>
@@ -36,8 +50,8 @@ export default async function Audit({ searchParams }: { searchParams: Promise<{ 
         </table>
       </div>
       <div className="flex gap-3 text-sm">
-        {p > 0 && <a className="underline" href={`?action=${action ?? ""}&page=${p - 1}`}>Newer</a>}
-        {rows.length === 100 && <a className="underline" href={`?action=${action ?? ""}&page=${p + 1}`}>Older</a>}
+        {p > 0 && <a className="underline" href={`?${new URLSearchParams({ ...(q ? { q } : {}), ...(sort !== "new" ? { sort } : {}), page: String(p - 1) })}`}>{sort === "old" ? "Earlier" : "Newer"}</a>}
+        {rows.length === 100 && <a className="underline" href={`?${new URLSearchParams({ ...(q ? { q } : {}), ...(sort !== "new" ? { sort } : {}), page: String(p + 1) })}`}>{sort === "old" ? "Later" : "Older"}</a>}
       </div>
     </div>
   );

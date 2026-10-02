@@ -4,22 +4,32 @@ import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { decrypt } from "@/server/crypto";
 import { namesMatch } from "@/server/payouts";
+import type { Prisma } from "@prisma/client";
 import { fmtIST } from "@/lib/time";
+import { pickSort } from "@/lib/sort";
+import { ListToolbar } from "@/components/ListToolbar";
 import { ApiForm } from "@/components/ApiForm";
 import { EmptyState, PageHeader, StatusPill } from "@/components/ui";
 
 // One place for everything that needs a person to look at it before a customer can sell.
 const AUTO_TO_CHECK = { autoApproved: true, postReviewedAt: null, status: "APPROVED" } as const;
 type Tab = "kyc" | "payout" | "auto" | "history";
+const SORTS = [
+  { value: "old", label: "Oldest first" },
+  { value: "new", label: "Newest first" },
+  { value: "name", label: "Name A–Z" },
+] as const;
+type Sort = (typeof SORTS)[number]["value"];
 
-export default async function Reviews({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function Reviews({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; sort?: string }> }) {
   await adminOrLogin();
   const [kycCount, payoutCount, autoCount] = await Promise.all([
     prisma.kycSubmission.count({ where: { status: "SUBMITTED" } }),
     prisma.payoutMethod.count({ where: { status: "PENDING", deletedAt: null } }),
     prisma.kycSubmission.count({ where: AUTO_TO_CHECK }),
   ]);
-  const requested = (await searchParams).tab as Tab | undefined;
+  const sp = await searchParams;
+  const requested = sp.tab as Tab | undefined;
   // Open the first tab that has work in it.
   const tab: Tab = requested ?? (kycCount ? "kyc" : payoutCount ? "payout" : autoCount ? "auto" : "kyc");
   const tabs: { id: Tab; label: string; count?: number }[] = [
@@ -28,10 +38,13 @@ export default async function Reviews({ searchParams }: { searchParams: Promise<
     { id: "auto", label: "Auto-approved", count: autoCount },
     { id: "history", label: "History" },
   ];
+  const defaultSort: Sort = tab === "history" ? "new" : "old";
+  const sort = pickSort(sp.sort, SORTS.map((s) => s.value), defaultSort);
+  const q = sp.q?.trim() || undefined;
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Reviews" subtitle="Oldest first" icon={<ClipboardCheck className="size-5" />} tile="tile-violet" />
+      <PageHeader title="Reviews" subtitle="Everything waiting for a person to check." icon={<ClipboardCheck className="size-5" />} tile="tile-violet" />
       <nav className="flex gap-1 border-b border-slate-200" aria-label="Review queues">
         {tabs.map((t) => (
           <Link
@@ -45,19 +58,23 @@ export default async function Reviews({ searchParams }: { searchParams: Promise<
           </Link>
         ))}
       </nav>
-      {tab === "payout" ? <PayoutQueue /> : <KycQueue mode={tab} />}
+      <ListToolbar placeholder={tab === "payout" ? "Email, name, account no., IFSC or UPI ID" : "Name, email or PAN"} sorts={[...SORTS]} defaultSort={defaultSort} />
+      {tab === "payout" ? <PayoutQueue q={q} sort={sort} /> : <KycQueue mode={tab} q={q} sort={sort} />}
     </div>
   );
 }
 
-async function KycQueue({ mode }: { mode: "kyc" | "auto" | "history" }) {
+async function KycQueue({ mode, q, sort }: { mode: "kyc" | "auto" | "history"; q?: string; sort: Sort }) {
+  const search: Prisma.KycSubmissionWhereInput = q
+    ? { OR: [{ fullName: { contains: q, mode: "insensitive" } }, { user: { email: { contains: q, mode: "insensitive" } } }, { panMasked: { contains: q.toUpperCase() } }] }
+    : {};
   const subs = await prisma.kycSubmission.findMany({
-    where: mode === "kyc" ? { status: "SUBMITTED" } : mode === "auto" ? AUTO_TO_CHECK : {},
-    orderBy: { submittedAt: mode === "history" ? "desc" : "asc" },
+    where: { ...(mode === "kyc" ? { status: "SUBMITTED" as const } : mode === "auto" ? AUTO_TO_CHECK : {}), ...search },
+    orderBy: sort === "name" ? [{ fullName: "asc" }, { submittedAt: "asc" }] : { submittedAt: sort === "new" ? "desc" : "asc" },
     include: { user: true },
     take: 200,
   });
-  if (subs.length === 0) return <EmptyState icon={<CheckCircle2 className="size-6" />} title="All clear">Nothing waiting here.</EmptyState>;
+  if (subs.length === 0) return q ? <EmptyState icon={<CheckCircle2 className="size-6" />} title="No matches">Nothing here matches “{q}”.</EmptyState> : <EmptyState icon={<CheckCircle2 className="size-6" />} title="All clear">Nothing waiting here.</EmptyState>;
   return (
     <div className="card overflow-x-auto p-0 sm:p-0">
       {mode === "auto" && <p className="border-b border-slate-100 px-4 py-2.5 text-sm text-slate-500">Approved automatically. Open each, check the documents, then confirm or ask for changes.</p>}
@@ -84,9 +101,25 @@ async function KycQueue({ mode }: { mode: "kyc" | "auto" | "history" }) {
   );
 }
 
-async function PayoutQueue() {
-  const pms = await prisma.payoutMethod.findMany({ where: { status: "PENDING", deletedAt: null }, orderBy: { createdAt: "asc" }, include: { user: true } });
-  if (pms.length === 0) return <EmptyState icon={<CheckCircle2 className="size-6" />} title="All clear">No bank accounts or UPI IDs waiting.</EmptyState>;
+async function PayoutQueue({ q, sort }: { q?: string; sort: Sort }) {
+  // Account numbers are encrypted, so they're matched on the last 4 digits.
+  const search: Prisma.PayoutMethodWhereInput = q
+    ? {
+        OR: [
+          { holderName: { contains: q, mode: "insensitive" } },
+          { user: { email: { contains: q, mode: "insensitive" } } },
+          { upiId: { contains: q, mode: "insensitive" } },
+          { ifsc: { contains: q.toUpperCase() } },
+          ...(/^\d{4,}$/.test(q) ? [{ accountLast4: q.slice(-4) }] : []),
+        ],
+      }
+    : {};
+  const pms = await prisma.payoutMethod.findMany({
+    where: { status: "PENDING", deletedAt: null, ...search },
+    orderBy: sort === "name" ? [{ holderName: "asc" }, { createdAt: "asc" }] : { createdAt: sort === "new" ? "desc" : "asc" },
+    include: { user: true },
+  });
+  if (pms.length === 0) return <EmptyState icon={<CheckCircle2 className="size-6" />} title={q ? "No matches" : "All clear"}>{q ? `Nothing here matches “${q}”.` : "No bank accounts or UPI IDs waiting."}</EmptyState>;
   const kycs = await prisma.kycSubmission.findMany({ where: { userId: { in: pms.map((p) => p.userId) }, status: "APPROVED" }, orderBy: { reviewedAt: "desc" } });
   const kycName = (uid: string) => kycs.find((k) => k.userId === uid)?.fullName ?? null;
   return (
