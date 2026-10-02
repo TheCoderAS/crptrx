@@ -41,22 +41,27 @@ migrate() {
   echo "Could not run migrations" >&2; exit 1
 }
 
+# Start node directly (no npx/npm wrapper processes): saves ~200 MB, which
+# matters on small hosts such as Render's free 512 MB plan.
+WEB="node node_modules/next/dist/bin/next start -p ${PORT:-3000}"
+WORKER="node --import tsx src/worker/index.ts"
+
 case "${1:-web}" in
   web)
     migrate
     npx tsx prisma/seed.ts
-    exec npx next start -p "${PORT:-3000}"
+    exec $WEB
     ;;
   worker)
     migrate
-    exec npx tsx src/worker/index.ts
+    exec $WORKER
     ;;
   all)
     migrate
     npx tsx prisma/seed.ts
     # Blockchain watcher in the background, restarted if it ever exits.
-    ( while true; do npx tsx src/worker/index.ts; echo "worker exited, restarting in 5s" >&2; sleep 5; done ) &
-    exec npx next start -p "${PORT:-3000}"
+    ( while true; do $WORKER; echo "worker exited, restarting in 5s" >&2; sleep 5; done ) &
+    exec $WEB
     ;;
   migrate) migrate ;;
   seed) npx tsx prisma/seed.ts ;;
