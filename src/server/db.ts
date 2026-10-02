@@ -1,8 +1,29 @@
 import { PrismaClient } from "@prisma/client";
 
+/**
+ * Hosted Postgres poolers cap connections (Supabase free: 15 in session mode),
+ * and Prisma otherwise opens one per CPU core x2 + 1. So every process gets a
+ * small pool: DB_POOL_SIZE if set (the start script sets it per process),
+ * else the URL's connection_limit, else 5.
+ */
+function databaseUrl(): string | undefined {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return undefined;
+  try {
+    const u = new URL(raw);
+    const size = process.env.DB_POOL_SIZE || u.searchParams.get("connection_limit") || "5";
+    u.searchParams.set("connection_limit", size);
+    if (!u.searchParams.has("pool_timeout")) u.searchParams.set("pool_timeout", "20");
+    return u.toString();
+  } catch {
+    return raw; // let Prisma report a malformed URL itself
+  }
+}
+
+// One client (and so one pool) per process, even when the server bundle loads
+// this module more than once (Next.js splits routes into separate chunks).
 const g = globalThis as unknown as { __prisma?: PrismaClient };
-export const prisma = g.__prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== "production") g.__prisma = prisma;
+export const prisma = (g.__prisma ??= new PrismaClient({ datasourceUrl: databaseUrl() }));
 
 export type Tx = Omit<
   PrismaClient,
