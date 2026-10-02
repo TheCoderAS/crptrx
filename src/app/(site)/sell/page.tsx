@@ -23,7 +23,7 @@ export default async function Sell() {
   if (!o.ready)
     return (
       <div>
-        <PageHeader title="Sell USDT" />
+        <PageHeader title="Sell USDT" tab />
         <Banner tone={o.blockedReason ? "danger" : "warn"} title={o.blockedReason ? undefined : "Almost there"}>
           {notReadyMessage(o)} {!o.blockedReason && <Link className="font-medium underline" href="/dashboard">See what&apos;s left</Link>}
         </Banner>
@@ -34,7 +34,7 @@ export default async function Sell() {
   const available = Object.fromEntries(NETWORK_CODES.map((n) => [n, s.network_enabled[n] && !!s.deposit_address[s.network_mode][n]])) as Record<"TRON" | "BSC", boolean>;
   return (
     <div>
-      <PageHeader title="Sell USDT" subtitle="Three choices. Exact amount before you send." icon={<ArrowLeftRight className="size-6" />} />
+      <PageHeader tab title="Sell USDT" subtitle="Three choices. Exact amount before you send." icon={<ArrowLeftRight className="size-6" />} />
       {stale ? (
         <Banner tone="warn">Our rate is being updated. Please try again shortly.</Banner>
       ) : (

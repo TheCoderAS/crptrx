@@ -32,7 +32,7 @@ export default async function Account() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Account" subtitle="Your details, payouts and security." icon={<UserRound className="size-6" />} />
+      <PageHeader tab title="Account" subtitle="Your details, payouts and security." icon={<UserRound className="size-6" />} />
 
       {/* Mobile first when it's the step that's holding them up. */}
       {!mobileOk && s.onboarding_mobile_required && (
