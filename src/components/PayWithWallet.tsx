@@ -14,6 +14,9 @@ type TronWeb = {
   };
   trx: { sign: (tx: unknown) => Promise<unknown>; sendRawTransaction: (tx: unknown) => Promise<{ result?: boolean; txid?: string; code?: string }> };
 };
+// The wallet is set to our deposit address: the payment would go from us to us.
+const OWN_WALLET = "Your wallet is set to our deposit address, so this would send money to itself. Switch to the account you're paying from, then try again.";
+
 type Win = Window & { ethereum?: Eip1193; tronLink?: Eip1193; tronWeb?: TronWeb };
 
 const BSC_CHAIN = {
@@ -71,6 +74,7 @@ export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mod
   async function payBsc(): Promise<string> {
     const eth = (window as Win).ethereum!;
     const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+    if (accounts[0]?.toLowerCase() === p.to.toLowerCase()) throw new Error(OWN_WALLET);
     const chain = BSC_CHAIN[p.mode];
     if ((await eth.request({ method: "eth_chainId" })) !== chain.chainId) {
       try {
@@ -91,6 +95,7 @@ export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mod
     const tw = w.tronWeb;
     const from = tw?.defaultAddress?.base58;
     if (!tw || !from) throw new Error("Unlock TronLink and try again.");
+    if (from === p.to) throw new Error(OWN_WALLET);
     const onTestnet = /nile|shasta/i.test(tw.fullNode?.host ?? "");
     if (p.mode === "TEST" && !onTestnet) throw new Error("Switch TronLink to the Nile testnet, then try again.");
     if (p.mode === "LIVE" && onTestnet) throw new Error("Switch TronLink to the Tron mainnet, then try again.");
