@@ -1,4 +1,4 @@
-import { api } from "@/server/http";
+import { api, formData } from "@/server/http";
 import { requireUser } from "@/server/auth/session";
 import { DOC_FIELDS, submitKyc, type DocField } from "@/server/kyc";
 import { rateLimit } from "@/server/ratelimit";
@@ -6,7 +6,7 @@ import { rateLimit } from "@/server/ratelimit";
 export const POST = api(async (req: Request) => {
   const user = await requireUser();
   await rateLimit(`kyc:${user.id}`, 10, 3600);
-  const fd = await req.formData();
+  const fd = await formData(req);
   const files = {} as Record<DocField, { buf: Buffer; type: string } | undefined>;
   for (const f of DOC_FIELDS) {
     const v = fd.get(f);

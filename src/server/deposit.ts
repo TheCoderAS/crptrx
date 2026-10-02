@@ -7,10 +7,19 @@ import { AppError } from "./errors";
 import { getAdapter } from "./networks";
 import { getSettings, writeSetting } from "./settings";
 
-export const ADDRESS_CHANGE_DELAY_MS = 60 * 60 * 1000; // spec 10.3: 1 hour
+
+/**
+ * How long a new deposit address waits before it applies: the admin setting
+ * address_change_delay_minutes (0 = instant). The wait lets other admins cancel
+ * a change made from a stolen admin login before payments go to the new address.
+ * Setting the first address always applies at once: there is nothing to divert.
+ */
+export function addressChangeDelayMs(delayMinutes: number, oldAddress: string | null): number {
+  return oldAddress ? Math.max(0, delayMinutes) * 60_000 : 0;
+}
 export const ADDRESS_BANNER_MS = 24 * 60 * 60 * 1000;
 
-/** Apply any address change whose 1-hour delay has passed and wasn't cancelled. */
+/** Apply any address change whose wait has passed and wasn't cancelled. */
 export async function applyDueAddressChanges(now = new Date()) {
   const due = await prisma.depositAddressChange.findMany({
     where: { appliedAt: null, cancelledAt: null, effectiveAt: { lte: now } },
@@ -72,13 +81,14 @@ export async function requestAddressChange(network: NetworkCode, newAddressInput
         oldAddress,
         requestedBy: actor.id!,
         cancelTokenHash: sha256(token),
-        effectiveAt: new Date(Date.now() + ADDRESS_CHANGE_DELAY_MS),
+        effectiveAt: new Date(Date.now() + addressChangeDelayMs(s.address_change_delay_minutes, oldAddress)),
       },
     });
     await audit(actor, "DEPOSIT_ADDRESS_CHANGE_REQUESTED", { targetType: "deposit_address_change", targetId: c.id, details: { network, mode, oldAddress, newAddress }, ip }, tx);
     return c;
   });
-  return { change, token };
+  if (change.effectiveAt.getTime() <= Date.now()) await applyDueAddressChanges(); // no wait: apply now
+  return { change, token, immediate: change.effectiveAt.getTime() <= Date.now() };
 }
 
 export async function cancelAddressChange(opts: { token?: string; id?: string }, actor: Actor, ip?: string | null): Promise<DepositAddressChange> {
@@ -86,7 +96,7 @@ export async function cancelAddressChange(opts: { token?: string; id?: string },
     ? await prisma.depositAddressChange.findUnique({ where: { cancelTokenHash: sha256(opts.token) } })
     : await prisma.depositAddressChange.findUnique({ where: { id: opts.id } });
   if (!c) throw new AppError("Change request not found", 404);
-  if (c.appliedAt) throw new AppError("This change already took effect. Set the correct address again (it will also take 1 hour).");
+  if (c.appliedAt) throw new AppError("This change already took effect. Set the correct address again.");
   if (c.cancelledAt) return c;
   const res = await prisma.depositAddressChange.update({ where: { id: c.id }, data: { cancelledAt: new Date(), cancelledBy: actor.id } });
   await audit(actor, "DEPOSIT_ADDRESS_CHANGE_CANCELLED", { targetType: "deposit_address_change", targetId: c.id, details: { network: c.network, newAddress: c.newAddress }, ip });
