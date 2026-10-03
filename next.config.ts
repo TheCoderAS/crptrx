@@ -39,6 +39,10 @@ const config: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["@prisma/client", "bcryptjs"],
   experimental: { serverActions: { bodySizeLimit: "25mb" } },
+  // Crawlers and some browsers ask for /favicon.ico directly; serve the app icon there too.
+  async rewrites() {
+    return [{ source: "/favicon.ico", destination: "/icon" }];
+  },
   async headers() {
     return [
       { source: "/((?!api/files$).*)", headers: securityHeaders },

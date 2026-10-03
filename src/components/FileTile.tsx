@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { AlertCircle, FileCheck2, Loader2, UploadCloud } from "lucide-react";
 import { fitUpload, kb, replaceInputFile } from "@/lib/shrinkImage";
+import { useFormPreparing } from "./ApiForm";
 
 type Picked = { name: string; url: string | null; size: number; shrunkFrom?: number };
 
@@ -10,6 +11,7 @@ export function FileTile({ name, label, hint, required, keptNote }: { name: stri
   const [file, setFile] = useState<Picked | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const holdForm = useFormPreparing();
   return (
     <label
       htmlFor={name}
@@ -29,7 +31,8 @@ export function FileTile({ name, label, hint, required, keptNote }: { name: stri
           input.setCustomValidity("");
           if (!picked) return setFile(null);
           setBusy(true);
-          const r = await fitUpload(picked);
+          const release = holdForm(); // keep Submit disabled until the file is fully read
+          const r = await fitUpload(picked).finally(release);
           setBusy(false);
           if ("error" in r) {
             input.value = "";

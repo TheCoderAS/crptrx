@@ -39,6 +39,7 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
+  const [preparing, setPreparing] = useState(false); // picked image still being read/shrunk
   const [error, setError] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
@@ -93,24 +94,29 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
   }, [messages.length, typing, visible]);
 
   async function submit() {
-    if (sending || (!text.trim() && !file)) return;
+    if (sending || preparing || (!text.trim() && !file)) return;
     setSending(true);
     setError(null);
+    const sentText = text;
+    const sentFile = file;
     const fd = new FormData();
-    fd.set("text", text);
-    if (file) fd.set("file", file);
+    fd.set("text", sentText);
+    if (sentFile) fd.set("file", sentFile);
     try {
       let res = await fetch(base, { method: "POST", body: fd });
       let d = await res.json().catch(() => ({}));
-      // The server got an incomplete upload (flaky mobile connection): try once more.
-      if (d.code === "UPLOAD_UNREADABLE") {
+      // The server got an incomplete upload (flaky mobile connection): quietly try up to twice more.
+      for (let retry = 1; retry <= 2 && d.code === "UPLOAD_UNREADABLE"; retry++) {
+        await new Promise((r) => setTimeout(r, 700 * retry));
         res = await fetch(base, { method: "POST", body: fd });
         d = await res.json().catch(() => ({}));
       }
       if (!res.ok) throw new Error(d.error ?? "Couldn't send. Try again.");
       setMessages((prev) => (prev.some((x) => x.id === d.message.id) ? prev : [...prev, d.message]));
-      setText("");
-      setFile(null);
+      // Clear only what was sent: the next message may already be typed or picked
+      // while this one was on its way (the live update can show it before we get here).
+      setText((cur) => (cur === sentText ? "" : cur));
+      setFile((cur) => (cur === sentFile ? null : cur));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -121,7 +127,8 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
   async function pick(f: File | undefined) {
     setError(null);
     if (!f) return;
-    const r = await fitUpload(f, { imagesOnly: true });
+    setPreparing(true);
+    const r = await fitUpload(f, { imagesOnly: true }).finally(() => setPreparing(false));
     if ("error" in r) return setError(r.error);
     setFile(r.file);
   }
@@ -172,7 +179,12 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
         {side === "USER" ? messages.some((m) => m.from === "USER") && <PushPrompt who="user" /> : <PushPrompt who="admin" />}
         {status === "RESOLVED" && <p className="mb-2 text-center text-xs text-slate-500">{side === "USER" ? "Marked resolved. Write again to reopen." : "Resolved. A new message reopens it."}</p>}
         {error && <p role="alert" className="mb-2 text-xs text-rose-700">{error}</p>}
-        {file && filePreview && (
+        {preparing && (
+          <div className="mb-2 grid h-20 w-20 place-items-center rounded-xl bg-slate-100 ring-1 ring-slate-200" role="status" aria-label="Preparing image">
+            <Loader2 className="size-5 animate-spin text-brand-600" aria-hidden />
+          </div>
+        )}
+        {!preparing && file && filePreview && (
           <div className="relative mb-2 inline-block">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={filePreview} alt="Image to send" className="h-20 w-auto max-w-[10rem] rounded-xl object-cover ring-1 ring-slate-200" />
@@ -216,8 +228,8 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
               }
             }}
           />
-          <button className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-600 text-white disabled:opacity-50" disabled={sending || (!text.trim() && !file)} aria-label="Send">
-            {sending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <SendHorizontal className="size-4" aria-hidden />}
+          <button className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-600 text-white disabled:opacity-50" disabled={sending || preparing || (!text.trim() && !file)} aria-label="Send">
+            {sending || preparing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <SendHorizontal className="size-4" aria-hidden />}
           </button>
         </div>
       </form>
