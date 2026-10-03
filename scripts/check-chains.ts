@@ -141,7 +141,11 @@ async function checkBsc() {
 /** The address the app reads the real BNB Smart Chain from (Live mode). */
 const BSC_LIVE_DEFAULT = "https://bsc-rpc.publicnode.com";
 
+/** Set when no BSC_LIVE_RPC_URL is configured: the free default is tested, and its known limit only warns. */
+let liveDefault = false;
+
 async function checkBscLive() {
+  liveDefault = !process.env.BSC_LIVE_RPC_URL;
   const url = process.env.BSC_LIVE_RPC_URL || BSC_LIVE_DEFAULT;
   const token = getAddress(NETWORK_INFO.BSC.mainnetUsdt);
   // Don't print a keyed address in full: the key sits in the path.
@@ -167,14 +171,22 @@ async function checkBscLive() {
   record("bsc live: provider serves USDT transfer searches", r.logs.length > 0, `${r.logs.length} transfers in blocks ${fin - 4n}–${r.coveredTo}`);
   if (!r.logs.length) return;
   const log = r.logs[r.logs.length - 1];
-  const tx = await bscAdapter.lookupTx(log.transactionHash!, ctx);
-  record("bsc live: lookup by TxID", tx.found && tx.success && tx.final, `tx ${log.transactionHash} found=${tx.found} success=${tx.success} final=${tx.final}`);
-  const mine = tx.transfers.find((t) => t.position === Number(log.logIndex));
-  record("bsc live: decoded amount matches chain (18 decimals)", !!mine && mine.rawAmount === BigInt(log.args.value!), mine ? `${mine.amount.toFixed()} USDT` : "log not decoded");
-  if (!mine) return;
-  const scan = await bscAdapter.scan([mine.to], { lastBlock: (mine.blockNumber - 1n).toString() }, { ...ctx, scanRange: 3 });
-  const hit = scan.transfers.find((t) => t.txid === mine.txid && t.position === mine.position);
-  record("bsc live: address scan finds the same transfer", !!hit, hit ? `found in block ${hit.blockNumber}` : `${scan.transfers.length} transfers returned, none matched`);
+  try {
+    const tx = await bscAdapter.lookupTx(log.transactionHash!, ctx);
+    record("bsc live: lookup by TxID", tx.found && tx.success && tx.final, `tx ${log.transactionHash} found=${tx.found} success=${tx.success} final=${tx.final}`);
+    const mine = tx.transfers.find((t) => t.position === Number(log.logIndex));
+    record("bsc live: decoded amount matches chain (18 decimals)", !!mine && mine.rawAmount === BigInt(log.args.value!), mine ? `${mine.amount.toFixed()} USDT` : "log not decoded");
+  } catch (e) {
+    // The free PublicNode address refuses single-transaction lookups ("archive requests
+    // require a personal token"). Customer TxIDs and Re-check need them; scanning doesn't.
+    const why = (e as Error).message.split("\n").find((l) => l.startsWith("Details:")) ?? (e as Error).message.slice(0, 120);
+    record("bsc live: lookup by TxID", false, `${why}${liveDefault ? " (free default address: set BSC_LIVE_RPC_URL to a keyed provider)" : ""}`);
+  }
+  // How payments are actually detected: scanning our deposit address. Checked either way.
+  const to = getAddress(log.args.to!);
+  const scan = await bscAdapter.scan([to], { lastBlock: (log.blockNumber! - 1n).toString() }, { ...ctx, scanRange: 3 });
+  const hit = scan.transfers.find((t) => t.txid === log.transactionHash && t.position === Number(log.logIndex));
+  record("bsc live: address scan finds the transfer", !!hit && hit.rawAmount === BigInt(log.args.value!), hit ? `found in block ${hit.blockNumber}, ${hit.amount.toFixed()} USDT` : `${scan.transfers.length} transfers returned, none matched`);
 }
 
 async function main() {
@@ -186,7 +198,11 @@ async function main() {
       record(`${name}: unexpected error`, false, (e as Error).message);
     }
   }
-  const failed = results.filter((r) => !r.ok && !r.check.includes("supports 'finalized'"));
+  // Not fatal: a provider without the "finalized" tag (we fall back), and the free
+  // default BSC address's known lack of TxID lookups (warned; a configured address must pass).
+  const warnOnly = (r: { check: string }) => r.check.includes("supports 'finalized'") || (liveDefault && r.check === "bsc live: lookup by TxID");
+  const failed = results.filter((r) => !r.ok && !warnOnly(r));
+  for (const w of results.filter((r) => !r.ok && warnOnly(r))) console.log(`::warning::${w.check}: ${w.detail}`);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed.`);
   process.exit(failed.length ? 1 : 0);
 }
