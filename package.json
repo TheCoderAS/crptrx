@@ -15,7 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:dev": "prisma migrate dev",
     "check:chains": "tsx scripts/check-chains.ts",
-    "test:chat-rules": "npx -y firebase-tools emulators:exec --project demo-chat --only database,auth \"tsx scripts/check-chat-rules.ts\""
+    "test:chat-rules": "npx -y firebase-tools@15.32.1 emulators:exec --project demo-chat --only database,auth \"tsx scripts/check-chat-rules.ts\""
   },
   "engines": {
     "node": ">=20"
