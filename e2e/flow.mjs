@@ -185,6 +185,17 @@ await user.click("[role=dialog] button[aria-label=Send]");
 await user.locator("[role=dialog] button[aria-label='Open image'] img").waitFor();
 await user.click("[role=dialog] button[aria-label='Open image']");
 await user.locator("[role=dialog][aria-label='Image'] img").waitFor();
+// It opens inside the chat window, not over the whole screen.
+const chatBox = await user.locator("[role=dialog]:has(textarea[aria-label=Message])").boundingBox();
+const viewBox = await user.locator("[role=dialog][aria-label='Image']").boundingBox();
+if (viewBox.x < chatBox.x - 1 || viewBox.y < chatBox.y - 1 || viewBox.x + viewBox.width > chatBox.x + chatBox.width + 1 || viewBox.y + viewBox.height > chatBox.y + chatBox.height + 1)
+  throw new Error("image viewer isn't inside the chat window");
+await shot(user, "07d-user-chat-image");
+// Escape closes the image only; the chat stays open.
+await user.keyboard.press("Escape");
+await user.locator("[role=dialog][aria-label='Image']").waitFor({ state: "detached" });
+await user.locator("[role=dialog] textarea[aria-label=Message]").waitFor();
+await user.click("[role=dialog] button[aria-label='Open image']");
 await user.click("button[aria-label='Close image']");
 if (await user.getByRole("dialog", { name: "Image" }).count()) throw new Error("image viewer didn't close");
 // PDFs can't be sent in chat.
