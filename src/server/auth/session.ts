@@ -56,7 +56,7 @@ export async function createSession(subjectType: "USER" | "ADMIN", subjectId: st
 // cache; outside rendering, e.g. in API routes, it reads fresh every time).
 const loadSession = cache(loadSessionUncached);
 
-async function loadSessionUncached(cookieName: string, subjectType: string, idleMs: number) {
+async function loadSessionUncached(cookieName: string, subjectType: string, idleMs: number, touch = true) {
   const token = (await cookies()).get(cookieName)?.value;
   if (!token) return null;
   const s = await prisma.session.findUnique({ where: { id: sha256(token) } });
@@ -66,8 +66,26 @@ async function loadSessionUncached(cookieName: string, subjectType: string, idle
     return null;
   }
   // Touch at most once a minute.
-  if (now - s.lastSeenAt.getTime() > 60_000) await prisma.session.update({ where: { id: s.id }, data: { lastSeenAt: new Date() } });
+  if (touch && now - s.lastSeenAt.getTime() > 60_000) await prisma.session.update({ where: { id: s.id }, data: { lastSeenAt: new Date() } });
   return s;
+}
+
+// Admin sessions are NOT kept alive by requests: the panel's background checks
+// (live counts every 20 s, chat updates) would keep an unattended tab logged in
+// forever. Instead the browser reports real activity (clicks, typing, opening a
+// page) through /api/admin/session; idle time is time since the last of those.
+
+/** When the current admin session ends: idle (no activity) and the hard 12-hour limit. */
+export async function adminSessionTimes(): Promise<{ idleEndsAt: Date; hardEndsAt: Date } | null> {
+  const s = await loadSession(ADMIN_COOKIE, "ADMIN", ADMIN_IDLE_MS, false);
+  if (!s) return null;
+  return { idleEndsAt: new Date(s.lastSeenAt.getTime() + ADMIN_IDLE_MS), hardEndsAt: s.expiresAt };
+}
+
+/** The admin is active right now: restart the idle clock. */
+export async function touchAdminSession() {
+  const id = await currentSessionId("ADMIN");
+  if (id) await prisma.session.updateMany({ where: { id, subjectType: "ADMIN" }, data: { lastSeenAt: new Date() } });
 }
 
 export async function destroySession(kind: "USER" | "ADMIN") {
@@ -121,7 +139,7 @@ export async function requireUser(opts: { allowUnverified?: boolean } = {}): Pro
 
 /** Admin whose password is checked but who still owes a 2FA code. */
 export async function pendingAdmin(): Promise<Admin | null> {
-  const s = await loadSession(ADMIN_COOKIE, "ADMIN", ADMIN_IDLE_MS);
+  const s = await loadSession(ADMIN_COOKIE, "ADMIN", ADMIN_IDLE_MS, false);
   if (!s) return null;
   const a = await prisma.admin.findUnique({ where: { id: s.subjectId } });
   return a && a.status === "ACTIVE" ? a : null;
@@ -129,7 +147,7 @@ export async function pendingAdmin(): Promise<Admin | null> {
 
 export const currentAdmin = cache(currentAdminUncached);
 async function currentAdminUncached(): Promise<Admin | null> {
-  const s = await loadSession(ADMIN_COOKIE, "ADMIN", ADMIN_IDLE_MS);
+  const s = await loadSession(ADMIN_COOKIE, "ADMIN", ADMIN_IDLE_MS, false);
   if (!s || s.stage !== "FULL") return null;
   const a = await prisma.admin.findUnique({ where: { id: s.subjectId } });
   if (!a || a.status !== "ACTIVE" || !a.totpEnabled) return null;
