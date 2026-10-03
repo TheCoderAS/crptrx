@@ -1,0 +1,76 @@
+name: Firebase rules
+
+# Live chat access rules (firebase/database.rules.json).
+# Pull requests: the rules are checked on the Firebase emulator.
+# Merge to main: checked again, then published to the real database.
+# Setup (repo Settings > Secrets and variables > Actions):
+#   FIREBASE_DEPLOY_KEY  key file of a service account that has only the
+#                        "Firebase Realtime Database Admin" role (not the app's key)
+#   FIREBASE_PROJECT_ID  the Firebase project ID
+# Without them the check still runs; publishing is skipped.
+# Edit rules only here: a change made in the Firebase console is overwritten by the next publish.
+
+on:
+  pull_request:
+    paths:
+      - "firebase/**"
+      - "firebase.json"
+      - "scripts/check-chat-rules.ts"
+      - "src/server/firebase/chatSignal.ts"
+      - ".github/workflows/firebase-rules.yml"
+  push:
+    branches: [main]
+    paths:
+      - "firebase/**"
+      - "firebase.json"
+      - "scripts/check-chat-rules.ts"
+      - "src/server/firebase/chatSignal.ts"
+      - ".github/workflows/firebase-rules.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: firebase-rules-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    env:
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Check the rules on the Firebase emulator
+        run: npm run test:chat-rules
+
+      - name: Check publish settings
+        id: check
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          KEY: ${{ secrets.FIREBASE_DEPLOY_KEY }}
+          PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$PROJECT" ]; then
+            echo "::notice::FIREBASE_DEPLOY_KEY / FIREBASE_PROJECT_ID not set; rules were checked but not published."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish the rules
+        if: steps.check.outputs.publish == 'true'
+        env:
+          KEY: ${{ secrets.FIREBASE_DEPLOY_KEY }}
+          PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          KEY_FILE="$RUNNER_TEMP/firebase-deploy-key.json"
+          printf '%s' "$KEY" > "$KEY_FILE"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          GOOGLE_APPLICATION_CREDENTIALS="$KEY_FILE" npx -y firebase-tools@15.32.1 deploy --only database --project "$PROJECT" --non-interactive
