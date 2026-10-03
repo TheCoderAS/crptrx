@@ -15,11 +15,12 @@ import { unreadForUser } from "@/server/chat/service";
 import { GuestNav } from "@/components/GuestNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/ui";
+import { nativeAppVersion } from "@/server/appClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
-  const [user, s] = await Promise.all([currentUser(), getSettings()]);
+  const [user, s, inApp] = await Promise.all([currentUser(), getSettings(), nativeAppVersion()]);
   // Someone who still has to confirm their email only gets "Log out", not the app navigation.
   const pending = !!user && !user.emailVerified && s.auth_email_verification_required;
   const nav = !!user && !pending;
@@ -72,6 +73,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             </div>
             <nav className="flex gap-4" aria-label="Legal">
               <Link href="/help" className="hover:text-slate-900">Help &amp; FAQ</Link>
+              {!inApp && <Link href="/app" className="hover:text-slate-900">Android app</Link>}
               <Link href="/terms" className="hover:text-slate-900">Terms</Link>
               <Link href="/privacy" className="hover:text-slate-900">Privacy</Link>
             </nav>

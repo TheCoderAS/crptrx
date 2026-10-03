@@ -88,6 +88,21 @@ export const env = {
       return opt("FIREBASE_VAPID_KEY");
     },
   },
+  /** The Android app (android/ in this repo). It reads these from /api/app/config, so one app file fits any server. */
+  android: {
+    /** OAuth "Web client" ID (Google Cloud > Credentials; Firebase creates it). The app's Google sign-in asks for a token for it. */
+    get googleWebClientId() {
+      return opt("GOOGLE_WEB_CLIENT_ID");
+    },
+    /** Firebase > Project settings > Your apps > the Android app's "App ID" (1:…:android:…). Needed for app push notifications. */
+    get firebaseAppId() {
+      return opt("FIREBASE_ANDROID_APP_ID");
+    },
+    /** GitHub repository whose releases hold the app files. */
+    get releasesRepo() {
+      return opt("ANDROID_RELEASES_REPO") ?? "TheCoderAS/crptrx";
+    },
+  },
   storage: {
     /** Supabase whenever it's configured, so a missing STORAGE_DRIVER can't send files to a disk that's wiped on redeploy. */
     get driver() {

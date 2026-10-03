@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/surface">
+
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/refresh"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <WebView
+            android:id="@+id/web"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/progress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:indeterminate="false"
+        android:visibility="gone"
+        app:indicatorColor="@color/brand"
+        app:trackThickness="3dp"
+        xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+    <LinearLayout
+        android:id="@+id/offline"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/surface"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:contentDescription="@null"
+            android:src="@mipmap/ic_launcher_round" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/offline_title"
+            android:textColor="@color/on_surface"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/offline_body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/offline_body"
+            android:textColor="@color/muted"
+            android:textSize="15sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/retry"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/retry" />
+    </LinearLayout>
+</FrameLayout>

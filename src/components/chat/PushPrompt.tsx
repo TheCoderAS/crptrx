@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BellRing, X } from "lucide-react";
-import { enablePush, pushAvailable, type Who } from "@/lib/push";
+import { enablePush, pushAvailable, pushOnHere, pushPermission, pushSupported, type Who } from "@/lib/push";
 
 /** One slim line under the chat: "Get notified when …". Shown until answered or closed. */
 export function PushPrompt({ who = "user" }: { who?: Who }) {
@@ -16,7 +16,8 @@ export function PushPrompt({ who = "user" }: { who?: Who }) {
     } catch {
       /* private mode */
     }
-    if (dismissed || !("Notification" in window) || Notification.permission !== "default") return;
+    // Not yet on for this device (in the Android app the phone may already allow notifications).
+    if (dismissed || !pushSupported() || pushPermission() === "denied" || pushOnHere(who)) return;
     let on = true;
     void pushAvailable(who).then((ok) => on && setShow(ok));
     return () => {

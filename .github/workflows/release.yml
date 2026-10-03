@@ -3,7 +3,8 @@ name: Release
 # Every merge into main (the live app) gets a version tag and a GitHub Release
 # listing what changed: v1.0.0 first, then the minor number goes up each time
 # (v1.1.0, v1.2.0, ...). Label the staging -> main PR "release:patch" for a small
-# fix (v1.2.1) or "release:major" for a big change (v2.0.0).
+# fix (v1.2.1) or "release:major" for a big change (v2.0.0). The live Android app is
+# built with the same version and attached to the release (see android-build.yml).
 
 on:
   push:
@@ -20,6 +21,11 @@ concurrency:
 jobs:
   tag:
     runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.v.outputs.skip }}
+      next: ${{ steps.v.outputs.next }}
+      version: ${{ steps.v.outputs.version }}
+      code: ${{ steps.v.outputs.code }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,12 +35,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -n "$(git tag --points-at "$GITHUB_SHA" --list 'v*')" ]; then
+          # Only plain vX.Y.Z tags count: test-app pre-releases (vX.Y.Z-test.N) are not versions of main.
+          if git tag --points-at "$GITHUB_SHA" --list 'v*' | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "::notice::This commit is already tagged; nothing to do."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          last=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
           # Labels of the pull request that was merged into main, if any.
           labels=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[].labels[].name] | join(",")' 2>/dev/null || true)
           if [ -z "$last" ]; then
@@ -49,9 +56,30 @@ jobs:
           fi
           echo "Previous: ${last:-none} -> next: $next (labels: ${labels:-none})"
           echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "last=$last" >> "$GITHUB_OUTPUT"
+          # The Android app gets the same version: name X.Y.Z, code X*10000 + Y*100 + Z.
+          IFS=. read -r a b c <<< "${next#v}"
+          echo "version=${next#v}" >> "$GITHUB_OUTPUT"
+          echo "code=$((a * 10000 + b * 100 + c))" >> "$GITHUB_OUTPUT"
       - name: Tag and publish the release
         if: steps.v.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.v.outputs.next }}
-        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          LAST: ${{ steps.v.outputs.last }}
+        # Notes count from the previous live version, not from a test-app pre-release.
+        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes ${LAST:+--notes-start-tag "$LAST"} --latest
+
+  # The live Android app, signed with our key, attached to the same release (VisionPay-vX.Y.Z.apk).
+  android:
+    needs: tag
+    if: needs.tag.outputs.skip != 'true'
+    uses: ./.github/workflows/android-build.yml
+    with:
+      flavor: live
+      version_name: ${{ needs.tag.outputs.version }}
+      version_code: ${{ needs.tag.outputs.code }}
+      tag: ${{ needs.tag.outputs.next }}
+      require_signing: true
+      smoke_test: true
+    secrets: inherit

@@ -12,7 +12,8 @@ import { ContactLinks } from "@/components/ContactLinks";
 import { contactChannels } from "@/server/contact";
 import { PageHeader, StatusPill } from "@/components/ui";
 import { PushSetting } from "@/components/PushSetting";
-import { webPushReady } from "@/server/firebase/push";
+import { appPushReady, webPushReady } from "@/server/firebase/push";
+import { nativeAppVersion } from "@/server/appClient";
 
 export const metadata = { title: "Account", robots: { index: false, follow: false } };
 
@@ -20,10 +21,11 @@ const dateFmt = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", mon
 
 export default async function Account() {
   const user = await userOrLogin();
-  const [s, payouts, wallets] = await Promise.all([
+  const [s, payouts, wallets, inApp] = await Promise.all([
     getSettings(),
     prisma.payoutMethod.count({ where: { userId: user.id, deletedAt: null } }),
     prisma.userWallet.count({ where: { userId: user.id, deletedAt: null } }),
+    nativeAppVersion(),
   ]);
   const mobileOk = !!(user.mobile && user.mobileVerifiedAt);
   const google = !!user.firebaseUid && !user.firebaseUid.startsWith("dev:");
@@ -92,7 +94,7 @@ export default async function Account() {
         <h2 className="mb-2 px-1 text-sm font-semibold text-slate-900">Sign-in &amp; security</h2>
         <div className="card divide-y divide-slate-100 p-0 sm:p-0">
           <SecurityRow icon={<ShieldCheck className="size-4" aria-hidden />} label="Sign-in methods" detail={methods.join(" · ") || "None"} />
-          {webPushReady() && <PushSetting />}
+          {(inApp ? appPushReady() : webPushReady()) && <PushSetting />}
           {(mobileOk || !s.onboarding_mobile_required) && (
             <SecurityRow
               icon={<Smartphone className="size-4" aria-hidden />}
@@ -138,6 +140,14 @@ export default async function Account() {
             {google ? "Turn on 2-Step Verification in your Google account. " : "Use a password you don't use anywhere else. "}We will never ask for your password or codes by phone or chat.
           </p>
         </div>
+      </section>
+
+      {/* The Android app: a download link on the website, the version inside the app. */}
+      <section>
+        <h2 className="mb-2 px-1 text-sm font-semibold text-slate-900">App</h2>
+        <nav className="card divide-y divide-slate-100 p-0 sm:p-0" aria-label="Android app">
+          <NavRow href="/app" icon={<Smartphone className="size-4" aria-hidden />} tile="tile-blue" label={inApp ? "VisionPay app" : "Get the Android app"} detail={inApp ? `Version ${inApp}` : "Faster access and reply alerts"} />
+        </nav>
       </section>
 
       {/* Help */}
