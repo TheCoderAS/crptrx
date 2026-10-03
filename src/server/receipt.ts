@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import { degrees, PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import QRCode from "qrcode";
 import { explorerTxUrl, NETWORK_INFO, type Mode, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
@@ -198,7 +198,31 @@ export async function buildReceipt(orderId: string, userId?: string): Promise<Ui
   t.text(help, M, fy - 2, 8, font, MUTED);
   t.text(`${companyName(s)} · ${o.id}`, M, fy - 22, 7, font, tint(MUTED, 0.3));
   page.drawRectangle({ x: 0, y: 0, width: W, height: 6, color: brand });
+  if (o.networkMode === "TEST") testWatermark(page, bold, W, H);
   return doc.save();
+}
+
+/**
+ * Test-mode receipts can't pass for real ones: a diagonal "NOT A REAL PAYMENT"
+ * across the whole page, drawn last so it sits on top of everything (cropping
+ * out one line still leaves the others), plus a red strip at the top.
+ */
+function testWatermark(page: PDFPage, bold: PDFFont, W: number, H: number) {
+  const RED = rgb(0.86, 0.15, 0.15);
+  const text = "TEST ONLY - NOT A REAL PAYMENT";
+  const size = 34;
+  const width = bold.widthOfTextAtSize(text, size);
+  const angle = 35;
+  const rad = (angle * Math.PI) / 180;
+  for (const cy of [H * 0.78, H * 0.5, H * 0.22]) {
+    // Centre each line on (W/2, cy) along the rotated baseline.
+    const x = W / 2 - (Math.cos(rad) * width) / 2 + (Math.sin(rad) * size) / 3;
+    const y = cy - (Math.sin(rad) * width) / 2 - (Math.cos(rad) * size) / 3;
+    page.drawText(text, { x, y, size, font: bold, color: RED, opacity: 0.16, rotate: degrees(angle) });
+  }
+  page.drawRectangle({ x: 0, y: H - 18, width: W, height: 18, color: RED });
+  const strip = "TEST NETWORK RECEIPT - NO REAL USDT OR RUPEES MOVED";
+  page.drawText(strip, { x: (W - bold.widthOfTextAtSize(strip, 8)) / 2, y: H - 12.5, size: 8, font: bold, color: rgb(1, 1, 1) });
 }
 
 /** Split a long unbroken string (a TxID) into lines that fit the width. */

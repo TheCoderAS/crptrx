@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { InfoTip } from "@/components/InfoTip";
 import { Select } from "@/components/Select";
 import {
   ArrowLeftRight,
@@ -14,7 +13,6 @@ import {
   Palette,
   Percent,
   Phone,
-  RadioTower,
   ShieldAlert,
   Signal,
   UserCheck,
@@ -178,16 +176,6 @@ export default async function SettingsPage() {
                     ))}
                   </Group>
                 </SettingsForm>
-                <div className={`card flex items-center gap-3 p-4 sm:p-4 ${mode === "LIVE" ? "ring-1 ring-rose-200" : ""}`}>
-                  <span className={`icon-tile ${mode === "LIVE" ? "tile-rose" : "tile-amber"} size-8 rounded-lg [&_svg]:size-4`}><RadioTower /></span>
-                  <div className="flex-1">
-                    <h2 className="flex items-center gap-1 text-sm font-semibold text-slate-900">
-                      Mode: {mode === "LIVE" ? "Live" : "Test"}
-                      <InfoTip>Fixed for this server by its APP_MODE setting: the live app runs Live, staging runs Test. It can&apos;t be switched from here.</InfoTip>
-                    </h2>
-                    <p className="text-xs text-slate-500">{mode === "LIVE" ? "Real networks, real money" : "Tron Nile + BSC Testnet, no real money"}</p>
-                  </div>
-                </div>
               </>
             ),
           },

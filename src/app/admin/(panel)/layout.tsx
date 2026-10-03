@@ -16,6 +16,7 @@ import { LogoutButton } from "@/components/LogoutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AdminPushToggle } from "@/components/PushSetting";
 import { PushSync } from "@/components/PushSync";
+import { SessionTimer } from "@/components/SessionTimer";
 import { webPushReady } from "@/server/firebase/push";
 import { Banner, Logo } from "@/components/ui";
 
@@ -55,6 +56,7 @@ export default async function Panel({ children }: { children: React.ReactNode })
   return (
     <div className="admin-ui lg:flex">
       <LivePulse url="/api/admin/pulse" everyMs={20_000} />
+      <SessionTimer />
       {webPushReady() && <PushSync who="admin" />}
       <Suspense fallback={null}><NavProgress /></Suspense>
       <AdminMobileNav items={items} brand={<span className="flex items-center gap-2"><Link href="/admin"><Logo name={s.brand_name} src={logoSrc(s)} inverted /></Link>{mode}</span>} badge={mode} footer={who} />
@@ -88,7 +90,6 @@ export default async function Panel({ children }: { children: React.ReactNode })
             })}
         </div>
         <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6">{children}</main>
-        <p className="px-4 pb-6 text-center text-xs text-slate-400">Sessions end after 30 minutes without activity.</p>
       </div>
     </div>
   );
