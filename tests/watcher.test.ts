@@ -186,7 +186,7 @@ describe("TxID check when the provider refuses receipt lookups (free PublicNode)
     const c = fakeBsc([{ blockNumber: 975n, logIndex: 3, txid: tx(50), to: ADDR.BSC, amount: order.usdtAmount.toString() }], { finalized: 1000n });
     setBscClientForTests(c);
     await prisma.order.update({ where: { id: order.id }, data: { status: "PAYMENT_SUBMITTED", submittedTxid: tx(50) } });
-    await recheckPayment(order.id, { type: "USER", userId: user.id }, user.id);
+    await recheckPayment(order.id, { type: "USER", id: user.id }, user.id);
     expect((await orderById(order.id)).status).toBe("PAYMENT_CONFIRMED");
   });
 
@@ -195,7 +195,7 @@ describe("TxID check when the provider refuses receipt lookups (free PublicNode)
     const c = fakeBsc([{ blockNumber: 975n, logIndex: 0, txid: tx(51), from: ADDR.BSC, to: ADDR.BSC, amount: order.usdtAmount.toString() }], { finalized: 1000n });
     setBscClientForTests(c);
     await prisma.order.update({ where: { id: order.id }, data: { status: "PAYMENT_SUBMITTED", submittedTxid: tx(51) } });
-    await recheckPayment(order.id, { type: "USER", userId: user.id }, user.id);
+    await recheckPayment(order.id, { type: "USER", id: user.id }, user.id);
     const o = await orderById(order.id);
     expect(o.status).toBe("ON_HOLD");
     expect((await prisma.incomingTransfer.findFirstOrThrow({ where: { txid: tx(51) } })).unmatchedReason).toMatch(/own deposit address/);
@@ -209,6 +209,6 @@ describe("TxID check when the provider refuses receipt lookups (free PublicNode)
     };
     setBscClientForTests(c);
     await prisma.order.update({ where: { id: order.id }, data: { status: "PAYMENT_SUBMITTED", submittedTxid: tx(52) } });
-    await expect(recheckPayment(order.id, { type: "USER", userId: user.id }, user.id)).rejects.toMatchObject({ status: 503, message: /Couldn't reach the blockchain/ });
+    await expect(recheckPayment(order.id, { type: "USER", id: user.id }, user.id)).rejects.toMatchObject({ status: 503, message: /Couldn't reach the blockchain/ });
   });
 });
