@@ -7,6 +7,7 @@ import { companyName } from "@/server/contact";
 import { Suspense } from "react";
 import { Dismissible } from "@/components/Dismissible";
 import { LivePulse } from "@/components/LivePulse";
+import { PushSync } from "@/components/PushSync";
 import { NavProgress } from "@/components/NavProgress";
 import { LogoutButton } from "@/components/LogoutButton";
 import { DesktopNav, MobileTabs } from "@/components/SiteNav";
@@ -28,6 +29,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
   return (
     <div className="flex min-h-screen flex-col">
       {user && <LivePulse url="/api/me/pulse" everyMs={30_000} />}
+      {nav && <PushSync />}
       <Suspense fallback={null}><NavProgress /></Suspense>
       {s.network_mode === "TEST" && (
         <Dismissible id="test-mode-strip">

@@ -1,18 +1,34 @@
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import WebSocket from "ws";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Firebase is replaced by recorders: these tests check what we'd send, not Google.
+const fb = vi.hoisted(() => ({ signals: [] as unknown[][], sends: [] as unknown[], reply: null as null | ((tokens: string[]) => unknown) }));
+vi.mock("@/server/firebase/chatSignal", () => ({ signalChat: (...a: unknown[]) => void fb.signals.push(a) }));
+vi.mock("@/server/firebase/admin", () => ({ firebaseApp: () => ({}), logFirebaseError: () => undefined }));
+vi.mock("firebase-admin/messaging", () => ({
+  getMessaging: () => ({
+    sendEachForMulticast: async (m: { tokens: string[] }) => {
+      fb.sends.push(m);
+      return fb.reply ? fb.reply(m.tokens) : { successCount: m.tokens.length, responses: m.tokens.map(() => ({ success: true })) };
+    },
+  }),
+}));
+
 import { prisma } from "@/server/db";
-import { randomToken, sha256 } from "@/server/crypto";
+import { randomToken } from "@/server/crypto";
 import { adminCounts } from "@/server/adminCounts";
 import { listChat, markChatRead, sendChat, setChatResolved, unreadForUser, waitingOnUsCount } from "@/server/chat/service";
-import { attachChat } from "@/server/chat/ws";
+import { pushToUser, registerPushDevice } from "@/server/firebase/push";
 import { baseSettings, makeOrder, makeUser, resetDb } from "./helpers";
 
 beforeEach(async () => {
   await resetDb();
   await baseSettings();
+  fb.signals.length = 0;
+  fb.sends.length = 0;
+  fb.reply = null;
 });
+
+const settle = () => new Promise((r) => setTimeout(r, 50));
 
 async function makeAdmin(name = "Priya Sharma") {
   return prisma.admin.create({ data: { name, email: `${randomToken().slice(0, 8)}@admin.dev`, passwordHash: "x", totpEnabled: true } });
@@ -71,69 +87,49 @@ describe("order chat", () => {
   });
 });
 
-describe("chat socket", () => {
-  let server: Server;
-  let base: string;
-  beforeAll(async () => {
-    server = createServer((_, res) => res.end());
-    attachChat(server);
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-    base = `127.0.0.1:${(server.address() as AddressInfo).port}`;
-  });
-  afterAll(() => new Promise<void>((r) => server.close(() => r())));
-
-  async function session(subjectType: "USER" | "ADMIN", subjectId: string) {
-    const token = randomToken();
-    await prisma.session.create({ data: { id: sha256(token), subjectType, subjectId, expiresAt: new Date(Date.now() + 3600_000) } });
-    return `${subjectType === "USER" ? "sid" : "asid"}=${token}`;
-  }
-
-  function connect(query: string, cookie: string, origin = `http://${base}`) {
-    const ws = new WebSocket(`ws://${base}/ws?${query}`, { headers: { cookie, origin } });
-    const events: Record<string, unknown>[] = [];
-    ws.on("message", (d) => events.push(JSON.parse(String(d))));
-    const opened = new Promise<number>((resolve) => {
-      ws.on("open", () => resolve(101));
-      ws.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0));
-      ws.on("error", () => resolve(0));
-    });
-    return { ws, events, opened };
-  }
-
-  const until = async (fn: () => boolean) => {
-    for (let i = 0; i < 100 && !fn(); i++) await new Promise((r) => setTimeout(r, 20));
-    expect(fn()).toBe(true);
-  };
-
-  it("delivers messages and typing live, and keeps strangers out", async () => {
+describe("live signal and push", () => {
+  it("rings the order's chat on every change, with no message text", async () => {
     const { order, user } = await makeOrder("TRON", "100");
-    const stranger = await makeUser();
     const admin = await makeAdmin();
-    const customer = connect(`order=${order.id}`, await session("USER", user.id));
-    const support = connect(`order=${order.id}&as=admin`, await session("ADMIN", admin.id));
-    const inbox = connect("inbox=1", await session("ADMIN", admin.id));
-    expect(await customer.opened).toBe(101);
-    expect(await support.opened).toBe(101);
-    expect(await inbox.opened).toBe(101);
+    await sendChat(order.id, { type: "USER", userId: user.id }, "secret details");
+    await markChatRead(order.id, { type: "ADMIN", adminId: admin.id });
+    await setChatResolved(order.id, admin.id, true);
+    expect(fb.signals).toEqual([
+      [user.id, order.id, "message", "USER"],
+      [user.id, order.id, "read", "ADMIN"],
+      [user.id, order.id, "thread", "ADMIN"],
+    ]);
+  });
 
-    // Someone else's order, no cookie, a customer asking for the inbox, another website.
-    expect(await connect(`order=${order.id}`, await session("USER", stranger.user.id)).opened).toBe(404);
-    expect(await connect(`order=${order.id}`, "").opened).toBe(401);
-    expect(await connect("inbox=1", await session("USER", user.id)).opened).toBe(401);
-    expect(await connect(`order=${order.id}`, await session("USER", user.id), "https://evil.example").opened).toBe(403);
-
+  it("pushes support replies to the customer's devices only, never the text", async () => {
+    const { order, user } = await makeOrder("TRON", "100");
+    const admin = await makeAdmin();
+    await registerPushDevice(user.id, "web-token-aaaaaaaaaaaaaaaaaaaa", "WEB");
+    await registerPushDevice(user.id, "android-token-bbbbbbbbbbbbbbbbbb", "ANDROID");
     await sendChat(order.id, { type: "USER", userId: user.id }, "hello");
-    await until(() => support.events.some((e) => e.type === "message"));
-    await until(() => inbox.events.some((e) => e.type === "message"));
+    await settle();
+    expect(fb.sends).toHaveLength(0); // customers' own messages don't push
+    await sendChat(order.id, { type: "ADMIN", adminId: admin.id }, "Your UTR is 1234");
+    await settle();
+    expect(fb.sends).toHaveLength(1);
+    const m = fb.sends[0] as { tokens: string[]; data: Record<string, string>; android: { notification: { body: string } } };
+    expect(m.tokens.sort()).toEqual(["android-token-bbbbbbbbbbbbbbbbbb", "web-token-aaaaaaaaaaaaaaaaaaaa"]);
+    expect(m.data).toMatchObject({ type: "chat_reply", orderId: order.id, link: `/orders/${order.id}`, tag: `chat-${order.id}` });
+    expect(JSON.stringify(m)).not.toContain("1234");
+  });
 
-    customer.ws.send(JSON.stringify({ type: "typing" }));
-    await until(() => support.events.some((e) => e.type === "typing" && e.from === "USER"));
-    // Your own typing isn't sent back to you.
-    expect(customer.events.some((e) => e.type === "typing")).toBe(false);
-
-    support.ws.send(JSON.stringify({ type: "read" }));
-    await until(() => customer.events.some((e) => e.type === "read" && e.by === "ADMIN"));
-
-    for (const c of [customer, support, inbox]) c.ws.close();
+  it("forgets devices Firebase says are gone, and a token moves with whoever signs in", async () => {
+    const a = await makeUser();
+    const b = await makeUser();
+    await registerPushDevice(a.user.id, "shared-browser-token-xxxxxxxxxx", "WEB");
+    await registerPushDevice(b.user.id, "shared-browser-token-xxxxxxxxxx", "WEB");
+    expect(await prisma.pushDevice.count({ where: { userId: a.user.id } })).toBe(0);
+    await registerPushDevice(b.user.id, "old-token-yyyyyyyyyyyyyyyyyyyy", "WEB");
+    fb.reply = (tokens) => ({
+      successCount: 1,
+      responses: tokens.map((t) => (t.startsWith("old") ? { success: false, error: { code: "messaging/registration-token-not-registered" } } : { success: true })),
+    });
+    expect(await pushToUser(b.user.id, { title: "t", body: "b", link: "/", tag: "x" })).toEqual({ sent: 1, removed: 1 });
+    expect((await prisma.pushDevice.findMany({ where: { userId: b.user.id } })).map((d) => d.token)).toEqual(["shared-browser-token-xxxxxxxxxx"]);
   });
 });

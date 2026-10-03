@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "NODE_ENV=production node --import tsx server.ts",
+    "start": "next start",
     "worker": "tsx src/worker/index.ts",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -14,7 +14,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:dev": "prisma migrate dev",
-    "check:chains": "tsx scripts/check-chains.ts"
+    "check:chains": "tsx scripts/check-chains.ts",
+    "test:chat-rules": "npx -y firebase-tools emulators:exec --project demo-chat --only database,auth \"tsx scripts/check-chat-rules.ts\""
   },
   "engines": {
     "node": ">=20"
@@ -26,6 +27,7 @@
     "@walletconnect/ethereum-provider": "^2.25.0",
     "bcryptjs": "^3.0.3",
     "decimal.js": "^10.6.0",
+    "firebase-admin": "^13.10.0",
     "jose": "^6.2.12",
     "lucide-react": "^0.577.0",
     "next": "15.5",
@@ -36,7 +38,6 @@
     "react-dom": "19.1",
     "tsx": "^4.23.15",
     "viem": "^2.56.9",
-    "ws": "^8.22.0",
     "zod": "3.25"
   },
   "devDependencies": {
@@ -46,7 +47,6 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/ws": "^8.18.2",
     "eslint": "^9.39.5",
     "eslint-config-next": "15.5",
     "firebase": "^12.19.0",

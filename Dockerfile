@@ -25,7 +25,7 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 STORAGE_LOCAL_DIR=/a
 RUN groupadd -r app && useradd -r -g app -d /app app
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
-COPY package.json next.config.ts tsconfig.json server.ts ./
+COPY package.json next.config.ts tsconfig.json ./
 COPY prisma ./prisma
 COPY src ./src
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint

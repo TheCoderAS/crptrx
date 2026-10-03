@@ -153,6 +153,33 @@ await expectText(admin, "No open order for exactly 77.77 USDT");
 await shot(admin, "07b-admin-unmatched");
 console.log("unmatched payment explains why");
 
+// Support chat on the order: customer asks, support answers in the inbox/order page, customer sees it.
+await user.goto(orderUrl);
+await user.click("button[aria-label='Chat with support']");
+await expectText(user, "Send us a message");
+await user.fill("[role=dialog] textarea[aria-label=Message]", "Is my payment okay?");
+await user.click("[role=dialog] button[aria-label=Send]");
+await expectText(user, "Is my payment okay?");
+await expectText(user, "Get notified when we reply");
+await shot(user, "07e-user-chat");
+await admin.goto(BASE + "/admin/support");
+await expectText(admin, "tester@example.com");
+await shot(admin, "07f-admin-support-inbox");
+await admin.click(`a[href='/admin/orders/${orderId}']`);
+await expectText(admin, "Is my payment okay?");
+await admin.fill("section[aria-label='Chat with customer'] textarea", "Yes, received. Reviewing now.");
+await admin.click("section[aria-label='Chat with customer'] button[aria-label=Send]");
+await expectText(admin, "Yes, received. Reviewing now.");
+await expectText(user, "Yes, received. Reviewing now.");
+await expectText(user, "Seen");
+await shot(user, "07g-user-chat-reply");
+await shot(admin, "07h-admin-order-chat");
+await admin.click("section[aria-label='Chat with customer'] button:has-text('Resolve')");
+await expectText(admin, "Reopen");
+await admin.goto(BASE + "/admin/support?view=resolved");
+await expectText(admin, "tester@example.com");
+console.log("support chat round trip works");
+
 // 7. Admin workflow
 await admin.goto(`${BASE}/admin/orders/${orderId}`);
 await admin.click("button:has-text('Start review')");

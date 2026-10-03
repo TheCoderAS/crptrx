@@ -103,6 +103,7 @@ model User {
   orders          Order[]
   supportMessages SupportMessage[]
   supportThreads  SupportThread[]
+  pushDevices     PushDevice[]
   wallets         UserWallet[]
   emailTokens     EmailToken[]
 
@@ -330,6 +331,22 @@ model SupportThread {
   @@index([status, lastFrom, lastMessageAt])
   @@index([userId])
   @@map("support_threads")
+}
+
+// A phone or browser that gets push notifications for a customer (Firebase Cloud
+// Messaging). WEB today; ANDROID / IOS when the apps register their tokens.
+model PushDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  platform   String // WEB | ANDROID | IOS
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_devices")
 }
 
 model Setting {

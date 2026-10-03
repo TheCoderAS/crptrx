@@ -29,7 +29,7 @@ export function AdminOrderChat({ orderId }: { orderId: string }) {
             <div className="flex items-center gap-2">
               <MessageCircle className="size-4 text-slate-500" aria-hidden />
               <h2 className="h2 flex-1">Chat with customer</h2>
-              <span className={`size-2 rounded-full ${live ? "bg-emerald-500" : "bg-slate-300"}`} title={live ? "Live" : "Connecting…"} aria-label={live ? "Live" : "Connecting"} />
+              <span className={`size-2 rounded-full ${live ? "bg-emerald-500" : "bg-slate-300"}`} title={live ? "Live" : "Checks every few seconds"} aria-label={live ? "Live" : "Checks every few seconds"} />
               {count === 0 ? null : status === "OPEN" ? (
                 <button type="button" disabled={busy} onClick={() => void setResolved(true)} className="btn-ghost min-h-8 px-2.5 text-xs">
                   <CheckCircle2 className="size-3.5" aria-hidden /> Resolve

@@ -62,8 +62,8 @@ export function ChatLauncher({ orderId, hours, startUnread = false }: { orderId:
                   Support <InfoTip className="text-white/80">{hours}. Messages outside these hours are answered next working day.</InfoTip>
                 </p>
                 <p className="flex items-center gap-1.5 text-xs text-white/80">
-                  <span className={`size-1.5 rounded-full ${live ? "bg-emerald-300" : "bg-white/50"}`} aria-hidden />
-                  {live ? `Order ${orderId}` : "Connecting…"}
+                  {live && <span className="size-1.5 rounded-full bg-emerald-300" aria-hidden />}
+                  Order {orderId}
                 </p>
               </div>
               <button type="button" onClick={() => setOpen(false)} aria-label="Close support chat" className="grid size-9 place-items-center rounded-full hover:bg-white/15">

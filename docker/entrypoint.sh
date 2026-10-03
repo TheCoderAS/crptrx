@@ -58,8 +58,7 @@ seed() {
 
 # Start node directly (no npx/npm wrapper processes): saves ~200 MB, which
 # matters on small hosts such as Render's free 512 MB plan.
-# server.ts runs Next plus the live support chat socket (/ws) on the same port.
-WEB="node --import tsx server.ts"
+WEB="node node_modules/next/dist/bin/next start -p ${PORT:-3000}"
 WORKER="node --import tsx src/worker/index.ts"
 
 case "${1:-web}" in

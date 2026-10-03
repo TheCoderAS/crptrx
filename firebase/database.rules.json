@@ -1,0 +1,28 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "chat": {
+      "u": {
+        "$userId": {
+          "$orderId": {
+            ".read": "auth != null && (auth.uid === 'u_' + $userId || auth.token.staff === true)",
+            "typing": {
+              "user": {
+                ".write": "auth != null && auth.uid === 'u_' + $userId",
+                ".validate": "newData.isNumber() && newData.val() <= now + 5000"
+              },
+              "admin": {
+                ".write": "auth != null && auth.token.staff === true",
+                ".validate": "newData.isNumber() && newData.val() <= now + 5000"
+              }
+            }
+          }
+        }
+      },
+      "inbox": {
+        ".read": "auth != null && auth.token.staff === true"
+      }
+    }
+  }
+}

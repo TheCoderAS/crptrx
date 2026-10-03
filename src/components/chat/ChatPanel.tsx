@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckCheck, ImagePlus, Loader2, SendHorizontal, X } from "lucide-react";
 import { fitUpload } from "@/lib/shrinkImage";
-import { useChatSocket } from "./useChatSocket";
+import { useChatLive } from "./useChatLive";
+import { PushPrompt } from "./PushPrompt";
 
 type Side = "USER" | "ADMIN";
 interface Msg {
@@ -24,8 +25,9 @@ const when = (iso: string) => {
 
 /**
  * Live support chat for one order, used by the customer (side = USER) and by
- * support (side = ADMIN). Messages go out over HTTP and arrive over the socket;
- * stays mounted while hidden so unread replies are counted live.
+ * support (side = ADMIN). Messages are sent and loaded over our API; Firebase
+ * only says "something changed" (see useChatLive). Stays mounted while hidden so
+ * unread replies are counted live.
  */
 export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: { orderId: string; side: Side; visible: boolean; onUnread?: (n: number) => void; header?: (s: { live: boolean; status: "OPEN" | "RESOLVED"; count: number }) => ReactNode; empty?: ReactNode }) {
   const base = side === "USER" ? `/api/orders/${orderId}/chat` : `/api/admin/orders/${orderId}/chat`;
@@ -33,65 +35,46 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
   const [status, setStatus] = useState<"OPEN" | "RESOLVED">("OPEN");
   const [otherReadAt, setOtherReadAt] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [typing, setTyping] = useState(false);
   const [unread, setUnread] = useState(0);
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
-  const typingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
   const lastTypingSent = useRef(0);
-  const visibleRef = useRef(visible);
-  visibleRef.current = visible;
-  const other: Side = side === "USER" ? "ADMIN" : "USER";
+  const readBusy = useRef(false);
 
   const load = useCallback(async () => {
     const res = await fetch(base, { cache: "no-store" });
     if (!res.ok) return;
-    const d = (await res.json()) as { messages: Msg[]; status: "OPEN" | "RESOLVED"; otherReadAt: string | null; ownReadAt?: string | null };
+    const d = (await res.json()) as { messages: Msg[]; status: "OPEN" | "RESOLVED"; otherReadAt: string | null; unread: number; ownerId: string };
     setMessages(d.messages);
     setStatus(d.status);
     setOtherReadAt(d.otherReadAt);
+    setUnread(d.unread);
+    setOwnerId(d.ownerId);
     setLoaded(true);
   }, [base]);
 
-  const { live, send } = useChatSocket(
-    `order=${encodeURIComponent(orderId)}${side === "ADMIN" ? "&as=admin" : ""}`,
-    (e) => {
-      if (e.type === "message") {
-        const m = e.message as Msg;
-        setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
-        if (m.from === other) {
-          setTyping(false);
-          if (visibleRef.current && document.visibilityState === "visible") send({ type: "read" });
-          else setUnread((n) => n + 1);
-        }
-      } else if (e.type === "typing" && e.from === other) {
-        setTyping(true);
-        clearTimeout(typingTimer.current);
-        typingTimer.current = setTimeout(() => setTyping(false), 4000);
-      } else if (e.type === "read" && e.by === other) {
-        setOtherReadAt(String(e.at));
-      } else if (e.type === "thread") {
-        setStatus(e.status as "OPEN" | "RESOLVED");
-      }
-    },
-    load,
-  );
+  const { live, typing, sendTyping } = useChatLive({ side, ownerId, orderId, fast: visible, onChange: () => void load() });
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  // Opening the chat reads everything in it.
+  // Open and in front: everything in it counts as read.
   useEffect(() => {
-    if (visible && live) {
-      send({ type: "read" });
+    const markRead = () => {
+      if (!visible || unread === 0 || readBusy.current || document.visibilityState !== "visible") return;
+      readBusy.current = true;
       setUnread(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, live, messages.length]);
+      void fetch(`${base}/read`, { method: "POST" }).finally(() => (readBusy.current = false));
+    };
+    markRead();
+    document.addEventListener("visibilitychange", markRead);
+    return () => document.removeEventListener("visibilitychange", markRead);
+  }, [visible, unread, base]);
 
   useEffect(() => onUnread?.(unread), [unread, onUnread]);
 
@@ -176,6 +159,7 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
           void submit();
         }}
       >
+        {side === "USER" && messages.some((m) => m.from === "USER") && <PushPrompt />}
         {status === "RESOLVED" && <p className="mb-2 text-center text-xs text-slate-500">{side === "USER" ? "Marked resolved. Write again to reopen." : "Resolved. A new message reopens it."}</p>}
         {error && <p role="alert" className="mb-2 text-xs text-rose-700">{error}</p>}
         {file && (
@@ -202,7 +186,7 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
               e.target.style.height = `${Math.min(128, e.target.scrollHeight)}px`;
               if (Date.now() - lastTypingSent.current > 2000) {
                 lastTypingSent.current = Date.now();
-                send({ type: "typing" });
+                sendTyping();
               }
             }}
             onKeyDown={(e) => {
