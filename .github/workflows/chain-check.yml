@@ -1,6 +1,8 @@
 name: Live data check
 
-# Runs the real Tron Nile and BSC Testnet readers against live test networks.
+# Runs the chain readers against the Tron Nile and BSC test networks, and checks
+# that the real BNB Smart Chain address (BSC_LIVE_RPC_URL) can see official USDT
+# transfers (read-only).
 # Run it manually (Actions tab) any time, e.g. after changing test tokens.
 on:
   workflow_dispatch:
@@ -29,6 +31,8 @@ jobs:
       TRONGRID_API_KEY: ${{ secrets.TRONGRID_API_KEY }}
       CHECK_TRON_TOKEN: ${{ inputs.tron_token }}
       CHECK_BSC_TOKEN: ${{ inputs.bsc_token }}
+      # Optional: the same address as on the server; blank = the free PublicNode address.
+      BSC_LIVE_RPC_URL: ${{ secrets.BSC_LIVE_RPC_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,7 +40,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Testnet chain readers (Tron Nile + BSC Testnet)
+      - name: Chain readers (Tron Nile, BSC Testnet, real BNB Smart Chain)
         run: npx tsx scripts/check-chains.ts
       - name: USDT/INR price sources (Auto rate mode)
         if: always()

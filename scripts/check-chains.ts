@@ -1,6 +1,7 @@
 /**
  * Live check of the blockchain readers against the real test networks
- * (Tron Nile + BSC Testnet). Needs internet; no database.
+ * (Tron Nile + BSC Testnet), plus the real BNB Smart Chain with the official
+ * USDT contract (read-only, nothing is sent). Needs internet; no database.
  *
  * For each network it finds a recent real transfer of the configured test
  * USDT token, then checks that our adapter:
@@ -10,9 +11,10 @@
  *
  * Usage: npx tsx scripts/check-chains.ts
  * Override tokens with CHECK_TRON_TOKEN / CHECK_BSC_TOKEN.
+ * The real-network check uses BSC_LIVE_RPC_URL (default: the free PublicNode address).
  */
 import { createPublicClient, getAddress, http } from "viem";
-import { bscTestnet } from "viem/chains";
+import { bsc, bscTestnet } from "viem/chains";
 import { NETWORK_INFO } from "@/lib/networks";
 import { env } from "@/server/env";
 import { bscAdapter, getTransferLogsAdaptive, resetLearnedSpanForTests } from "@/server/networks/bsc";
@@ -136,9 +138,48 @@ async function checkBsc() {
   record("bsc: address scan finds the same transfer", !!hit, hit ? `found in block ${hit.blockNumber}, cursor now ${JSON.stringify(scan.cursor)}` : `${scan.transfers.length} transfers returned, none matched`);
 }
 
+/** The address the app reads the real BNB Smart Chain from (Live mode). */
+const BSC_LIVE_DEFAULT = "https://bsc-rpc.publicnode.com";
+
+async function checkBscLive() {
+  const url = process.env.BSC_LIVE_RPC_URL || BSC_LIVE_DEFAULT;
+  const token = getAddress(NETWORK_INFO.BSC.mainnetUsdt);
+  // Don't print a keyed address in full: the key sits in the path.
+  const shown = url.replace(/(\/\/[^/]+\/).+/, "$1…");
+  console.log(`\n== BNB Smart Chain (real network), official USDT ${token}, via ${shown}`);
+  resetLearnedSpanForTests();
+  process.env.BSC_LIVE_RPC_URL = url;
+  delete process.env.BSC_LIVE_RPC_BACKUP_URL;
+  const ctx: NetworkContext = { ...baseCtx, mode: "LIVE", tokenContract: token };
+  const c = createPublicClient({ chain: bsc, transport: http(url, { timeout: 20_000, retryCount: 1 }) });
+  const latest = await c.getBlockNumber();
+  record("bsc live: provider answers", latest > 0n, `latest block ${latest}`);
+  let fin: bigint;
+  try {
+    fin = (await c.getBlock({ blockTag: "finalized" })).number!;
+    record("bsc live: provider supports 'finalized'", true, `finalized block ${fin} (${latest - fin} behind)`);
+  } catch (e) {
+    fin = latest - 15n;
+    record("bsc live: provider supports 'finalized'", false, `falls back to latest-15 (${(e as Error).message.slice(0, 80)})`);
+  }
+  // Real USDT moves every few seconds, so a few recent blocks are enough.
+  const r = await getTransferLogsAdaptive(c as never, { token, fromBlock: fin - 4n, toBlock: fin });
+  record("bsc live: provider serves USDT transfer searches", r.logs.length > 0, `${r.logs.length} transfers in blocks ${fin - 4n}–${r.coveredTo}`);
+  if (!r.logs.length) return;
+  const log = r.logs[r.logs.length - 1];
+  const tx = await bscAdapter.lookupTx(log.transactionHash!, ctx);
+  record("bsc live: lookup by TxID", tx.found && tx.success && tx.final, `tx ${log.transactionHash} found=${tx.found} success=${tx.success} final=${tx.final}`);
+  const mine = tx.transfers.find((t) => t.position === Number(log.logIndex));
+  record("bsc live: decoded amount matches chain (18 decimals)", !!mine && mine.rawAmount === BigInt(log.args.value!), mine ? `${mine.amount.toFixed()} USDT` : "log not decoded");
+  if (!mine) return;
+  const scan = await bscAdapter.scan([mine.to], { lastBlock: (mine.blockNumber - 1n).toString() }, { ...ctx, scanRange: 3 });
+  const hit = scan.transfers.find((t) => t.txid === mine.txid && t.position === mine.position);
+  record("bsc live: address scan finds the same transfer", !!hit, hit ? `found in block ${hit.blockNumber}` : `${scan.transfers.length} transfers returned, none matched`);
+}
+
 async function main() {
   console.log(`Decimals: Tron ${NETWORK_INFO.TRON.decimals}, BSC ${NETWORK_INFO.BSC.decimals}`);
-  for (const [name, fn] of [["tron", checkTron], ["bsc", checkBsc]] as const) {
+  for (const [name, fn] of [["tron", checkTron], ["bsc", checkBsc], ["bsc live", checkBscLive]] as const) {
     try {
       await fn();
     } catch (e) {
