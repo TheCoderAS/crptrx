@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
-import { CheckCircle2, Download, Hourglass, PauseCircle, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Download, Hourglass, PauseCircle, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { RECHECKABLE_HOLDS } from "@/server/matching";
 import { prisma } from "@/server/db";
@@ -14,10 +14,11 @@ import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { CopyButton } from "@/components/CopyButton";
 import { PayWithWallet } from "@/components/PayWithWallet";
+import { InfoTip } from "@/components/InfoTip";
 import { env } from "@/server/env";
 import { SupportPanel } from "@/components/SupportPanel";
 import { AutoRefresh, Countdown } from "@/components/Countdown";
-import { BackLink, Banner, NetworkBadge, Row, Section, StatusPill, Steps, Timeline } from "@/components/ui";
+import { BackLink, NetworkBadge, Row, Section, StatusPill, Steps, Timeline } from "@/components/ui";
 
 export const metadata = { title: "Order", robots: { index: false, follow: false } };
 
@@ -46,7 +47,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const waiting = o.status === "QUOTE_READY" && o.quoteExpiresAt > new Date();
   const showQuote = waiting && step === "quote";
   const breakdown = (
-    <Section title="Amounts" description="Fixed when the quote was created.">
+    <Section title="Amounts" info="Fixed when the quote was created. Rate changes after that don't affect this order.">
       <div className="divide-y divide-slate-100">
         <Row k="USDT" v={`${amount} USDT`} />
         <Row k="Rate" v={`${fmtInr(o.rate)} per USDT`} />
@@ -76,10 +77,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             <div className="mt-1.5"><NetworkBadge network={n} /></div>
           </div>
         </div>
-        <Banner tone="danger">Send only USDT on the <b>{nw}</b> network. Sending on any other network, or any other coin, may permanently lose your funds.</Banner>
+        <NetworkOnly nw={nw} n={n} />
         {breakdown}
-        <Link href={`/orders/${o.id}`} className="btn btn-lg bg-brand-gradient w-full text-white shadow-lg shadow-brand-600/20 hover:opacity-95">Confirm and get deposit address</Link>
-        <p className="text-center text-sm text-slate-500">Changed your mind? Do nothing. The quote expires on its own and nothing is charged.</p>
+        <div className="flex items-center gap-2">
+          <Link href={`/orders/${o.id}`} className="btn btn-lg bg-brand-gradient flex-1 text-white shadow-lg shadow-brand-600/20 hover:opacity-95">Confirm and get deposit address</Link>
+          <InfoTip>Changed your mind? Just leave. The quote expires on its own and nothing is charged.</InfoTip>
+        </div>
       </div>
     );
 
@@ -124,7 +127,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         {(o.status === "EXPIRED" || (o.status === "QUOTE_READY" && !waiting)) && (
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <Link href="/sell" className="btn-primary">Start a new order</Link>
-            <p className="text-sm text-slate-500">Already sent USDT for this order? Don&apos;t worry: we still match it for 24 hours.</p>
+            <span className="inline-flex items-center gap-1 text-sm text-slate-500">Already paid? <InfoTip>Payments for this order are still matched for 24 hours after it expires.</InfoTip></span>
           </div>
         )}
         {o.status === "PAID" && (
@@ -143,38 +146,30 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <section className="card space-y-5 ring-2 ring-brand-600/10">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="eyebrow">Send payment</p>
+              <p className="eyebrow flex items-center gap-1">Send payment <InfoTip>We detect your payment on the blockchain automatically, usually within a few minutes. This page updates by itself, so there&apos;s no need to come back and confirm.</InfoTip></p>
               <p className="mt-1 text-sm text-slate-600">Time left to send</p>
             </div>
             <Countdown until={o.quoteExpiresAt.toISOString()} variant="ring" />
           </div>
-          <Banner tone="danger" title={`${nw} only`}>Send only USDT on the {nw} network. Sending on any other network, or any other coin, may permanently lose your funds.</Banner>
-          {s.wallet_registration === "REQUIRED" && <Banner tone="warn">Send from a wallet listed in <Link href="/wallets" className="font-medium underline">Your wallets</Link>. Payments from other wallets are held for a check.</Banner>}
-          {n === "BSC" && <Banner tone="warn">This is <b>not</b> an Ethereum (ERC-20) address, even though it looks similar.</Banner>}
+          <NetworkOnly nw={nw} n={n} walletsRequired={s.wallet_registration === "REQUIRED"} />
 
           <PayWithWallet orderId={o.id} network={n} mode={s.network_mode} token={tokenContractFor(s, n)} to={o.depositAddress} amount={D(o.usdtAmount).toFixed()} decimals={NETWORK_INFO[n].decimals} wcProjectId={env.walletConnectProjectId ?? null} appName={s.brand_name} />
 
           <div>
-            <p className="label">Exact amount (including decimals)</p>
+            <p className="label flex items-center gap-1">Exact amount <InfoTip>Send exactly this amount, decimals included. If your exchange takes a withdrawal fee, add it on top so exactly {amount} USDT arrives.</InfoTip></p>
             <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 ring-inset">
               <span className="money text-2xl text-slate-900 sm:text-3xl">{amount} USDT</span>
               <CopyButton text={D(o.usdtAmount).toFixed()} />
             </div>
-            <p className="mt-1.5 text-sm text-slate-600">
-              <b className="text-rose-700">Send exactly this amount.</b> If your exchange takes a withdrawal fee, add it on top so exactly {amount} USDT arrives.
-            </p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
             <div className="min-w-0">
-              <p className="label">Deposit address ({nw})</p>
+              <p className="label flex items-center gap-1">Deposit address <InfoTip>{nw} address. You pay the network fee in {NETWORK_INFO[n].feeCoin}.</InfoTip></p>
               <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 ring-inset">
                 <span className="min-w-0 flex-1 font-mono text-sm break-all text-slate-900">{o.depositAddress}</span>
                 <CopyButton text={o.depositAddress} />
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                The network fee is paid by you in {NETWORK_INFO[n].feeCoin}. Sending from an exchange? Make sure the amount that <b>arrives</b> is exactly {amount} USDT.
-              </p>
             </div>
             {qr && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -182,17 +177,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             )}
           </div>
 
-          <div className="flex items-start gap-3 rounded-xl bg-emerald-50 p-3.5 text-sm text-emerald-900 ring-1 ring-emerald-200 ring-inset">
-            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-hidden />
-            <p>No need to come back and confirm. We detect your payment on the blockchain automatically, usually within a few minutes, and this page updates by itself.</p>
-          </div>
-
           <details className="group border-t border-slate-100 pt-4">
-            <summary className="cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900">Paid, but it&apos;s not showing after 10 minutes?</summary>
+            <summary className="cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900">Paid but not showing?</summary>
             <ApiForm action={`/api/orders/${o.id}/txid`} className="mt-3 space-y-2">
-              <label className="label" htmlFor="txid">Paste the transaction ID from your wallet or exchange</label>
+              <label className="label" htmlFor="txid">Transaction ID</label>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <input id="txid" name="txid" required className="input font-mono text-sm" placeholder={n === "BSC" ? "0x…" : "64-character transaction ID"} autoComplete="off" />
+                <input id="txid" name="txid" required className="input font-mono text-sm" placeholder="From your wallet or exchange" autoComplete="off" />
                 <button className="btn-primary">Check this payment</button>
               </div>
             </ApiForm>
@@ -213,7 +203,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           )}
         </div>
         <div className="min-w-0 space-y-5">
-          <Section title="Timeline" description="All times in IST.">
+          <Section title="Timeline" info="All times are Indian Standard Time.">
             <Timeline events={events} />
           </Section>
           <SupportPanel orderId={o.id} defaultOpen={o.status === "ON_HOLD"} hours={s.business_hours_text} />
@@ -234,4 +224,18 @@ function depositQr(address: string) {
     qrCache.set(address, q);
   }
   return q;
+}
+
+/** One short safety line instead of paragraphs; the details sit behind the (i). */
+function NetworkOnly({ nw, n, walletsRequired }: { nw: string; n: NetworkCode; walletsRequired?: boolean }) {
+  return (
+    <p className="flex items-center gap-2 rounded-xl bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-800 ring-1 ring-rose-200 ring-inset">
+      <ShieldAlert className="size-4 shrink-0" aria-hidden />
+      <span className="flex-1">Send only USDT on {nw}</span>
+      <InfoTip>
+        Any other network or coin may be lost for good.{n === "BSC" ? " This is not an Ethereum (ERC-20) address, even though it looks similar." : ""}
+        {walletsRequired ? " Send from a wallet listed under Account → Your wallets; payments from other wallets are held for a check." : ""}
+      </InfoTip>
+    </p>
+  );
 }

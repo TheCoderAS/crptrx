@@ -336,6 +336,15 @@ describe("payments from our own wallet", () => {
     expect((await prisma.incomingTransfer.findFirstOrThrow()).status).toBe("UNMATCHED");
   });
 
+  it("an old deposit address no longer counts as ours (it may be reused as a customer's wallet)", async () => {
+    const old = await makeOrder("TRON", "50");
+    const oldAddress = randTron();
+    await prisma.order.update({ where: { id: old.order.id }, data: { depositAddress: oldAddress } });
+    const { order } = await makeOrder("TRON", "100");
+    await ingestTransfers([transfer("TRON", "100", { from: oldAddress })]);
+    expect(await statusOf(order.id)).toBe("PAYMENT_CONFIRMED");
+  });
+
   it("an order claiming such a transfer is held", async () => {
     const { order, user, actor } = await makeOrder("TRON", "100");
     const t = transfer("TRON", "100", { from: ADDR.TRON });

@@ -13,8 +13,8 @@ export function SupportPanel({ orderId, defaultOpen, hours }: { orderId: string;
       <summary className="flex cursor-pointer list-none items-center gap-3">
         <span className="icon-tile tile-violet size-9 rounded-xl"><LifeBuoy className="size-4" aria-hidden /></span>
         <span className="flex-1">
-          <span className="block font-semibold text-slate-900">Contact support about this order</span>
-          <span className="block text-xs text-slate-500">We reply by email. {hours}.</span>
+          <span className="block font-semibold text-slate-900">Contact support</span>
+          <span className="block text-xs text-slate-500">Replies by email · {hours}</span>
         </span>
       </summary>
       <ApiForm action="/api/support" className="mt-4 space-y-3" resetOnSuccess>

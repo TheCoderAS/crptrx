@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InfoTip } from "@/components/InfoTip";
 import type { PayoutMethod } from "@prisma/client";
 import { CheckCircle2, Clock, Landmark, Smartphone, XCircle } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
@@ -40,7 +41,7 @@ export default async function PayoutMethods({ searchParams }: { searchParams: Pr
           <div className="card flex flex-col items-center px-6 py-10 text-center">
             <span className="icon-tile tile-emerald size-12 rounded-2xl"><Landmark className="size-6" aria-hidden /></span>
             <h2 className="h2 mt-4">Where should we pay you?</h2>
-            <p className="mt-1 max-w-sm text-sm text-slate-500">Add a bank account or UPI ID in your own name. We check it once, then every payout goes there.</p>
+            <p className="mt-1 flex items-center gap-1 text-sm text-slate-500">Bank account or UPI ID in your name <InfoTip>We check it once, then every payout goes there.</InfoTip></p>
             <div className="mt-5"><AddPayoutMethod kycRequired={s.kyc_required} autoOpen={add === "1"} /></div>
           </div>
         )

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InfoTip } from "@/components/InfoTip";
 import { Select } from "@/components/Select";
 import { Wallet } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
@@ -28,7 +29,10 @@ export default async function Wallets() {
       {mode === "OFF" ? (
         <Banner tone="info">You don&apos;t need to add wallets right now. <Link href="/dashboard" className="font-medium underline">Back to home</Link></Banner>
       ) : mode === "REQUIRED" ? (
-        <Banner tone="warn" title="Payments from other wallets are held">If you send from a wallet that isn&apos;t listed, your order is paused until we check it. Exchange withdrawals come from the exchange&apos;s wallet, so send from your own wallet.</Banner>
+        <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-medium text-amber-900 ring-1 ring-amber-200 ring-inset">
+          <span className="flex-1">Pay only from a wallet listed here</span>
+          <InfoTip>Payments from other wallets are held until we check them. Exchange withdrawals come from the exchange&apos;s wallet, so send from your own wallet.</InfoTip>
+        </p>
       ) : null}
 
       <Section title="Saved wallets">
@@ -69,8 +73,10 @@ export default async function Wallets() {
             <label className="label" htmlFor="label">Name <span className="font-normal text-slate-500">(optional)</span></label>
             <input id="label" name="label" maxLength={40} className="input" placeholder="e.g. My Trust Wallet" />
           </div>
-          <button className="btn-primary">Add wallet</button>
-          <p className="text-xs text-slate-500">Up to {MAX_WALLETS_PER_NETWORK} per network. Don&apos;t add our deposit address here.</p>
+          <div className="flex items-center gap-2">
+            <button className="btn-primary">Add wallet</button>
+            <InfoTip>Up to {MAX_WALLETS_PER_NETWORK} per network. Add the wallet you send from, not our deposit address.</InfoTip>
+          </div>
         </ApiForm>
       )}
     </div>

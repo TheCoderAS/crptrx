@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Dismissible } from "./Dismissible";
@@ -138,13 +139,13 @@ export function PageHeader({ title, subtitle, action, eyebrow, icon, tile = "til
   );
 }
 
-export function Section({ title, description, action, children, className = "" }: { title?: ReactNode; description?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
+export function Section({ title, description, info, action, children, className = "" }: { title?: ReactNode; description?: ReactNode; info?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`card min-w-0 ${className}`}>
       {(title || action) && (
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            {title && <h2 className="h2">{title}</h2>}
+            {title && <h2 className="h2 flex items-center gap-1">{title}{info && <InfoTip>{info}</InfoTip>}</h2>}
             {description && <p className="mt-0.5 text-sm text-slate-500">{description}</p>}
           </div>
           {action}

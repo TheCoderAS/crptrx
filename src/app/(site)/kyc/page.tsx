@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InfoTip } from "@/components/InfoTip";
 import { BadgeCheck, Clock3, ScanFace, ShieldX, TriangleAlert } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { latestKyc } from "@/server/kyc";
@@ -36,8 +37,7 @@ export default async function Kyc() {
         <div className="card flex gap-4">
           <span className="icon-tile tile-emerald"><BadgeCheck className="size-5" aria-hidden /></span>
           <div>
-            <p className="font-semibold text-slate-900">Not needed right now</p>
-            <p className="mt-0.5 text-sm text-slate-600">You can sell without an identity check at the moment. We&apos;ll let you know if that changes.</p>
+            <p className="flex items-center gap-1 font-semibold text-slate-900">Not needed right now <InfoTip>You can sell without an identity check at the moment. We&apos;ll let you know if that changes.</InfoTip></p>
             <Link href="/dashboard" className="btn-primary mt-3">Back to home</Link>
           </div>
         </div>
@@ -108,7 +108,7 @@ export default async function Kyc() {
               <span>I confirm the Aadhaar I uploaded is masked, and these documents are mine.</span>
             </label>
             <button className="btn-primary btn-lg w-full">{s.kyc_auto_approve ? "Submit" : "Submit for review"}</button>
-            <p className="text-center text-xs text-slate-500">Your documents are stored privately and only our compliance team can open them. Every view is logged.</p>
+            <p className="flex items-center justify-center gap-1 text-xs text-slate-500">Stored privately <InfoTip>Only our compliance team can open your documents, and every view is logged.</InfoTip></p>
           </div>
         </ApiForm>
       )}

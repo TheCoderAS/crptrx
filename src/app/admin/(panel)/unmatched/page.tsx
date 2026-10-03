@@ -11,7 +11,7 @@ import { FilterMenu } from "@/components/FilterMenu";
 import { ListToolbar } from "@/components/ListToolbar";
 import { NetworkBadge, PageHeader, StatusPill } from "@/components/ui";
 import { getSettings } from "@/server/settings";
-import { allKnownDepositAddresses } from "@/server/deposit";
+import { currentDepositAddresses } from "@/server/deposit";
 import { getAdapter } from "@/server/networks";
 import Link from "next/link";
 
@@ -46,7 +46,7 @@ export default async function Unmatched({ searchParams }: { searchParams: Promis
           orderBy: { createdAt: "desc" },
         })
       : [],
-    Promise.all((["TRON", "BSC"] as const).map(async (n) => (await allKnownDepositAddresses(n)).map((a) => `${n}:${getAdapter(n).normalizeAddress(a)}`))),
+    Promise.all((["TRON", "BSC"] as const).map(async (n) => (await currentDepositAddresses(n)).map((a) => `${n}:${getAdapter(n).normalizeAddress(a)}`))),
   ]);
   const ours = new Set(ourAddrs.flat());
   const fromUs = (t: (typeof rows)[number]) => ours.has(`${t.network}:${getAdapter(t.network as NetworkCode).normalizeAddress(t.fromAddress)}`);

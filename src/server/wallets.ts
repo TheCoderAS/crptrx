@@ -1,7 +1,7 @@
 import { NETWORK_CODES, type NetworkCode } from "@/lib/networks";
 import { audit, type Actor } from "./audit";
 import { prisma } from "./db";
-import { allKnownDepositAddresses } from "./deposit";
+import { currentDepositAddresses } from "./deposit";
 import { AppError } from "./errors";
 import { getAdapter } from "./networks";
 import { getSettings } from "./settings";
@@ -19,7 +19,7 @@ export async function addWallet(userId: string, input: { network: string; addres
   const raw = String(input.address ?? "").trim();
   if (!adapter.isValidAddress(raw)) throw new AppError(network === "TRON" ? "Enter a valid Tron address (starts with T)." : "Enter a valid BNB Smart Chain address (starts with 0x).");
   const address = adapter.normalizeAddress(raw);
-  if ((await allKnownDepositAddresses(network)).includes(address)) throw new AppError("That's our deposit address. Enter the wallet you send from.");
+  if ((await currentDepositAddresses(network)).includes(address)) throw new AppError("That's our deposit address. Enter the wallet you send from.");
   const label = String(input.label ?? "").trim().slice(0, 40) || null;
   const mine = await prisma.userWallet.findMany({ where: { userId, network, deletedAt: null } });
   if (mine.some((w) => w.address === address)) throw new AppError("You've already added this wallet.");

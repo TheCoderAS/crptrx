@@ -34,7 +34,7 @@ export function userStatusText(o: {
         body: `We're doing a standard safety check. Usually done within ${ctx.reviewHours} hours (${ctx.businessHours}).`,
       };
     case "ON_HOLD":
-      return { title: "On hold", body: `On hold: ${o.holdReason ?? "we need to check something"}. ${o.holdMessage ?? ""} Please contact support if you have questions.`.trim() };
+      return { title: "On hold", body: [o.holdReason ?? "We need to check something", o.holdMessage].filter(Boolean).map((t) => t!.trim().replace(/\.?$/, ".")).join(" ") };
     case "APPROVED":
       return { title: "Approved", body: `Approved. ${net} is being sent to your account ending ${o.payoutLast4 ?? "••••"}.` };
     case "PAID":
