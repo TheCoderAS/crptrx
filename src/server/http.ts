@@ -25,7 +25,9 @@ export async function formData(req: Request): Promise<FormData> {
     return await req.formData();
   } catch (e) {
     console.error(`[upload] unreadable form body (content-length ${req.headers.get("content-length") ?? "?"}): ${(e as Error).message}`);
-    throw new AppError("We couldn't read your upload. Each file must be 200 KB or smaller (JPG, PNG or PDF). Please try again.", 413, "UPLOAD_UNREADABLE");
+    // Usually a cut-short upload (the phone or connection dropped part of it), not a size problem:
+    // sizes are checked separately with their own message. The browser retries once on this code.
+    throw new AppError("The file didn't arrive in full. Please try again.", 400, "UPLOAD_UNREADABLE");
   }
 }
 

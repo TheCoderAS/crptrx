@@ -42,6 +42,15 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
   const [error, setError] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<string | null>(null);
+  // Thumbnail of the picked image, before it's sent.
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) return setFilePreview(null);
+    const url = URL.createObjectURL(file);
+    setFilePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
   const lastTypingSent = useRef(0);
   const readBusy = useRef(false);
 
@@ -91,8 +100,13 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
     fd.set("text", text);
     if (file) fd.set("file", file);
     try {
-      const res = await fetch(base, { method: "POST", body: fd });
-      const d = await res.json().catch(() => ({}));
+      let res = await fetch(base, { method: "POST", body: fd });
+      let d = await res.json().catch(() => ({}));
+      // The server got an incomplete upload (flaky mobile connection): try once more.
+      if (d.code === "UPLOAD_UNREADABLE") {
+        res = await fetch(base, { method: "POST", body: fd });
+        d = await res.json().catch(() => ({}));
+      }
       if (!res.ok) throw new Error(d.error ?? "Couldn't send. Try again.");
       setMessages((prev) => (prev.some((x) => x.id === d.message.id) ? prev : [...prev, d.message]));
       setText("");
@@ -107,7 +121,7 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
   async function pick(f: File | undefined) {
     setError(null);
     if (!f) return;
-    const r = await fitUpload(f);
+    const r = await fitUpload(f, { imagesOnly: true });
     if ("error" in r) return setError(r.error);
     setFile(r.file);
   }
@@ -127,13 +141,9 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
           return (
             <div key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
               {showName && <span className="mb-0.5 px-1 text-[11px] font-medium text-slate-500">{m.name}</span>}
-              <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words ${mine ? "rounded-br-md bg-brand-600 text-white" : "rounded-bl-md bg-slate-100 text-slate-900"}`}>
-                {m.text}
-                {m.attachment && (
-                  <a href={fileHref(m.id)} target="_blank" rel="noreferrer" className={`mt-1 flex items-center gap-1.5 text-xs font-medium underline ${mine ? "text-white/90" : "text-brand-700"}`}>
-                    <ImagePlus className="size-3.5" aria-hidden /> Screenshot
-                  </a>
-                )}
+              <div className={`max-w-[85%] rounded-2xl text-sm ${m.attachment ? (m.text ? "p-1 pb-2" : "p-1") : "px-3.5 py-2"} leading-relaxed whitespace-pre-wrap break-words ${mine ? "rounded-br-md bg-brand-600 text-white" : "rounded-bl-md bg-slate-100 text-slate-900"}`}>
+                {m.attachment && <ChatImage src={fileHref(m.id)} onOpen={setViewer} hasText={!!m.text} />}
+                {m.attachment ? m.text && <span className="block px-2.5">{m.text}</span> : m.text}
               </div>
               <span className="mt-0.5 flex items-center gap-1 px-1 text-[10px] text-slate-400">
                 {when(m.at)}
@@ -162,16 +172,25 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
         {side === "USER" ? messages.some((m) => m.from === "USER") && <PushPrompt who="user" /> : <PushPrompt who="admin" />}
         {status === "RESOLVED" && <p className="mb-2 text-center text-xs text-slate-500">{side === "USER" ? "Marked resolved. Write again to reopen." : "Resolved. A new message reopens it."}</p>}
         {error && <p role="alert" className="mb-2 text-xs text-rose-700">{error}</p>}
-        {file && (
-          <p className="mb-2 flex items-center gap-2 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs text-slate-700">
-            <ImagePlus className="size-3.5" aria-hidden /> <span className="min-w-0 flex-1 truncate">{file.name}</span>
-            <button type="button" onClick={() => setFile(null)} aria-label="Remove screenshot" className="text-slate-500 hover:text-slate-900"><X className="size-3.5" /></button>
-          </p>
+        {file && filePreview && (
+          <div className="relative mb-2 inline-block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={filePreview} alt="Image to send" className="h-20 w-auto max-w-[10rem] rounded-xl object-cover ring-1 ring-slate-200" />
+            <button type="button" onClick={() => setFile(null)} aria-label="Remove image" className="absolute -top-2 -right-2 grid size-6 place-items-center rounded-full bg-slate-900 text-white shadow"><X className="size-3.5" /></button>
+          </div>
         )}
         <div className="flex items-end gap-2">
-          <label className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Attach a screenshot">
+          <label className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Attach an image">
             <ImagePlus className="size-5" aria-hidden />
-            <input type="file" accept="image/jpeg,image/png,application/pdf" className="sr-only" onChange={(e) => void pick(e.currentTarget.files?.[0]).then(() => (e.currentTarget.value = ""))} />
+            <input
+              type="file"
+              accept="image/jpeg,image/png"
+              className="sr-only"
+              onChange={(e) => {
+                const input = e.currentTarget; // React clears currentTarget once the handler returns
+                void pick(input.files?.[0]).finally(() => (input.value = ""));
+              }}
+            />
           </label>
           <textarea
             value={text}
@@ -202,6 +221,45 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
           </button>
         </div>
       </form>
+      {viewer && <ImageViewer src={viewer} onClose={() => setViewer(null)} />}
+    </div>
+  );
+}
+
+/** An image in a chat bubble: a thumbnail that opens full screen, inside the app. */
+function ChatImage({ src, onOpen, hasText }: { src: string; onOpen: (src: string) => void; hasText: boolean }) {
+  const [state, setState] = useState<"loading" | "ok" | "error">("loading");
+  if (state === "error")
+    return <span className={`flex items-center gap-1.5 py-1 text-xs opacity-80 ${hasText ? "" : "px-2.5"}`}><ImagePlus className="size-3.5" aria-hidden /> Attachment unavailable</span>;
+  return (
+    <button type="button" onClick={() => onOpen(src)} className={`block overflow-hidden rounded-xl ${hasText ? "mb-1.5" : ""}`} aria-label="Open image">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt="Image sent in chat"
+        loading="lazy"
+        onLoad={() => setState("ok")}
+        onError={() => setState("error")}
+        className={`max-h-64 w-56 max-w-full object-cover ${state === "loading" ? "h-40 animate-pulse bg-slate-300/40" : ""}`}
+      />
+    </button>
+  );
+}
+
+/** Full-screen image, closed by the X, a tap outside the image, or Escape. No new tab. */
+function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Image" className="fixed inset-0 z-[80] grid place-items-center bg-black/90 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="Image sent in chat" className="max-h-full max-w-full rounded-lg object-contain" />
+      <button type="button" onClick={onClose} aria-label="Close image" className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 grid size-10 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25">
+        <X className="size-5" aria-hidden />
+      </button>
     </div>
   );
 }
