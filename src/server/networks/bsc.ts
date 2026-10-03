@@ -178,15 +178,11 @@ export const bscAdapter: NetworkAdapter = {
 
     const { logs, coveredTo: to } = await getTransferLogsAdaptive(c, { token: ctx.tokenContract, to: addresses, fromBlock: from, toBlock: wanted });
     const out: ChainTransfer[] = [];
-    const statusCache = new Map<string, boolean>();
+    // A Transfer event only exists if its transaction succeeded: a failed (reverted)
+    // transaction leaves no events at all. So there is no per-transaction lookup here,
+    // which free providers refuse ("archive requests"), and the scan stays fast.
     for (const log of logs) {
       if (log.removed) continue;
-      const hash = log.transactionHash!;
-      if (!statusCache.has(hash)) {
-        const r = await c.getTransactionReceipt({ hash });
-        statusCache.set(hash, r.status === "success");
-      }
-      if (!statusCache.get(hash)) continue;
       const t = decodeBscLog(log, await blockTime(c, log.blockNumber!));
       if (t) out.push(t);
     }

@@ -20,12 +20,14 @@ export const POST = api(async (req: Request) => {
     await notifyAllAdmins(
       `SECURITY: ${name} deposit address set`,
       `${a.admin.name} (${a.admin.email}) set the ${name} deposit address (${change.networkMode} mode).\n\nOld: ${change.oldAddress ?? "(none)"}\nNew: ${change.newAddress}\n\nIt is active now. If you did not expect this, sign in and set the correct address.`,
+      "/admin/settings",
     );
     return { message: `Saved. The ${name} address is active now.` };
   }
   await notifyAllAdmins(
     `SECURITY: ${name} deposit address change requested`,
     `${a.admin.name} (${a.admin.email}) asked to change the ${name} deposit address (${change.networkMode} mode).\n\nOld: ${change.oldAddress ?? "(none)"}\nNew: ${change.newAddress}\n\nIt takes effect at ${fmtIST(change.effectiveAt)} (in ${Math.round((change.effectiveAt.getTime() - Date.now()) / 60000)} minutes).\n\nIf you did not expect this, cancel it now:\n${env.appUrl}/admin/address-change/cancel?token=${token}`,
+    "/admin/settings",
   );
-  return { message: `Requested. The new ${name} address takes effect at ${fmtIST(change.effectiveAt)}. All admins were emailed a cancel link.` };
+  return { message: `Requested. The new ${name} address takes effect at ${fmtIST(change.effectiveAt)}. All admins were alerted.` };
 });

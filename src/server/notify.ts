@@ -6,6 +6,7 @@ import { maskedPayout, type PayoutSnapshot } from "./payouts";
 import { getSettings } from "./settings";
 import { companyName, contactChannels } from "./contact";
 import type { MatchEvent } from "./matching";
+import { pushToAdmins, pushToUser, type PushNote } from "./firebase/push";
 
 // ---------------------------------------------------------------------------
 // Providers. "console" stores the message in outbound_messages and logs it,
@@ -67,7 +68,12 @@ export async function sendSms(to: string, body: string, otp?: string) {
 // Templates (spec 4.9)
 // ---------------------------------------------------------------------------
 
-async function toUser(userId: string, subject: string, body: string) {
+// Push goes alongside email: a short title and the order number, never amounts,
+// names or bank details (it can show on a lock screen). Not awaited by callers'
+// flows beyond this function, and it never throws.
+
+async function toUser(userId: string, subject: string, body: string, push?: PushNote) {
+  if (push) void pushToUser(userId, push);
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return;
   const s = await getSettings();
@@ -92,7 +98,14 @@ export async function notifyOrder(orderId: string, kind: "PAYMENT_DETECTED" | "O
     EXPIRED: [`Quote ${o.id} expired`, `No payment was received in time. Nothing was charged. If you already sent USDT, contact support right away with your transaction ID.`],
   } as const;
   const [subject, body] = map[kind];
-  await toUser(o.userId, subject, `${body}\n\n${orderLink(o.id)}`);
+  const push = {
+    PAYMENT_DETECTED: "Payment received",
+    ON_HOLD: "Your order is on hold",
+    APPROVED: "Order approved",
+    PAID: "Payout sent",
+    EXPIRED: "Quote expired",
+  }[kind];
+  await toUser(o.userId, subject, `${body}\n\n${orderLink(o.id)}`, { title: push, body: `Order ${o.id}`, link: `/orders/${o.id}`, tag: `order-${o.id}`, data: { type: "order_status", orderId: o.id, status: kind } });
 }
 
 export async function notifyKyc(userId: string, status: "APPROVED" | "NEEDS_CHANGES" | "DECLINED", reason?: string | null) {
@@ -101,7 +114,7 @@ export async function notifyKyc(userId: string, status: "APPROVED" | "NEEDS_CHAN
     NEEDS_CHANGES: ["Your identity check needs changes", `Please fix this and upload again: ${reason ?? ""}`],
     DECLINED: ["Your identity check was declined", `Reason: ${reason ?? ""}`],
   }[status];
-  await toUser(userId, m[0], `${m[1]}\n\n${env.appUrl}/kyc`);
+  await toUser(userId, m[0], `${m[1]}\n\n${env.appUrl}/kyc`, { title: m[0], body: status === "APPROVED" ? "Tap to continue" : "Tap to see what to fix", link: "/kyc", tag: "kyc", data: { type: "kyc", status } });
 }
 
 export async function notifyPayoutMethod(userId: string, approved: boolean, reason?: string | null) {
@@ -109,6 +122,7 @@ export async function notifyPayoutMethod(userId: string, approved: boolean, reas
     userId,
     approved ? "Your payout method is approved" : "Your payout method was declined",
     approved ? `You can now sell USDT.\n\n${env.appUrl}/sell` : `Reason: ${reason ?? ""}\n\n${env.appUrl}/payout-methods`,
+    { title: approved ? "Payout method approved" : "Payout method declined", body: approved ? "You can now sell USDT" : "Tap to see why", link: approved ? "/sell" : "/payout-methods", tag: "payout-method", data: { type: "payout_method", approved: String(approved) } },
   );
 }
 
@@ -116,18 +130,29 @@ export async function notifyMatchEvents(events: MatchEvent[]) {
   for (const e of events) {
     try {
       await notifyOrder(e.orderId, e.kind === "CONFIRMED" ? "PAYMENT_DETECTED" : "ON_HOLD");
+      // Support: a paid-in order is waiting for review (or was held and needs a look).
+      void pushToAdmins({
+        title: e.kind === "CONFIRMED" ? "Payment received: review" : "Payment held: check",
+        body: `Order ${e.orderId}`,
+        link: `/admin/orders/${e.orderId}`,
+        tag: `admin-order-${e.orderId}`,
+        data: { type: "order_waiting", orderId: e.orderId },
+      });
     } catch (err) {
       console.error("notify failed", err);
     }
   }
 }
 
-export async function notifySuperAdmins(subject: string, body: string) {
+/** Admin alerts go by email and push. The push carries only the subject; `link` is the admin page to open. */
+export async function notifySuperAdmins(subject: string, body: string, link = "/admin") {
+  void pushToAdmins({ title: subject, body: "Tap to open the admin panel", link, tag: `alert-${subject}`, data: { type: "admin_alert" } }, { superOnly: true });
   const admins = await prisma.admin.findMany({ where: { role: "SUPER_ADMIN", status: "ACTIVE" } });
   for (const a of admins) await sendEmail(a.email, subject, body);
 }
 
-export async function notifyAllAdmins(subject: string, body: string) {
+export async function notifyAllAdmins(subject: string, body: string, link = "/admin") {
+  void pushToAdmins({ title: subject, body: "Tap to open the admin panel", link, tag: `alert-${subject}`, data: { type: "admin_alert" } });
   const admins = await prisma.admin.findMany({ where: { status: "ACTIVE" } });
   for (const a of admins) await sendEmail(a.email, subject, body);
 }

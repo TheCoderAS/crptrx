@@ -67,11 +67,11 @@ export async function pushToUser(userId: string, note: PushNote): Promise<{ sent
   }
 }
 
-/** Send to every active admin's devices. Never throws. */
-export async function pushToAdmins(note: PushNote): Promise<{ sent: number; removed: number }> {
+/** Send to every active admin's devices (or only super admins'). Never throws. */
+export async function pushToAdmins(note: PushNote, opts: { superOnly?: boolean } = {}): Promise<{ sent: number; removed: number }> {
   if (!firebaseApp()) return { sent: 0, removed: 0 };
   try {
-    const devices = await prisma.adminPushDevice.findMany({ where: { admin: { status: "ACTIVE" } }, select: { token: true } });
+    const devices = await prisma.adminPushDevice.findMany({ where: { admin: { status: "ACTIVE", ...(opts.superOnly ? { role: "SUPER_ADMIN" } : {}) } }, select: { token: true } });
     return await send(devices.map((d) => d.token), note, (dead) => prisma.adminPushDevice.deleteMany({ where: { token: { in: dead } } }));
   } catch (e) {
     logFirebaseError("admin push", e);

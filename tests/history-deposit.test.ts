@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/server/db";
 import { applyDueAddressChanges, cancelAddressChange, getActiveDepositAddress, requestAddressChange } from "@/server/deposit";
-import { getSettings, setNetworkMode, updateSetting, writeSetting } from "@/server/settings";
+import { getSettings, updateSetting, writeSetting } from "@/server/settings";
+import { env } from "@/server/env";
 import { ADDR, baseSettings, makeOrder, randBsc, randTron, resetDb } from "./helpers";
 
 const SUPER = { type: "ADMIN" as const, id: "super-1" };
@@ -31,10 +32,32 @@ describe("append-only history (spec 9, M1)", () => {
 });
 
 describe("settings rules (spec 5.5)", () => {
-  it("switching to Live needs the typed confirmation", async () => {
-    await expect(setNetworkMode("LIVE", "yes", SUPER)).rejects.toThrow(/SWITCH TO LIVE/);
-    await setNetworkMode("LIVE", "SWITCH TO LIVE", SUPER);
-    expect((await getSettings()).network_mode).toBe("LIVE");
+  it("the server's APP_MODE decides Live or Test, over anything stored", async () => {
+    const saved = { mode: process.env.APP_MODE, node: process.env.NODE_ENV, phase: process.env.NEXT_PHASE, login: process.env.DEV_LOGIN_ENABLED, tools: process.env.DEV_TOOLS_ENABLED };
+    const set = (k: string, v: string | undefined) => (v === undefined ? delete process.env[k] : (process.env[k] = v));
+    try {
+      await writeSetting("network_mode", "TEST", SUPER);
+      set("APP_MODE", "live");
+      expect((await getSettings()).network_mode).toBe("LIVE");
+      // Test back doors stay shut in Live even if someone turns them on.
+      set("DEV_LOGIN_ENABLED", "true");
+      set("DEV_TOOLS_ENABLED", "true");
+      expect(env.devLoginEnabled).toBe(false);
+      expect(env.devToolsEnabled).toBe(false);
+      set("APP_MODE", "TEST");
+      expect(env.devLoginEnabled).toBe(true);
+      expect((await getSettings()).network_mode).toBe("TEST");
+      set("APP_MODE", "PROD");
+      expect(() => env.appMode).toThrow(/LIVE or TEST/);
+      // Missing in production: refuse, except while building.
+      set("APP_MODE", undefined);
+      set("NODE_ENV", "production");
+      expect(() => env.appMode).toThrow(/Missing environment setting APP_MODE/);
+      set("NEXT_PHASE", "phase-production-build");
+      expect(env.appMode).toBeNull();
+    } finally {
+      for (const [k, v] of [["APP_MODE", saved.mode], ["NODE_ENV", saved.node], ["NEXT_PHASE", saved.phase], ["DEV_LOGIN_ENABLED", saved.login], ["DEV_TOOLS_ENABLED", saved.tools]] as const) set(k, v);
+    }
   });
   it("token contracts are editable only in Test mode, and never the mainnet contract", async () => {
     await expect(updateSetting("test_token_contract", { TRON: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", BSC: randBsc() }, SUPER)).rejects.toThrow(/mainnet/);
