@@ -275,7 +275,7 @@ await expectText(admin, "Start review");
 console.log("unmatched payment confirmed from the order page");
 
 // Audit log shows doc views
-await admin.goto(BASE + "/admin/audit?type=KYC_DOC_VIEWED");
+await admin.goto(BASE + "/admin/audit?cat=customers");
 await expectText(admin, "KYC doc viewed");
 await shot(admin, "10b-admin-audit-filter");
 console.log("doc view logged");

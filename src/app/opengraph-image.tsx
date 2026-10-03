@@ -2,7 +2,8 @@ import { ImageResponse } from "next/og";
 import { BrandMark, brandForImages } from "@/lib/brandMark";
 
 export const size = { width: 1200, height: 630 };
-export const contentType = "image/png";
+// JPEG: the gradients make a PNG ~470 KB, and WhatsApp skips preview images over ~300 KB.
+export const contentType = "image/jpeg";
 export const alt = "Sell USDT for INR to your own bank or UPI";
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function OgImage() {
   const b = await brandForImages();
   const name = b.name;
-  return new ImageResponse(
+  const card = (
     <div
       style={{
         width: "100%",
@@ -37,7 +38,15 @@ export default async function OgImage() {
           <div key={t} style={{ display: "flex", padding: "10px 20px", borderRadius: 999, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)" }}>{t}</div>
         ))}
       </div>
-    </div>,
-    size,
+    </div>
   );
+  const png = new ImageResponse(card, size);
+  try {
+    const sharp = (await import("sharp")).default;
+    const jpg = await sharp(Buffer.from(await png.arrayBuffer())).jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+    return new Response(new Uint8Array(jpg), { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=3600" } });
+  } catch {
+    // No image converter on this server: the PNG still works, just larger.
+    return new ImageResponse(card, size);
+  }
 }
