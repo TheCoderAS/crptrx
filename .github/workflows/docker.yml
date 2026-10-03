@@ -3,8 +3,11 @@ name: Docker test
 # Builds the app's Docker image (the same one Render builds), starts the full
 # stack and walks the whole customer/admin flow in a browser. Only checks:
 # Render builds and deploys by itself, so nothing is published.
+# Runs on release PRs (staging -> main) and by hand (Actions -> Run workflow);
+# everyday PRs into staging skip it to save CI time.
 on:
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:

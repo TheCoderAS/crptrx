@@ -128,7 +128,7 @@ The rules live in one place, `src/server/onboarding.ts`, which the pages and the
 | Workflow | When | What |
 |---|---|---|
 | `ci.yml` | every push to `main` and every PR | lint, type check, tests against Postgres, production build |
-| `docker.yml` | every PR | builds the Docker image, starts the stack, runs the browser walkthrough (checks only, nothing published) |
+| `docker.yml` | release PRs (`staging` → `main`), or by hand | builds the Docker image, starts the stack, runs the browser walkthrough (checks only, nothing published) |
 | `release.yml` | every push to `main` | next version tag (`v1.0.0`, `v1.1.0`, …) and a GitHub Release with notes |
 | `firebase-rules.yml` | rules changes: PRs check, `main` publishes | chat access rules, checked on the Firebase emulator |
 | `chain-check.yml` | weekly, manually, chain-reader PRs | blockchain readers against the test networks and the real BNB Smart Chain |
