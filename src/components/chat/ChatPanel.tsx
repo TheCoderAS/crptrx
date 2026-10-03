@@ -138,7 +138,7 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
   const seen = !!(lastMine && otherReadAt && otherReadAt >= lastMine.at);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       {header?.({ live, status, count: messages.length })}
       <div ref={list} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3" aria-live="polite">
         {loaded && messages.length === 0 && <div className="grid h-full place-items-center px-6 text-center text-sm text-slate-500">{empty}</div>}
@@ -258,18 +258,25 @@ function ChatImage({ src, onOpen, hasText }: { src: string; onOpen: (src: string
   );
 }
 
-/** Full-screen image, closed by the X, a tap outside the image, or Escape. No new tab. */
+/**
+ * The image at full size inside the chat window (not the whole screen, not a new tab).
+ * Closed by the X, a tap outside the image, or Escape (which then leaves the chat open).
+ */
 function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation(); // the chat pop-up also closes on Escape; only the image should
+      onClose();
+    };
+    window.addEventListener("keydown", esc, true);
+    return () => window.removeEventListener("keydown", esc, true);
   }, [onClose]);
   return (
-    <div role="dialog" aria-modal="true" aria-label="Image" className="fixed inset-0 z-[80] grid place-items-center bg-black/90 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div role="dialog" aria-label="Image" className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/95 p-3 pt-14" onClick={(e) => e.target === e.currentTarget && onClose()}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="Image sent in chat" className="max-h-full max-w-full rounded-lg object-contain" />
-      <button type="button" onClick={onClose} aria-label="Close image" className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 grid size-10 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25">
+      <button type="button" onClick={onClose} aria-label="Close image" className="absolute top-3 right-3 grid size-9 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25">
         <X className="size-5" aria-hidden />
       </button>
     </div>
