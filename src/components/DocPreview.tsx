@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { ChevronLeft, ChevronRight, Eye, FileText, Loader2 } from "lucide-react";
 import { Modal } from "./Modal";
+import { PdfView } from "./PdfView";
 
 type Doc = { label: string; href: string };
 type Shown = { index: number; url: string | null; pdf: boolean; error: string | null };
@@ -46,7 +47,7 @@ export function DocPreview({ docs }: { docs: Doc[] }) {
           ) : !shown?.url ? (
             <Loader2 className="size-6 animate-spin text-slate-400" aria-label="Loading" />
           ) : shown.pdf ? (
-            <iframe src={shown.url} title={doc?.label} className="h-[70vh] w-full bg-white" />
+            <PdfView url={shown.url} title={doc?.label} />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={shown.url} alt={doc?.label ?? ""} className="max-h-[70vh] w-auto object-contain" />

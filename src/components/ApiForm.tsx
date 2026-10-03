@@ -1,4 +1,5 @@
 "use client";
+import { readFully } from "@/lib/shrinkImage";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -53,6 +54,18 @@ export function ApiForm({
     // left out of FormData, so a retry after the 2FA prompt would send nothing else.
     const fields = [...new FormData(form).entries()];
     setBusy(true);
+    // Files go up from memory, fully read (see readFully): a phone can otherwise send one cut short.
+    for (let i = 0; i < fields.length; i++) {
+      const v = fields[i][1];
+      if (v instanceof File && v.size > 0) {
+        const whole = await readFully(v);
+        if (!whole) {
+          setBusy(false);
+          return setError("Your phone couldn't hand over a file. Wait a moment and pick it again.");
+        }
+        fields[i] = [fields[i][0], whole];
+      }
+    }
     setError(null);
     setOk(null);
     const build = (totp?: string): RequestInit => {
@@ -73,6 +86,11 @@ export function ApiForm({
     try {
       let res = await fetch(action, build());
       let data = await res.json().catch(() => ({}));
+      // The server got an incomplete upload (flaky mobile connection): try once more.
+      if (data.code === "UPLOAD_UNREADABLE") {
+        res = await fetch(action, build());
+        data = await res.json().catch(() => ({}));
+      }
       // Sensitive admin action without a recent 2FA code: ask once, then retry.
       // (A wrong code from the dialog re-opens it; a wrong code typed on the 2FA login page doesn't.)
       let prompted = false;

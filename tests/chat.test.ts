@@ -152,3 +152,15 @@ describe("live signal and push", () => {
     expect((await prisma.pushDevice.findMany({ where: { userId: b.user.id } })).map((d) => d.token)).toEqual(["shared-browser-token-xxxxxxxxxx"]);
   });
 });
+
+describe("chat attachments", () => {
+  it("accept JPG/PNG only, checked by the file's bytes", async () => {
+    const { chatAttachment } = await import("@/server/chat/upload");
+    const pdf = new File([Buffer.from("%PDF-1.4\n%fake")], "receipt.png", { type: "image/png" });
+    const fdPdf = new FormData();
+    fdPdf.set("file", pdf);
+    await expect(chatAttachment(fdPdf, "u1")).rejects.toThrow(/JPG or PNG/);
+    const empty = new FormData();
+    expect(await chatAttachment(empty, "u1")).toBeNull();
+  });
+});
