@@ -13,7 +13,6 @@ import {
   Palette,
   Percent,
   Phone,
-  RadioTower,
   ShieldAlert,
   Signal,
   UserCheck,
@@ -24,7 +23,7 @@ import { logoSrc } from "@/server/brand";
 import { env } from "@/server/env";
 import { prisma } from "@/server/db";
 import { rateFeedState } from "@/server/rateFeed";
-import { getSettings, isRealValue, LIVE_CONFIRM_PHRASE, rateIsStale, tokenContractFor } from "@/server/settings";
+import { getSettings, isRealValue, rateIsStale, tokenContractFor } from "@/server/settings";
 import { NETWORK_CODES, NETWORK_INFO } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
@@ -177,27 +176,6 @@ export default async function SettingsPage() {
                     ))}
                   </Group>
                 </SettingsForm>
-                <ApiForm action="/api/admin/settings/mode" className={`card space-y-3 p-4 sm:p-4 ${mode === "TEST" ? "ring-1 ring-rose-200" : ""}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`icon-tile ${mode === "LIVE" ? "tile-rose" : "tile-amber"} size-8 rounded-lg [&_svg]:size-4`}><RadioTower /></span>
-                    <div className="flex-1">
-                      <h2 className="text-sm font-semibold text-slate-900">Mode: {mode === "LIVE" ? "Live" : "Test"}</h2>
-                      <p className="text-xs text-slate-500">{mode === "LIVE" ? "Mainnets, real money" : "Tron Nile + BSC Testnet, no real money"}</p>
-                    </div>
-                  </div>
-                  <input type="hidden" name="mode" value={mode === "LIVE" ? "TEST" : "LIVE"} />
-                  {mode === "TEST" ? (
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <input name="confirm" aria-label="Type the confirmation phrase" required className="input py-2 text-sm" placeholder={`Type ${LIVE_CONFIRM_PHRASE}`} />
-                      <button className="btn-danger shrink-0">Switch to Live</button>
-                    </div>
-                  ) : (
-                    <>
-                      <input type="hidden" name="confirm" value="" />
-                      <button className="btn-secondary">Switch back to Test</button>
-                    </>
-                  )}
-                </ApiForm>
               </>
             ),
           },

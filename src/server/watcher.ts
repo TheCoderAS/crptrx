@@ -67,11 +67,22 @@ export async function delayedNetworks(now = new Date()): Promise<NetworkCode[]> 
     .map((r) => r.network as NetworkCode);
 }
 
-/** Check TxIDs users submitted (per network, so one outage never blocks the other). */
+/**
+ * Check TxIDs users submitted (per network, so one outage never blocks the other).
+ * Each one on its own: a lookup the provider refuses (free providers refuse single-
+ * transaction lookups) skips that order until next time; it doesn't stop the others
+ * or mark the network as failing. The address scan still finds those payments.
+ */
 export async function verifySubmitted(network: NetworkCode): Promise<MatchEvent[]> {
   const pending = await prisma.order.findMany({ where: { status: "PAYMENT_SUBMITTED", network }, select: { id: true }, orderBy: { createdAt: "asc" }, take: 50 });
   const out: MatchEvent[] = [];
-  for (const o of pending) out.push(...(await verifySubmittedTxid(o.id)));
+  for (const o of pending) {
+    try {
+      out.push(...(await verifySubmittedTxid(o.id)));
+    } catch (e) {
+      console.warn(`[watch:${network}] TxID check for ${o.id} skipped: ${(e as Error).message.split("\n")[0]}`);
+    }
+  }
   return out;
 }
 
@@ -79,12 +90,13 @@ export async function networkTick(network: NetworkCode) {
   const s = await getSettings();
   // Open orders keep being watched even when new quotes on the network are paused.
   try {
-    const events = [...(await watchOnce(network)), ...(await verifySubmitted(network))];
-    await notifyMatchEvents(events);
+    // Tell customers about scanned payments first; TxID checks can't hold them up.
+    await notifyMatchEvents(await watchOnce(network));
   } catch (e) {
     await recordWatcherFailure(network, e);
     throw e;
   }
+  await notifyMatchEvents(await verifySubmitted(network));
   return s.network_mode;
 }
 

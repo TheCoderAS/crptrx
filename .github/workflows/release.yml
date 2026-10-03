@@ -1,0 +1,57 @@
+name: Release
+
+# Every merge into main (the live app) gets a version tag and a GitHub Release
+# listing what changed: v1.0.0 first, then the minor number goes up each time
+# (v1.1.0, v1.2.0, ...). Label the staging -> main PR "release:patch" for a small
+# fix (v1.2.1) or "release:major" for a big change (v2.0.0).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Work out the next version
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "$(git tag --points-at "$GITHUB_SHA" --list 'v*')" ]; then
+            echo "::notice::This commit is already tagged; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          # Labels of the pull request that was merged into main, if any.
+          labels=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[].labels[].name] | join(",")' 2>/dev/null || true)
+          if [ -z "$last" ]; then
+            next="v1.0.0"
+          else
+            IFS=. read -r major minor patch <<< "${last#v}"
+            case ",$labels," in
+              *,release:major,*) next="v$((major + 1)).0.0" ;;
+              *,release:patch,*) next="v$major.$minor.$((patch + 1))" ;;
+              *) next="v$major.$((minor + 1)).0" ;;
+            esac
+          fi
+          echo "Previous: ${last:-none} -> next: $next (labels: ${labels:-none})"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+      - name: Tag and publish the release
+        if: steps.v.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.next }}
+        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes

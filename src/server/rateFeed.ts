@@ -147,6 +147,7 @@ export async function refreshAutoRate(opts: { now?: Date; fetcher?: Fetcher } = 
       await notifySuperAdmins(
         "Live rate paused",
         `The automatic USDT/INR rate was not updated: ${ev.reason}\n\nNew quotes stop once the last good rate is older than ${s.rate_feed_max_age_minutes} minutes. Open Admin → Settings to accept the new price or switch to a manual rate.`,
+        "/admin/settings",
       );
     }
     return { ok: false as const, reason: ev.reason, results };

@@ -28,8 +28,6 @@ open http://localhost:3000/admin     # admin panel
 
 The encryption key is generated on first start and stored in the `appdata` volume. `docker compose down -v` wipes all data, including that key.
 
-To use a pre-built image instead of building locally: `APP_IMAGE=ghcr.io/thecoderas/crptrx:latest docker compose up -d --no-build`. The image is published by the Docker workflow on every push to `main`.
-
 ### Full walkthrough (about 5 minutes)
 1. **Admin:** log in at `/admin` and scan the 2FA QR code.
 2. **User** (another browser or a private window): test sign-in → confirm mobile (the code is on screen) → submit KYC (any JPG/PNG/PDF files).
@@ -53,8 +51,8 @@ The seeded test deposit addresses are random placeholders that nobody controls. 
 2. Check that **USDT token contracts** (Test mode) are the test tokens you will actually send. The pre-filled ones are commonly used test tokens and **must be confirmed by the owner**.
 3. Optional: add `TRONGRID_API_KEY` (TronGrid limits keyless use).
 
-### Hosting: Supabase + Firebase + Render / your own server
-Step by step: **[docs/DEPLOY.md](docs/DEPLOY.md)**. Supabase holds the database and ID documents, Firebase does Google sign-in, and the app runs on Render (testing) or your own server (production).
+### Hosting: Supabase + Firebase + Render
+Step by step: **[docs/DEPLOY.md](docs/DEPLOY.md)**. Supabase holds the database and ID documents, Firebase does Google sign-in and live updates, and the app runs on Render: staging from the `staging` branch, live from `main`, each with its own Supabase project.
 
 ---
 
@@ -130,10 +128,12 @@ The rules live in one place, `src/server/onboarding.ts`, which the pages and the
 | Workflow | When | What |
 |---|---|---|
 | `ci.yml` | every push to `main` and every PR | lint, type check, tests against Postgres, production build |
-| `docker.yml` | PRs, `main`, `v*` tags | builds the image, starts the compose stack, runs the browser walkthrough, then (not on PRs) pushes to `ghcr.io/thecoderas/crptrx` with `latest`, branch, sha and version tags |
-| `deploy.yml` | after a green image build on `main`, or manually | SSH to a Docker host, copies `deploy/docker-compose.prod.yml`, pulls the image, restarts. Skips cleanly until configured. |
+| `docker.yml` | release PRs (`staging` → `main`), or by hand | builds the Docker image, starts the stack, runs the browser walkthrough (checks only, nothing published) |
+| `release.yml` | every push to `main` | next version tag (`v1.0.0`, `v1.1.0`, …) and a GitHub Release with notes |
+| `firebase-rules.yml` | rules changes: PRs check, `main` publishes | chat access rules, checked on the Firebase emulator |
+| `chain-check.yml` | weekly, manually, chain-reader PRs | blockchain readers against the test networks and the real BNB Smart Chain |
 
-To turn on deploys: in GitHub → Settings → Environments, create `staging` (and `production`) with secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` (optional `DEPLOY_PORT`) and variable `DEPLOY_PATH`. On the server, put a filled-in `.env` (from `.env.example`) in `DEPLOY_PATH`, and put HTTPS in front of port 3000.
+Deploys are done by Render, not GitHub Actions: the staging service builds from the `staging` branch, the live service from `main` (see `docs/DEPLOY.md`). Work goes into `staging`; a `staging` → `main` PR is a release.
 
 ---
 
@@ -174,4 +174,4 @@ New ones from this build:
 - Should automatic KYC approval be allowed in Live at all before a PAN/DigiLocker check provider is connected? It's allowed now, with a review-later queue.
 - Confirm the test USDT token contracts for Nile and BSC Testnet (Settings → USDT token contracts).
 - Monthly and platform-daily limits were not in the spec; placeholder values are 20,000 and 50,000 USDT.
-- Where will it be hosted (AWS Mumbai VM, ECS, etc.)? The deploy workflow assumes a single Docker host over SSH.
+- Hosting: Render for both staging (`staging` branch, `APP_MODE=TEST`) and live (`main`, `APP_MODE=LIVE`).
