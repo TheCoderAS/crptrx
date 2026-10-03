@@ -200,6 +200,8 @@ async function main() {
   const warnOnly = (r: { check: string }) => r.check.includes("supports 'finalized'") || r.check === "bsc live: lookup by TxID";
   const failed = results.filter((r) => !r.ok && !warnOnly(r));
   for (const w of results.filter((r) => !r.ok && warnOnly(r))) console.log(`::warning::${w.check}: ${w.detail}`);
+  // As annotations too, so a failure can be read from the checks page without the full log.
+  for (const f of failed) console.log(`::error::${f.check}: ${f.detail}`);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed.`);
   process.exit(failed.length ? 1 : 0);
 }

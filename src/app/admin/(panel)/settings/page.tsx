@@ -53,7 +53,7 @@ export default async function SettingsPage() {
     <div>
       <PageHeader
         title="Settings"
-        subtitle={<>Changes are <Link href="/admin/audit?type=SETTING_CHANGED" className="underline">logged</Link>. Risky ones ask for your 2FA code.</>}
+        subtitle={<>Changes are <Link href="/admin/audit?cat=settings" className="underline">logged</Link>. Risky ones ask for your 2FA code.</>}
         icon={<Gauge className="size-5" />}
         tile="tile-slate"
       />

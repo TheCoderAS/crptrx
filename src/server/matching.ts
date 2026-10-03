@@ -6,6 +6,7 @@ import { allKnownDepositAddresses, currentDepositAddresses } from "./deposit";
 import { AppError } from "./errors";
 import { D } from "./money";
 import { getAdapter, type ChainTransfer } from "./networks";
+import type { TxLookup } from "./networks/types";
 import { LATE_PAYMENT_WINDOW_MS, limitProblem } from "./orders/quote";
 import { transition } from "./orders/stateMachine";
 import { getSettings, tokenContractFor, type Settings } from "./settings";
@@ -319,7 +320,17 @@ export async function verifySubmittedTxid(orderId: string): Promise<MatchEvent[]
   const net = order.network as NetworkCode;
   const a = getAdapter(net);
   const ctx = networkContext(s, net);
-  const lookup = await a.lookupTx(order.submittedTxid, ctx);
+  let lookup: TxLookup;
+  try {
+    lookup = await a.lookupTx(order.submittedTxid, ctx);
+  } catch (e) {
+    console.warn(`[txid] lookup failed for ${order.id}:`, (e as Error).message);
+    // The provider failed, but the scan may already have stored this transaction:
+    // that's enough to decide (stored transfers are final and successful).
+    const seen = await prisma.incomingTransfer.count({ where: { network: net, txid: a.normalizeTxid(order.submittedTxid) } });
+    if (!seen) throw new AppError("Couldn't reach the blockchain to check this transaction. Try again in a minute.", 503, "CHAIN_UNREACHABLE");
+    lookup = { found: true, success: true, final: true, transfers: [] };
+  }
   if (!lookup.found || !lookup.final) return []; // try again next pass
   if (!lookup.success) {
     await prisma.$transaction((tx) => hold(tx, order, HOLD.TX_FAILED, events));

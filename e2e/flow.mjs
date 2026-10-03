@@ -18,6 +18,17 @@ async function freshCode(secret) { let step = Math.floor(Date.now() / 30000); wh
 // Tiny valid PNG
 function png() { const sig = Buffer.from([137,80,78,71,13,10,26,10]); const chunk = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(zlib.crc32 ? zlib.crc32(td) >>> 0 : 0); return Buffer.concat([l, td, c]); }; const ihdr = Buffer.from([0,0,0,1,0,0,0,1,8,2,0,0,0]); return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.from([0,255,0,0]))), chunk("IEND", Buffer.alloc(0))]); }
 fs.writeFileSync(OUT + "/doc.png", png());
+// Tiny valid one-page PDF
+function pdf() {
+  const stream = "BT /F1 24 Tf 40 100 Td (Test PDF) Tj ET";
+  const objs = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>", `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"];
+  let out = "%PDF-1.4\n"; const offs = [];
+  objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const x = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map((o) => String(o).padStart(10, "0") + " 00000 n \n").join("") + `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${x}\n%%EOF`;
+  return Buffer.from(out, "latin1");
+}
+fs.writeFileSync(OUT + "/doc.pdf", pdf());
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const admin = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
@@ -67,7 +78,7 @@ await user.fill("#fullName", "Test Kumar Sharma");
 await user.fill("#dob", "1990-05-17");
 await user.fill("#pan", "ABCDE1234F");
 await user.fill("#address", "12 MG Road, Bengaluru, Karnataka 560001");
-for (const f of ["panDoc", "aadhaarFront", "aadhaarBack", "selfie"]) await user.setInputFiles("#" + f, OUT + "/doc.png");
+for (const f of ["panDoc", "aadhaarFront", "aadhaarBack", "selfie"]) await user.setInputFiles("#" + f, OUT + (f === "aadhaarBack" ? "/doc.pdf" : "/doc.png"));
 await user.check("input[name=maskedConfirmed]");
 await shot(user, "03-user-kyc-form");
 await user.click("text=Submit for review");
@@ -84,6 +95,12 @@ const docImg = admin.locator("[role=dialog] img");
 await docImg.waitFor();
 await admin.waitForFunction(() => { const i = document.querySelector("[role=dialog] img"); return i && i.complete && i.naturalWidth > 0; });
 console.log("doc view opened:", (await docImg.getAttribute("src")).startsWith("/api/files?") ? "signed link, in app" : await docImg.getAttribute("src"));
+await admin.keyboard.press("Escape");
+// PDFs are drawn in the app (PDF.js), so they show on phones too.
+await admin.click("button:has-text('Masked Aadhaar back')");
+await admin.waitForFunction(() => { const c = document.querySelector("[role=dialog] canvas"); return c && c.width > 0; }, null, { timeout: 20000 });
+await shot(admin, "03b-admin-pdf-preview");
+console.log("pdf preview drawn in app");
 await admin.keyboard.press("Escape");
 await admin.fill("#reason-changes", "Selfie is blurry");
 await admin.click("button:has-text('Ask for changes')");
@@ -127,6 +144,7 @@ await user.waitForURL("**step=quote");
 await shot(user, "06-user-quote");
 await user.click("text=Confirm and get deposit address");
 await expectText(user, "Deposit address");
+await user.waitForURL((u) => !u.search.includes("step=quote")); // the order's own address, read below
 const amount = (await user.locator("text=/^\\d+\\.\\d+ USDT$/").first().innerText()).replace(" USDT", "");
 await shot(user, "07-user-deposit");
 const orderUrl = user.url();
@@ -160,6 +178,18 @@ await expectText(user, "Send us a message");
 await user.fill("[role=dialog] textarea[aria-label=Message]", "Is my payment okay?");
 await user.click("[role=dialog] button[aria-label=Send]");
 await expectText(user, "Is my payment okay?");
+// An image: thumbnail in the bubble, full view inside the app (no new tab).
+await user.setInputFiles("[role=dialog] input[type=file]", OUT + "/doc.png");
+await user.locator("[role=dialog] img[alt='Image to send']").waitFor();
+await user.click("[role=dialog] button[aria-label=Send]");
+await user.locator("[role=dialog] button[aria-label='Open image'] img").waitFor();
+await user.click("[role=dialog] button[aria-label='Open image']");
+await user.locator("[role=dialog][aria-label='Image'] img").waitFor();
+await user.click("button[aria-label='Close image']");
+if (await user.getByRole("dialog", { name: "Image" }).count()) throw new Error("image viewer didn't close");
+// PDFs can't be sent in chat.
+await user.setInputFiles("[role=dialog] input[type=file]", OUT + "/doc.pdf");
+await expectText(user, "Only JPG or PNG images can be sent.");
 await shot(user, "07e-user-chat");
 await admin.goto(BASE + "/admin/support");
 await expectText(admin, "tester@example.com");
@@ -246,7 +276,7 @@ await expectText(admin, "Start review");
 console.log("unmatched payment confirmed from the order page");
 
 // Audit log shows doc views
-await admin.goto(BASE + "/admin/audit?type=KYC_DOC_VIEWED");
+await admin.goto(BASE + "/admin/audit?cat=customers");
 await expectText(admin, "KYC doc viewed");
 await shot(admin, "10b-admin-audit-filter");
 console.log("doc view logged");
