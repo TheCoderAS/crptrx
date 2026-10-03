@@ -141,11 +141,7 @@ async function checkBsc() {
 /** The address the app reads the real BNB Smart Chain from (Live mode). */
 const BSC_LIVE_DEFAULT = "https://bsc-rpc.publicnode.com";
 
-/** Set when no BSC_LIVE_RPC_URL is configured: the free default is tested, and its known limit only warns. */
-let liveDefault = false;
-
 async function checkBscLive() {
-  liveDefault = !process.env.BSC_LIVE_RPC_URL;
   const url = process.env.BSC_LIVE_RPC_URL || BSC_LIVE_DEFAULT;
   const token = getAddress(NETWORK_INFO.BSC.mainnetUsdt);
   // Don't print a keyed address in full: the key sits in the path.
@@ -180,7 +176,7 @@ async function checkBscLive() {
     // The free PublicNode address refuses single-transaction lookups ("archive requests
     // require a personal token"). Customer TxIDs and Re-check need them; scanning doesn't.
     const why = (e as Error).message.split("\n").find((l) => l.startsWith("Details:")) ?? (e as Error).message.slice(0, 120);
-    record("bsc live: lookup by TxID", false, `${why}${liveDefault ? " (free default address: set BSC_LIVE_RPC_URL to a keyed provider)" : ""}`);
+    record("bsc live: lookup by TxID", false, `${why} (customer TxIDs and Re-check need a keyed BSC_LIVE_RPC_URL; payment detection doesn't)`);
   }
   // How payments are actually detected: scanning our deposit address. Checked either way.
   const to = getAddress(log.args.to!);
@@ -198,9 +194,10 @@ async function main() {
       record(`${name}: unexpected error`, false, (e as Error).message);
     }
   }
-  // Not fatal: a provider without the "finalized" tag (we fall back), and the free
-  // default BSC address's known lack of TxID lookups (warned; a configured address must pass).
-  const warnOnly = (r: { check: string }) => r.check.includes("supports 'finalized'") || (liveDefault && r.check === "bsc live: lookup by TxID");
+  // Not fatal, but shown as warnings: a provider without the "finalized" tag (we fall
+  // back), and a real-network address without single-transaction lookups (free
+  // providers): payments are still detected by the address scan, which must pass.
+  const warnOnly = (r: { check: string }) => r.check.includes("supports 'finalized'") || r.check === "bsc live: lookup by TxID";
   const failed = results.filter((r) => !r.ok && !warnOnly(r));
   for (const w of results.filter((r) => !r.ok && warnOnly(r))) console.log(`::warning::${w.check}: ${w.detail}`);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed.`);

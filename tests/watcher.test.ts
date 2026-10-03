@@ -101,6 +101,20 @@ describe("BSC watcher (spec 8.3, M6b)", () => {
     expect((await orderById(b.order.id)).status).toBe("PAYMENT_CONFIRMED");
   });
 
+  it("a TxID the provider won't look up doesn't stop the scan or mark the network failing", async () => {
+    const paid = await makeOrder("BSC", "100");
+    const waiting = await makeOrder("BSC", "200");
+    // A customer pasted a TxID; the provider refuses single-transaction lookups (fakeBsc, like PublicNode).
+    await prisma.order.update({ where: { id: waiting.order.id }, data: { status: "PAYMENT_SUBMITTED", submittedTxid: tx(99) } });
+    const c = fakeBsc([{ blockNumber: 975n, logIndex: 0, txid: tx(1), to: ADDR.BSC, amount: paid.order.usdtAmount.toString() }], { finalized: 1000n });
+    setBscClientForTests(c);
+    for (let i = 0; i < 6; i++) await networkTick("BSC");
+    expect((await orderById(paid.order.id)).status).toBe("PAYMENT_CONFIRMED");
+    expect((await orderById(waiting.order.id)).status).toBe("PAYMENT_SUBMITTED"); // tried again next time
+    const st = await prisma.watcherState.findUniqueOrThrow({ where: { network: "BSC" } });
+    expect(st.failingSince).toBeNull();
+  });
+
   it("does not read blocks that are not final yet", async () => {
     const { order } = await makeOrder("BSC", "100");
     const c = fakeBsc([{ blockNumber: 1005n, logIndex: 0, txid: tx(2), to: ADDR.BSC, amount: order.usdtAmount.toString() }], { finalized: 1000n });
