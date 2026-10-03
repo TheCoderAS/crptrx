@@ -136,6 +136,34 @@ export function decodeBscLog(log: Pick<Log, "address" | "topics" | "data" | "tra
   };
 }
 
+/**
+ * TxID lookup for providers that refuse eth_getTransactionReceipt. A Transfer
+ * event only exists if the transaction succeeded, so finding one proves
+ * success. Only the official token is read (a whole block of every token's
+ * events is too big for free providers); with none found the transaction is
+ * reported as successful with no transfers, which matching treats as "didn't
+ * pay us" and holds for an admin.
+ */
+async function lookupWithoutReceipt(c: PublicClient, txid: string, ctx: NetworkContext): Promise<TxLookup> {
+  let txn;
+  try {
+    txn = await c.getTransaction({ hash: txid as `0x${string}` });
+  } catch (e) {
+    if ((e as Error).name === "TransactionNotFoundError") return { found: false, success: false, final: false, transfers: [] };
+    throw e;
+  }
+  if (txn.blockNumber == null) return { found: false, success: false, final: false, transfers: [] }; // not in a block yet
+  const fin = await finalizedBlock(c, ctx);
+  if (txn.blockNumber > fin) return { found: true, success: false, final: false, transfers: [] };
+  const logs = await c.getLogs({ address: getAddress(ctx.tokenContract), event: TRANSFER, fromBlock: txn.blockNumber, toBlock: txn.blockNumber });
+  const time = await blockTime(c, txn.blockNumber);
+  const transfers = logs
+    .filter((l) => !l.removed && l.transactionHash?.toLowerCase() === txid.toLowerCase())
+    .map((l) => decodeBscLog(l, time))
+    .filter((t): t is ChainTransfer => !!t);
+  return { found: true, success: true, final: true, transfers };
+}
+
 export const bscAdapter: NetworkAdapter = {
   code: "BSC",
   decimals: DECIMALS,
@@ -154,7 +182,9 @@ export const bscAdapter: NetworkAdapter = {
       receipt = await c.getTransactionReceipt({ hash: txid as `0x${string}` });
     } catch (e) {
       if ((e as Error).name === "TransactionReceiptNotFoundError") return { found: false, success: false, final: false, transfers: [] };
-      throw e;
+      // Free providers (PublicNode) refuse receipt lookups. Find the block from the
+      // transaction itself, then read that one block's token Transfer events.
+      return lookupWithoutReceipt(c, txid, ctx);
     }
     const fin = await finalizedBlock(c, ctx);
     const time = await blockTime(c, receipt.blockNumber);

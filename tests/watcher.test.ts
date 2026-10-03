@@ -6,11 +6,12 @@ import { bscAdapter, resetLearnedSpanForTests, setBscClientForTests } from "@/se
 import { tronAdapter } from "@/server/networks/tron";
 import { toUnits } from "@/server/money";
 import { networkTick, recordWatcherFailure, delayedNetworks, watchOnce } from "@/server/watcher";
+import { recheckPayment } from "@/server/matching";
 import { ADDR, TOKEN, baseSettings, makeOrder, orderById, randBsc, resetDb } from "./helpers";
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-interface FakeLog { blockNumber: bigint; logIndex: number; txid: string; to: string; amount: string; token?: string }
+interface FakeLog { blockNumber: bigint; logIndex: number; txid: string; to: string; amount: string; token?: string; from?: string }
 
 /** Minimal fake of the viem client calls the BSC adapter makes. */
 function fakeBsc(logs: FakeLog[], opts: { finalized: bigint; failGetLogsAt?: bigint; maxRange?: bigint }) {
@@ -25,18 +26,18 @@ function fakeBsc(logs: FakeLog[], opts: { finalized: bigint; failGetLogsAt?: big
     async getBlockNumber() {
       return client.finalized + 20n;
     },
-    async getLogs(a: { fromBlock: bigint; toBlock: bigint; args: { to: string[] }; address: string }) {
+    async getLogs(a: { fromBlock: bigint; toBlock: bigint; args?: { to: string[] }; address: string }) {
       if (opts.maxRange && a.toBlock - a.fromBlock + 1n > opts.maxRange) throw new Error("Request exceeds defined limit.");
       calls.push([a.fromBlock, a.toBlock]);
       if (opts.failGetLogsAt !== undefined && a.fromBlock <= opts.failGetLogsAt && opts.failGetLogsAt <= a.toBlock) {
         throw new Error("provider died"); // keeps failing until the process restarts
       }
-      const tos = a.args.to.map((x) => x.toLowerCase());
+      const tos = a.args?.to.map((x) => x.toLowerCase());
       return logs
-        .filter((l) => l.blockNumber >= a.fromBlock && l.blockNumber <= a.toBlock && tos.includes(l.to.toLowerCase()) && (l.token ?? TOKEN.BSC).toLowerCase() === a.address.toLowerCase())
+        .filter((l) => l.blockNumber >= a.fromBlock && l.blockNumber <= a.toBlock && (!tos || tos.includes(l.to.toLowerCase())) && (l.token ?? TOKEN.BSC).toLowerCase() === a.address.toLowerCase())
         .map((l) => ({
           address: getAddress(l.token ?? TOKEN.BSC),
-          topics: [TRANSFER_TOPIC, pad(randBsc() as `0x${string}`), pad(l.to as `0x${string}`)],
+          topics: [TRANSFER_TOPIC, pad((l.from ?? randBsc()) as `0x${string}`), pad(l.to as `0x${string}`)],
           data: encodeAbiParameters([{ type: "uint256" }], [toUnits(l.amount, 18)]),
           transactionHash: l.txid,
           logIndex: l.logIndex,
@@ -48,6 +49,12 @@ function fakeBsc(logs: FakeLog[], opts: { finalized: bigint; failGetLogsAt?: big
     // Scanning must not need them.
     async getTransactionReceipt() {
       throw new Error("Archive requests require a personal token.");
+    },
+    // Plain transaction lookups do work there.
+    async getTransaction(a: { hash: string }) {
+      const l = logs.find((x) => x.txid === a.hash);
+      if (!l) throw Object.assign(new Error("not found"), { name: "TransactionNotFoundError" });
+      return { hash: l.txid, blockNumber: l.blockNumber };
     },
   };
   return client;
@@ -170,5 +177,38 @@ describe("network isolation", () => {
     await recordWatcherFailure("TRON", new Error("down"), new Date());
     expect(await prisma.outboundMessage.count({ where: { to: "owner@test.dev" } })).toBe(1);
     expect(await delayedNetworks()).toEqual(["TRON"]);
+  });
+});
+
+describe("TxID check when the provider refuses receipt lookups (free PublicNode)", () => {
+  it("confirms a customer's payment from the transaction's block", async () => {
+    const { order, user } = await makeOrder("BSC", "100");
+    const c = fakeBsc([{ blockNumber: 975n, logIndex: 3, txid: tx(50), to: ADDR.BSC, amount: order.usdtAmount.toString() }], { finalized: 1000n });
+    setBscClientForTests(c);
+    await prisma.order.update({ where: { id: order.id }, data: { status: "PAYMENT_SUBMITTED", submittedTxid: tx(50) } });
+    await recheckPayment(order.id, { type: "USER", userId: user.id }, user.id);
+    expect((await orderById(order.id)).status).toBe("PAYMENT_CONFIRMED");
+  });
+
+  it("holds an order whose TxID is our deposit wallet paying itself", async () => {
+    const { order, user } = await makeOrder("BSC", "100");
+    const c = fakeBsc([{ blockNumber: 975n, logIndex: 0, txid: tx(51), from: ADDR.BSC, to: ADDR.BSC, amount: order.usdtAmount.toString() }], { finalized: 1000n });
+    setBscClientForTests(c);
+    await prisma.order.update({ where: { id: order.id }, data: { status: "PAYMENT_SUBMITTED", submittedTxid: tx(51) } });
+    await recheckPayment(order.id, { type: "USER", userId: user.id }, user.id);
+    const o = await orderById(order.id);
+    expect(o.status).toBe("ON_HOLD");
+    expect((await prisma.incomingTransfer.findFirstOrThrow({ where: { txid: tx(51) } })).unmatchedReason).toMatch(/own deposit address/);
+  });
+
+  it("says the blockchain couldn't be reached instead of a generic error", async () => {
+    const { order, user } = await makeOrder("BSC", "100");
+    const c = fakeBsc([], { finalized: 1000n });
+    c.getTransaction = async () => {
+      throw new Error("provider down");
+    };
+    setBscClientForTests(c);
+    await prisma.order.update({ where: { id: order.id }, data: { status: "PAYMENT_SUBMITTED", submittedTxid: tx(52) } });
+    await expect(recheckPayment(order.id, { type: "USER", userId: user.id }, user.id)).rejects.toMatchObject({ status: 503, message: /Couldn't reach the blockchain/ });
   });
 });
