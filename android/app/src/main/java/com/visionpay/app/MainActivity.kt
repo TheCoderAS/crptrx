@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
@@ -151,6 +153,31 @@ class MainActivity : AppCompatActivity() {
         linkFrom(intent)?.let { web.loadUrl(it) }
     }
 
+    // Back online while the "You're offline" screen is up: try again by itself.
+    private val network = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(net: Network) {
+            runOnUiThread { if (offline.isVisible && retry.isVisible) retry.performClick() }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        try {
+            getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(network)
+        } catch (e: Exception) {
+            Log.w(TAG, "network callback: ${e.message}")
+        }
+    }
+
+    override fun onStop() {
+        try {
+            getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(network)
+        } catch (e: Exception) {
+            // wasn't registered
+        }
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         web.onResume()
@@ -258,8 +285,11 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPageFinished(view: WebView, url: String) {
             refresh.isRefreshing = false
+            if (mainFrameFailed) {
+                Log.i(TAG, "page-failed url=$url")
+                return
+            }
             Log.i(TAG, "page-finished url=$url title=${view.title}")
-            if (mainFrameFailed) return
             pageShown = true
             keepSplash = false
             offline.isVisible = false

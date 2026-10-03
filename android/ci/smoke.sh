@@ -12,10 +12,17 @@ adb install -r -g "$APK" || { fail "Couldn't install the app on the emulator"; e
 adb logcat -c
 adb shell am start -W -n "$PKG/com.visionpay.app.MainActivity" >/dev/null
 
+# Wait until the emulator itself is online (right after boot it often isn't yet).
+for _ in $(seq 1 60); do
+  adb shell dumpsys connectivity 2>/dev/null | grep -q "state: CONNECTED" && break
+  sleep 2
+done
+
 ok=""
-# A sleeping free-plan server can take ~1 minute to answer the first time.
+# A sleeping free-plan server can take ~1 minute to answer the first time. If the first try
+# fails (offline screen), the app retries by itself when the network comes up.
 for _ in $(seq 1 120); do
-  if adb logcat -d -s VisionPay:I | grep -q "page-finished url=https://$HOST"; then ok=1; break; fi
+  if adb logcat -d -s VisionPay:I | grep -E "page-finished url=https://$HOST" | grep -qv "title=$"; then ok=1; break; fi
   if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app stopped right after starting (crash)"; break; fi
   sleep 2
 done
@@ -32,8 +39,12 @@ if [ -z "$ok" ]; then
   exit 1
 fi
 note "Loaded" "$(grep page-finished "$OUT/app-log.txt" | tail -1 | sed 's/.*page-finished //')"
-texts=$(grep -o 'text="[^"]\+"' "$OUT/1-start.xml" 2>/dev/null | sed 's/^text="//;s/"$//' | head -20 | paste -sd '|' -)
+texts=$(grep -o 'text="[^"]\+"' "$OUT/1-start.xml" 2>/dev/null | sed 's/^text="//;s/"$//' | head -25 | paste -sd '|' -)
 note "On screen" "${texts:-<no text found in the screen dump>}"
+# Signed out, the app opens the login page: it must show our page, not an error.
+if echo "$texts" | grep -qiE "Webpage not available|ERR_|You're offline"; then fail "The app shows an error page instead of the website"; exit 1; fi
+if ! echo "$texts" | grep -qiE "Welcome back|Log in|Continue with"; then fail "The login page didn't appear on screen"; exit 1; fi
+note "Login page" "The website's login page is on screen inside the app"
 
 # Back button on the start page: the app goes to the background, it doesn't crash.
 adb shell input keyevent 4; sleep 2
