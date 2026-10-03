@@ -290,6 +290,8 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             Log.i(TAG, "page-finished url=$url title=${view.title}")
+            autoRetries = 0
+            handler.removeCallbacks(autoRetry)
             pageShown = true
             keepSplash = false
             offline.isVisible = false
@@ -341,6 +343,18 @@ class MainActivity : AppCompatActivity() {
         offlineBody.text = text
         retry.isVisible = withRetry
         offline.isVisible = true
+        if (withRetry) scheduleAutoRetry()
+    }
+
+    // While the offline screen is up, quietly try again: 3 s, 6 s, 12 s … then every 30 s.
+    private var autoRetries = 0
+    private val autoRetry = Runnable { if (offline.isVisible && retry.isVisible) retry.performClick() }
+
+    private fun scheduleAutoRetry() {
+        handler.removeCallbacks(autoRetry)
+        val delay = minOf(30_000L, 3_000L shl minOf(autoRetries, 4))
+        autoRetries++
+        handler.postDelayed(autoRetry, delay)
     }
 
     /** Our website stays in the app; other websites open in the browser; wallet and other app links open those apps. */

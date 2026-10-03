@@ -140,7 +140,7 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
           script: bash android/ci/smoke.sh "dist/${{ steps.meta.outputs.apk }}" "${{ steps.meta.outputs.package }}" "$(echo '${{ steps.meta.outputs.url }}' | sed -E 's#^https?://##;s#/.*##')" smoke
 
       - uses: actions/upload-artifact@v4
