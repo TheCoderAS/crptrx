@@ -3,7 +3,7 @@ import { adminCtx } from "@/server/auth/guard";
 import { AppError } from "@/server/errors";
 import { env } from "@/server/env";
 import { rateLimit } from "@/server/ratelimit";
-import { PUSH_PLATFORMS, registerAdminPushDevice, unregisterAdminPushDevice, webPushReady, type PushPlatform } from "@/server/firebase/push";
+import { PUSH_PLATFORMS, registerAdminPushDevice, unregisterAdminPushDevice, webPushReady, appPushReady, type PushPlatform } from "@/server/firebase/push";
 
 // Support staff's devices for "customer wrote" push notifications.
 
@@ -17,7 +17,9 @@ function parse(b: { token?: unknown; platform?: unknown }) {
 
 export const GET = api(async () => {
   await adminCtx();
-  return webPushReady() ? { enabled: true, config: { ...env.firebase.webConfig, messagingSenderId: env.firebase.messagingSenderId }, vapidKey: env.firebase.vapidKey } : { enabled: false };
+  // android: the server can send to the Android app (it only needs the service account).
+  const android = appPushReady();
+  return webPushReady() ? { enabled: true, android, config: { ...env.firebase.webConfig, messagingSenderId: env.firebase.messagingSenderId }, vapidKey: env.firebase.vapidKey } : { enabled: false, android };
 });
 
 export const POST = api(async (req: Request) => {

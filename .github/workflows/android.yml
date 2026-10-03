@@ -1,0 +1,58 @@
+name: Android app
+
+# Pull requests that touch the app: build it and try it on an emulator (nothing published).
+# Every merge into staging: a test app "VisionPay Test" as a GitHub pre-release
+#   vX.Y.Z-test.N, where X.Y.Z is the version main will get next and N counts up.
+# The live app is built by release.yml when main gets its version tag.
+
+on:
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/android*.yml"
+      - "src/lib/nativeApp.ts"
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.v.outputs.name }}
+      code: ${{ steps.v.outputs.code }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        run: |
+          # The version main will get next (same rule as release.yml without labels), then -test.<run>.
+          last=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          if [ -z "$last" ]; then next="1.0.0"; else IFS=. read -r a b c <<< "${last#v}"; next="$a.$((b + 1)).0"; fi
+          name="$next-test.${{ github.run_number }}"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          # Only staging publishes.
+          if [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref }}" = "refs/heads/staging" ]; then echo "tag=v$name" >> "$GITHUB_OUTPUT"; fi
+          echo "::notice title=Test app version::$name (code ${{ github.run_number }})"
+
+  app:
+    needs: version
+    uses: ./.github/workflows/android-build.yml
+    with:
+      flavor: staging
+      version_name: ${{ needs.version.outputs.name }}
+      version_code: ${{ needs.version.outputs.code }}
+      tag: ${{ needs.version.outputs.tag }}
+      create_release: true
+      smoke_test: true
+    secrets: inherit

@@ -4,15 +4,27 @@
 // The browser's own "Allow notifications?" question is asked only after a tap.
 // One browser can be signed up as both (same device token, separate lists).
 
+import { inNativeApp, nativeCall, nativeInfo } from "./nativeApp";
+
 export type Who = "user" | "admin";
 
 const SW = "/push-sw.js";
 const api = (who: Who) => (who === "admin" ? "/api/admin/push" : "/api/me/push");
 const keys = (who: Who) => ({ token: `push-token-${who}`, synced: `push-synced-${who}` });
 
-type Cfg = { enabled: boolean; config?: Record<string, string>; vapidKey?: string };
+type Cfg = { enabled: boolean; android?: boolean; config?: Record<string, string>; vapidKey?: string };
 
-export const pushSupported = () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+// Inside the Android app, notifications are the app's own (Firebase on the phone);
+// the website only passes the app's device token to our server.
+
+export const pushSupported = () =>
+  typeof window !== "undefined" && (inNativeApp() || ("serviceWorker" in navigator && "PushManager" in window && "Notification" in window));
+
+/** granted / denied / default, for the browser or the app. */
+export function pushPermission(): "granted" | "denied" | "default" {
+  if (inNativeApp()) return nativeInfo()?.push ?? "default";
+  return typeof Notification !== "undefined" ? Notification.permission : "default";
+}
 
 const store = {
   get: (k: string) => {
@@ -53,11 +65,12 @@ const loadCfg = (who: Who) =>
 
 /** Push is set up on the server and this browser can do it. */
 export async function pushAvailable(who: Who = "user"): Promise<boolean> {
+  if (inNativeApp()) return !!nativeInfo()?.pushReady && !!(await loadCfg(who)).android;
   return pushSupported() && !!(await loadCfg(who)).enabled;
 }
 
 /** This browser is signed up (and still allowed). */
-export const pushOnHere = (who: Who = "user") => pushSupported() && Notification.permission === "granted" && !!store.get(keys(who).token);
+export const pushOnHere = (who: Who = "user") => pushSupported() && pushPermission() === "granted" && !!store.get(keys(who).token);
 
 async function messaging(cfg: Cfg) {
   const [{ initializeApp, getApps }, m] = await Promise.all([import("firebase/app"), import("firebase/messaging")]);
@@ -66,7 +79,23 @@ async function messaging(cfg: Cfg) {
   return { m, msg: m.getMessaging(app) };
 }
 
+async function save(who: Who, token: string, platform: "WEB" | "ANDROID"): Promise<"on" | "unavailable"> {
+  const res = await fetch(api(who), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, platform }) });
+  if (!res.ok) return "unavailable";
+  store.set(keys(who).token, token);
+  store.set(keys(who).synced, String(Date.now()));
+  return "on";
+}
+
+/** The app asks Android's notification permission itself and returns its device token. */
+async function registerNative(who: Who): Promise<"on" | "unavailable" | "denied"> {
+  const r = await nativeCall<{ token?: string; error?: string }>("pushToken");
+  if (!r.token) return r.error === "denied" ? "denied" : "unavailable";
+  return save(who, r.token, "ANDROID");
+}
+
 async function register(who: Who): Promise<"on" | "unavailable" | "denied"> {
+  if (inNativeApp()) return registerNative(who);
   const cfg = await loadCfg(who);
   if (!cfg.enabled || !cfg.config || !cfg.vapidKey) return "unavailable";
   const fm = await messaging(cfg);
@@ -74,24 +103,22 @@ async function register(who: Who): Promise<"on" | "unavailable" | "denied"> {
   const reg = await navigator.serviceWorker.register(SW);
   const token = await fm.m.getToken(fm.msg, { vapidKey: cfg.vapidKey, serviceWorkerRegistration: reg });
   if (!token) return "denied";
-  const res = await fetch(api(who), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, platform: "WEB" }) });
-  if (!res.ok) return "unavailable";
-  store.set(keys(who).token, token);
-  store.set(keys(who).synced, String(Date.now()));
-  return "on";
+  return save(who, token, "WEB");
 }
 
 /** Ask permission (must come from a tap) and sign this browser up. */
 export async function enablePush(who: Who = "user"): Promise<"on" | "unavailable" | "denied"> {
   if (!(await pushAvailable(who))) return "unavailable";
-  const p = await Notification.requestPermission();
-  if (p !== "granted") return "denied";
+  if (!inNativeApp()) {
+    const p = await Notification.requestPermission();
+    if (p !== "granted") return "denied";
+  }
   return register(who).catch(() => "unavailable" as const);
 }
 
 /** Already signed up here: refresh it once a day (browsers change tokens now and then). */
 export async function syncPush(who: Who = "user") {
-  if (!pushSupported() || Notification.permission !== "granted" || !store.get(keys(who).token)) return;
+  if (!pushSupported() || pushPermission() !== "granted" || !store.get(keys(who).token)) return;
   if (Date.now() - Number(store.get(keys(who).synced) ?? 0) < 24 * 3600_000) return;
   await register(who).catch(() => undefined);
 }

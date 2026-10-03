@@ -3,7 +3,7 @@ import { requireUser } from "@/server/auth/session";
 import { AppError } from "@/server/errors";
 import { env } from "@/server/env";
 import { rateLimit } from "@/server/ratelimit";
-import { PUSH_PLATFORMS, registerPushDevice, unregisterPushDevice, webPushReady, type PushPlatform } from "@/server/firebase/push";
+import { PUSH_PLATFORMS, registerPushDevice, unregisterPushDevice, webPushReady, appPushReady, type PushPlatform } from "@/server/firebase/push";
 
 // Devices that get push notifications. The website registers browsers; the
 // Android app will call the same endpoint with platform "ANDROID".
@@ -19,7 +19,9 @@ function parse(b: { token?: unknown; platform?: unknown }) {
 /** What a browser needs to sign up for push; enabled: false when push isn't set up. */
 export const GET = api(async () => {
   await requireUser();
-  return webPushReady() ? { enabled: true, config: { ...env.firebase.webConfig, messagingSenderId: env.firebase.messagingSenderId }, vapidKey: env.firebase.vapidKey } : { enabled: false };
+  // android: the server can send to the Android app (it only needs the service account).
+  const android = appPushReady();
+  return webPushReady() ? { enabled: true, android, config: { ...env.firebase.webConfig, messagingSenderId: env.firebase.messagingSenderId }, vapidKey: env.firebase.vapidKey } : { enabled: false, android };
 });
 
 export const POST = api(async (req: Request) => {

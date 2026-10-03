@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Bell, BellOff, BellRing } from "lucide-react";
-import { disablePush, enablePush, pushOnHere, pushSupported, type Who } from "@/lib/push";
+import { disablePush, enablePush, pushOnHere, pushPermission, pushSupported, type Who } from "@/lib/push";
 
 type State = "loading" | "on" | "off" | "blocked" | "unsupported";
 const DETAIL: Record<State, string> = {
   loading: "…",
   on: "On for this device",
   off: "Off for this device",
-  blocked: "Blocked in your browser settings",
+  blocked: "Blocked in your phone or browser settings",
   unsupported: "Not available in this browser",
 };
 
@@ -18,7 +18,7 @@ function usePush(who: Who) {
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!pushSupported()) return setState("unsupported");
-    setState(Notification.permission === "denied" ? "blocked" : pushOnHere(who) ? "on" : "off");
+    setState(pushPermission() === "denied" ? "blocked" : pushOnHere(who) ? "on" : "off");
   }, [who]);
   async function toggle() {
     setBusy(true);
