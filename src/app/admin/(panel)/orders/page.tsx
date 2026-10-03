@@ -5,11 +5,11 @@ import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fmtInr, fmtUsdt } from "@/server/money";
 import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
-import { fmtIST } from "@/lib/time";
+import { fmtISTShort } from "@/lib/time";
 import { pickSort } from "@/lib/sort";
 import { ListToolbar } from "@/components/ListToolbar";
 import { FilterMenu } from "@/components/FilterMenu";
-import { NetworkBadge, PageHeader, StatusPill, statusLabel } from "@/components/ui";
+import { NetworkMark, PageHeader, StatusPill, statusLabel } from "@/components/ui";
 
 // Everything waiting on an admin: new payments, reviews, holds and approved orders still to be paid.
 const WORK: OrderStatus[] = ["PAYMENT_CONFIRMED", "UNDER_REVIEW", "ON_HOLD", "APPROVED"];
@@ -72,23 +72,56 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
           ]}
         />
       </ListToolbar>
-      <div className="card overflow-x-auto">
-        {orders.length === 0 ? <p className="muted">No orders.</p> : (
-          <table className="table">
-            <thead><tr><th>Order</th><th>Created</th><th>User</th><th>USDT</th><th>Net ₹</th><th>Status</th></tr></thead>
-            <tbody>
+      <div className="card overflow-hidden p-0 sm:p-0">
+        {orders.length === 0 ? <p className="muted p-5">No orders.</p> : (
+          <>
+            {/* Phones: one tappable card per order. */}
+            <ul className="divide-y divide-slate-100 md:hidden">
               {orders.map((o) => (
-                <tr key={o.id}>
-                  <td><Link className="font-medium text-brand-700 underline" href={`/admin/orders/${o.id}`}>{o.id}</Link></td>
-                  <td>{fmtIST(o.createdAt)}</td>
-                  <td>{o.user.email}</td>
-                  <td>{fmtUsdt(o.usdtAmount)} <NetworkBadge network={o.network} /></td>
-                  <td>{fmtInr(o.net)}</td>
-                  <td><StatusPill status={o.status} />{o.holdReason && o.status === "ON_HOLD" && <div className="text-xs text-orange-800">{o.holdReason}</div>}{maybePaid(o) && <div className="mt-1"><Link href={`/admin/orders/${o.id}`} className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-300">Possible payment found</Link></div>}</td>
-                </tr>
+                <li key={o.id}>
+                  <Link href={`/admin/orders/${o.id}`} className="block space-y-1 px-4 py-3 active:bg-slate-50">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs text-slate-500">{o.id}</span>
+                      <StatusPill status={o.status} />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900"><NetworkMark network={o.network} size={16} />{fmtUsdt(o.usdtAmount)} USDT</span>
+                      <span className="font-semibold text-slate-900">{fmtInr(o.net)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                      <span className="min-w-0 truncate">{o.user.email}</span>
+                      <span className="shrink-0">{fmtISTShort(o.createdAt)}</span>
+                    </div>
+                    {o.status === "ON_HOLD" && o.holdReason && <p className="truncate text-xs text-amber-700">{o.holdReason}</p>}
+                    {maybePaid(o) && <span className="inline-block rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-300">Possible payment found</span>}
+                  </Link>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+            {/* Desktop: compact table; the whole row opens the order. */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="table">
+                <thead><tr><th>Order</th><th>Customer</th><th className="text-right">USDT</th><th className="text-right">Pays</th><th>Status</th><th>Created</th></tr></thead>
+                <tbody>
+                  {orders.map((o) => (
+                    <tr key={o.id} className="relative hover:bg-slate-50">
+                      <td className="whitespace-nowrap"><Link className="font-mono text-xs font-medium text-brand-700 after:absolute after:inset-0" href={`/admin/orders/${o.id}`}>{o.id}</Link></td>
+                      <td className="max-w-56 truncate text-slate-600">{o.user.email}</td>
+                      <td className="whitespace-nowrap text-right"><span className="inline-flex items-center gap-1.5 font-medium">{fmtUsdt(o.usdtAmount)}<NetworkMark network={o.network} size={14} /></span></td>
+                      <td className="whitespace-nowrap text-right font-medium">{fmtInr(o.net)}</td>
+                      <td className="whitespace-nowrap">
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <StatusPill status={o.status} />
+                          {maybePaid(o) && <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-300">Possible payment found</span>}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap text-xs text-slate-500">{fmtISTShort(o.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
       {pages > 1 && (

@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import type { Prisma } from "@prisma/client";
-import { fmtIST } from "@/lib/time";
+import { fmtISTShort } from "@/lib/time";
 import { pickSort } from "@/lib/sort";
 import { ListToolbar } from "@/components/ListToolbar";
 
@@ -30,24 +30,37 @@ export default async function Audit({ searchParams }: { searchParams: Promise<{ 
   return (
     <div className="space-y-4">
       <PageHeader title="Audit log" icon={<ScrollText className="size-6" />} tile="tile-slate" />
-      <p className="muted">Permanent record of logins, document views, admin actions, settings changes and exports. Entries can&apos;t be edited or deleted.</p>
       <ListToolbar placeholder="Action (e.g. KYC_DOC), target ID or IP" sorts={[...SORTS]} defaultSort="new" />
-      <div className="card overflow-x-auto">
-        <table className="table">
-          <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Target</th><th>Details</th><th>IP</th></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td className="whitespace-nowrap">{fmtIST(r.createdAt)}</td>
-                <td>{who(r.actorType, r.actorId)}</td>
-                <td className="font-mono text-xs">{r.action}</td>
-                <td className="text-xs">{r.targetType}{r.targetId ? `:${r.targetId}` : ""}</td>
-                <td className="max-w-xs text-xs break-all">{r.details ? JSON.stringify(r.details) : ""}</td>
-                <td className="text-xs">{r.ip}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="card overflow-hidden p-0 sm:p-0">
+        <ul className="divide-y divide-slate-100 md:hidden">
+          {rows.map((r) => (
+            <li key={r.id} className="space-y-1 px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate font-mono text-xs font-semibold text-slate-900">{r.action}</span>
+                <span className="shrink-0 text-xs text-slate-500">{fmtISTShort(r.createdAt)}</span>
+              </div>
+              <p className="truncate text-xs text-slate-500">{who(r.actorType, r.actorId)}{r.targetType ? ` · ${r.targetType}${r.targetId ? `:${r.targetId}` : ""}` : ""}</p>
+              {r.details && <p className="line-clamp-2 font-mono text-[11px] break-all text-slate-500">{JSON.stringify(r.details)}</p>}
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
+          <table className="table">
+            <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Target</th><th>Details</th><th>IP</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td className="whitespace-nowrap text-xs text-slate-500">{fmtISTShort(r.createdAt)}</td>
+                  <td>{who(r.actorType, r.actorId)}</td>
+                  <td className="font-mono text-xs">{r.action}</td>
+                  <td className="text-xs">{r.targetType}{r.targetId ? `:${r.targetId}` : ""}</td>
+                  <td className="max-w-xs text-xs break-all">{r.details ? JSON.stringify(r.details) : ""}</td>
+                  <td className="text-xs">{r.ip}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       <div className="flex gap-3 text-sm">
         {p > 0 && <a className="underline" href={`?${new URLSearchParams({ ...(q ? { q } : {}), ...(sort !== "new" ? { sort } : {}), page: String(p - 1) })}`}>{sort === "old" ? "Earlier" : "Newer"}</a>}

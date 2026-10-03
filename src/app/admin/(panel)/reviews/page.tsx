@@ -6,7 +6,7 @@ import { prisma } from "@/server/db";
 import { decrypt } from "@/server/crypto";
 import { namesMatch } from "@/server/payouts";
 import type { Prisma } from "@prisma/client";
-import { fmtIST } from "@/lib/time";
+import { fmtIST, fmtISTShort } from "@/lib/time";
 import { pickSort } from "@/lib/sort";
 import { ListToolbar } from "@/components/ListToolbar";
 import { ApiForm } from "@/components/ApiForm";
@@ -74,27 +74,47 @@ async function KycQueue({ mode, q, sort }: { mode: "kyc" | "auto" | "history"; q
   });
   if (subs.length === 0) return q ? <EmptyState icon={<CheckCircle2 className="size-6" />} title="No matches">Nothing here matches “{q}”.</EmptyState> : <EmptyState icon={<CheckCircle2 className="size-6" />} title="All clear">Nothing waiting here.</EmptyState>;
   return (
-    <div className="card overflow-x-auto p-0 sm:p-0">
-      {mode === "auto" && <p className="border-b border-slate-100 px-4 py-2.5 text-sm text-slate-500">Approved automatically. Open each, check the documents, then confirm or ask for changes.</p>}
-      <table className="table">
-        <thead><tr><th>Name</th><th>PAN</th><th>Customer</th><th>Submitted</th><th>Status</th></tr></thead>
-        <tbody>
-          {subs.map((s) => (
-            <tr key={s.id}>
-              <td><Link className="font-medium text-brand-700 hover:underline" href={`/admin/kyc/${s.id}`}>{s.fullName}</Link></td>
-              <td className="font-mono text-xs">{s.panMasked}</td>
-              <td className="text-slate-600">{s.user.email}</td>
-              <td className="whitespace-nowrap text-slate-500">{fmtIST(s.submittedAt)}</td>
-              <td>
-                <span className="inline-flex items-center gap-1.5">
+    <div className="card overflow-hidden p-0 sm:p-0">
+      <ul className="divide-y divide-slate-100 md:hidden">
+        {subs.map((s) => (
+          <li key={s.id}>
+            <Link href={`/admin/kyc/${s.id}`} className="block space-y-1 px-4 py-3 active:bg-slate-50">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate font-medium text-slate-900">{s.fullName}</span>
+                <span className="inline-flex shrink-0 items-center gap-1.5">
                   <StatusPill status={s.status} />
                   {s.autoApproved && <span className="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">{s.postReviewedAt ? "Auto · checked" : "Auto"}</span>}
                 </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="min-w-0 truncate">{s.user.email} · <span className="font-mono">{s.panMasked}</span></span>
+                <span className="shrink-0">{fmtISTShort(s.submittedAt)}</span>
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto md:block">
+        <table className="table">
+          <thead><tr><th>Name</th><th>PAN</th><th>Customer</th><th>Submitted</th><th>Status</th></tr></thead>
+          <tbody>
+            {subs.map((s) => (
+              <tr key={s.id} className="relative hover:bg-slate-50">
+                <td><Link className="font-medium text-brand-700 after:absolute after:inset-0" href={`/admin/kyc/${s.id}`}>{s.fullName}</Link></td>
+                <td className="font-mono text-xs">{s.panMasked}</td>
+                <td className="max-w-56 truncate text-slate-600">{s.user.email}</td>
+                <td className="whitespace-nowrap text-xs text-slate-500">{fmtISTShort(s.submittedAt)}</td>
+                <td>
+                  <span className="inline-flex items-center gap-1.5">
+                    <StatusPill status={s.status} />
+                    {s.autoApproved && <span className="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">{s.postReviewedAt ? "Auto · checked" : "Auto"}</span>}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
