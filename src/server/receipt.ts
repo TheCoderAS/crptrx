@@ -106,8 +106,8 @@ export async function buildReceipt(orderId: string, userId?: string): Promise<Ui
   const stampW = 104;
   const sx = W - M - 18 - stampW;
   page.drawRectangle({ x: sx, y: y - 66, width: stampW, height: 40, borderColor: GREEN, borderWidth: 1.6, color: rgb(0.93, 0.99, 0.96) });
-  t.center("PAID", sx + stampW / 2, y - 47, 15, bold, GREEN, 3);
-  t.center(`UTR ${o.utr ?? "-"}`, sx + stampW / 2, y - 60, 6.5, font, GREEN);
+  t.center("PAID", sx + stampW / 2, y - (o.utr ? 47 : 51), 15, bold, GREEN, 3);
+  if (o.utr) t.center(`UTR ${o.utr}`, sx + stampW / 2, y - 60, 6.5, font, GREEN);
 
   // ── Billed to / Order details ─────────────────────────────────
   y -= heroH + 30;
@@ -125,7 +125,7 @@ export async function buildReceipt(orderId: string, userId?: string): Promise<Ui
     ["Order ID", o.id],
     ["Order placed", fmtIST(o.createdAt)],
     ["Paid on", fmtIST(o.paidAt)],
-    ["Bank reference (UTR)", o.utr ?? "-"],
+    ...(o.utr ? [["Bank reference (UTR)", o.utr] as [string, string]] : []),
   ];
   const yl = t.pairs(left, M, y, colW, font, bold);
   const yr = t.pairs(right, col2, y, colW, font, bold);

@@ -3,9 +3,9 @@ import { prisma } from "../db";
 import { env } from "../env";
 import { firebaseApp, logFirebaseError } from "./admin";
 
-// Push notifications to customers through Firebase Cloud Messaging. One message
-// reaches every device the customer has registered: browsers today, the Android
-// (or iOS) app later. Admins don't get push.
+// Push notifications through Firebase Cloud Messaging. One message reaches every
+// device the person has registered: browsers today, the Android (or iOS) app
+// later. Customers hear about support replies; support hears about customer messages.
 
 export const PUSH_PLATFORMS = ["WEB", "ANDROID", "IOS"] as const;
 export type PushPlatform = (typeof PUSH_PLATFORMS)[number];
@@ -40,34 +40,67 @@ export async function unregisterPushDevice(userId: string, token: string) {
   await prisma.pushDevice.deleteMany({ where: { token, userId } });
 }
 
+export async function registerAdminPushDevice(adminId: string, token: string, platform: PushPlatform) {
+  await prisma.adminPushDevice.upsert({
+    where: { token },
+    create: { adminId, token, platform },
+    update: { adminId, platform, lastSeenAt: new Date() },
+  });
+}
+
+export async function unregisterAdminPushDevice(adminId: string, token: string) {
+  await prisma.adminPushDevice.deleteMany({ where: { token, adminId } });
+}
+
 // Firebase says these tokens will never work again (app removed, permission revoked).
 const DEAD = new Set(["messaging/registration-token-not-registered", "messaging/invalid-registration-token"]);
 
 /** Send to all of a customer's devices. Never throws: a failed push must not fail the action behind it. */
 export async function pushToUser(userId: string, note: PushNote): Promise<{ sent: number; removed: number }> {
-  const app = firebaseApp();
-  if (!app) return { sent: 0, removed: 0 };
+  if (!firebaseApp()) return { sent: 0, removed: 0 };
   try {
     const devices = await prisma.pushDevice.findMany({ where: { userId }, select: { token: true } });
-    if (devices.length === 0) return { sent: 0, removed: 0 };
-    const tokens = devices.map((d) => d.token);
-    const data = { ...note.data, title: note.title, body: note.body, link: note.link, tag: note.tag };
-    const message: MulticastMessage = {
-      tokens,
-      // Browsers: data only; our service worker (public/push-sw.js) shows it.
-      data,
-      // Android app: shown by the system when the app is in the background.
-      android: { priority: "high", notification: { title: note.title, body: note.body, tag: note.tag, channelId: "chat" } },
-      // iOS app, if there ever is one.
-      apns: { payload: { aps: { alert: { title: note.title, body: note.body }, sound: "default", threadId: note.tag } } },
-      webpush: { headers: { Urgency: "high", TTL: String(24 * 3600) } },
-    };
-    const res = await getMessaging(app).sendEachForMulticast(message);
-    const dead = res.responses.flatMap((r, i) => (!r.success && r.error && DEAD.has(r.error.code) ? [tokens[i]] : []));
-    if (dead.length) await prisma.pushDevice.deleteMany({ where: { token: { in: dead } } });
-    return { sent: res.successCount, removed: dead.length };
+    return await send(devices.map((d) => d.token), note, (dead) => prisma.pushDevice.deleteMany({ where: { token: { in: dead } } }));
   } catch (e) {
     logFirebaseError("push", e);
     return { sent: 0, removed: 0 };
   }
+}
+
+/** Send to every active admin's devices. Never throws. */
+export async function pushToAdmins(note: PushNote): Promise<{ sent: number; removed: number }> {
+  if (!firebaseApp()) return { sent: 0, removed: 0 };
+  try {
+    const devices = await prisma.adminPushDevice.findMany({ where: { admin: { status: "ACTIVE" } }, select: { token: true } });
+    return await send(devices.map((d) => d.token), note, (dead) => prisma.adminPushDevice.deleteMany({ where: { token: { in: dead } } }));
+  } catch (e) {
+    logFirebaseError("admin push", e);
+    return { sent: 0, removed: 0 };
+  }
+}
+
+async function send(tokens: string[], note: PushNote, forget: (dead: string[]) => Promise<unknown>) {
+  if (tokens.length === 0) return { sent: 0, removed: 0 };
+  const data = { ...note.data, title: note.title, body: note.body, link: note.link, tag: note.tag };
+  const message: MulticastMessage = {
+    tokens,
+    // Browsers: data only; our service worker (/push-sw.js) shows it.
+    data,
+    // Android app: shown by the system when the app is in the background.
+    android: { priority: "high", notification: { title: note.title, body: note.body, tag: note.tag, channelId: "chat" } },
+    // iOS app, if there ever is one.
+    apns: { payload: { aps: { alert: { title: note.title, body: note.body }, sound: "default", threadId: note.tag } } },
+    webpush: { headers: { Urgency: "high", TTL: String(24 * 3600) } },
+  };
+  // Firebase takes at most 500 devices per call.
+  let sent = 0;
+  const dead: string[] = [];
+  for (let i = 0; i < tokens.length; i += 500) {
+    const batch = tokens.slice(i, i + 500);
+    const res = await getMessaging(firebaseApp()!).sendEachForMulticast({ ...message, tokens: batch });
+    sent += res.successCount;
+    res.responses.forEach((r, j) => !r.success && r.error && DEAD.has(r.error.code) && dead.push(batch[j]));
+  }
+  if (dead.length) await forget(dead);
+  return { sent, removed: dead.length };
 }

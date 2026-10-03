@@ -38,7 +38,7 @@ export function userStatusText(o: {
     case "APPROVED":
       return { title: "Approved", body: `Approved. ${net} is being sent to your account ending ${o.payoutLast4 ?? "••••"}.` };
     case "PAID":
-      return { title: "Paid", body: `${net} sent. Bank reference: ${o.utr}, at ${fmtIST(o.paidAt)}.` };
+      return { title: "Paid", body: o.utr ? `${net} sent. Bank reference: ${o.utr}, at ${fmtIST(o.paidAt)}.` : `${net} sent at ${fmtIST(o.paidAt)}.` };
     case "CLOSED_MANUAL":
       return { title: "Closed", body: "Closed. Our team has contacted you about this order." };
   }

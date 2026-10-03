@@ -88,7 +88,7 @@ export async function notifyOrder(orderId: string, kind: "PAYMENT_DETECTED" | "O
     PAYMENT_DETECTED: [`Payment received for ${o.id}`, `We received ${fmtUsdt(o.usdtAmount)} USDT on ${nw}. Your order is waiting for review.`],
     ON_HOLD: [`Order ${o.id} is on hold`, `Your order is on hold: ${o.holdReason ?? ""} ${o.holdMessage ?? ""}\nOur team will contact you, or you can contact support from the order page.`],
     APPROVED: [`Order ${o.id} approved`, `Approved. ${fmtInr(o.net)} is being sent to ${maskedPayout(snap)}.`],
-    PAID: [`${fmtInr(o.net)} sent for ${o.id}`, `We sent ${fmtInr(o.net)} to ${maskedPayout(snap)}.\nBank reference (UTR): ${o.utr}\nYou can download your receipt from the order page.`],
+    PAID: [`${fmtInr(o.net)} sent for ${o.id}`, `We sent ${fmtInr(o.net)} to ${maskedPayout(snap)}.${o.utr ? `\nBank reference (UTR): ${o.utr}` : ""}\nYou can download your receipt from the order page.`],
     EXPIRED: [`Quote ${o.id} expired`, `No payment was received in time. Nothing was charged. If you already sent USDT, contact support right away with your transaction ID.`],
   } as const;
   const [subject, body] = map[kind];

@@ -12,9 +12,9 @@ beforeEach(async () => {
 });
 
 describe("append-only history (spec 9, M1)", () => {
-  it("order_events, settings_history and audit_log reject updates and deletes", async () => {
+  it("order_events and audit_log reject updates and deletes", async () => {
     await makeOrder("TRON");
-    for (const t of ["order_events", "settings_history", "audit_log"]) {
+    for (const t of ["order_events", "audit_log"]) {
       await expect(prisma.$executeRawUnsafe(`UPDATE "${t}" SET "createdAt" = now()`)).rejects.toThrow(/append-only/);
       await expect(prisma.$executeRawUnsafe(`DELETE FROM "${t}"`)).rejects.toThrow(/append-only/);
       await expect(prisma.$executeRawUnsafe(`TRUNCATE "${t}"`)).rejects.toThrow(/append-only/);
@@ -23,11 +23,10 @@ describe("append-only history (spec 9, M1)", () => {
 
   it("every setting change is logged with old and new value", async () => {
     await updateSetting("rate", "91.25", SUPER);
-    const h = await prisma.settingsHistory.findMany({ where: { key: "rate" }, orderBy: { createdAt: "desc" }, take: 1 });
-    expect(h[0].oldValue).toBe("90");
-    expect(h[0].newValue).toBe("91.25");
-    expect(h[0].changedBy).toBe("super-1");
-    expect(await prisma.auditLog.count({ where: { action: "SETTING_CHANGED", actorId: "super-1" } })).toBe(1);
+    // The audit log is the one record of setting changes (old and new value, who).
+    const h = await prisma.auditLog.findMany({ where: { action: "SETTING_CHANGED", targetId: "rate", actorId: "super-1" } });
+    expect(h).toHaveLength(1);
+    expect(h[0].details).toEqual({ old: "90", new: "91.25" });
   });
 });
 

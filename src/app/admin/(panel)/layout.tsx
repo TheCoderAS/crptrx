@@ -14,6 +14,9 @@ import { LivePulse } from "@/components/LivePulse";
 import { NavProgress } from "@/components/NavProgress";
 import { LogoutButton } from "@/components/LogoutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AdminPushToggle } from "@/components/PushSetting";
+import { PushSync } from "@/components/PushSync";
+import { webPushReady } from "@/server/firebase/push";
 import { Banner, Logo } from "@/components/ui";
 
 export default async function Panel({ children }: { children: React.ReactNode }) {
@@ -43,12 +46,16 @@ export default async function Panel({ children }: { children: React.ReactNode })
     <>
       <p className="truncate text-sm font-medium text-white">{admin.name}</p>
       <p className="truncate text-xs text-slate-400">{admin.email} · {sup ? "Super admin" : "Admin"}</p>
-      <div className="mt-2 -ml-3 flex items-center justify-between"><LogoutButton action="/api/admin/auth/logout" dark /><ThemeToggle dark /></div>
+      <div className="mt-2 -ml-3 flex items-center justify-between">
+        <LogoutButton action="/api/admin/auth/logout" dark />
+        <span className="flex items-center gap-1">{webPushReady() && <AdminPushToggle />}<ThemeToggle dark /></span>
+      </div>
     </>
   );
   return (
     <div className="admin-ui lg:flex">
       <LivePulse url="/api/admin/pulse" everyMs={20_000} />
+      {webPushReady() && <PushSync who="admin" />}
       <Suspense fallback={null}><NavProgress /></Suspense>
       <AdminMobileNav items={items} brand={<span className="flex items-center gap-2"><Link href="/admin"><Logo name={s.brand_name} src={logoSrc(s)} inverted /></Link>{mode}</span>} badge={mode} footer={who} />
       <aside className="theme-lock sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-white/5 bg-slate-950 lg:flex">

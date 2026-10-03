@@ -159,7 +159,7 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
           void submit();
         }}
       >
-        {side === "USER" && messages.some((m) => m.from === "USER") && <PushPrompt />}
+        {side === "USER" ? messages.some((m) => m.from === "USER") && <PushPrompt who="user" /> : <PushPrompt who="admin" />}
         {status === "RESOLVED" && <p className="mb-2 text-center text-xs text-slate-500">{side === "USER" ? "Marked resolved. Write again to reopen." : "Resolved. A new message reopens it."}</p>}
         {error && <p role="alert" className="mb-2 text-xs text-rose-700">{error}</p>}
         {file && (

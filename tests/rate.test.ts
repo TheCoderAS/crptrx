@@ -65,9 +65,10 @@ describe("auto rate in the app", () => {
   it("logs a rate change only when the value changes", async () => {
     const f = prices({ coindcx: "90", wazirx: "90", coingecko: "90" });
     await refreshAutoRate({ fetcher: f });
-    const n = await prisma.settingsHistory.count({ where: { key: "rate" } });
+    const changes = () => prisma.auditLog.count({ where: { action: "SETTING_CHANGED", targetId: "rate" } });
+    const n = await changes();
     await refreshAutoRate({ fetcher: f });
-    expect(await prisma.settingsHistory.count({ where: { key: "rate" } })).toBe(n);
+    expect(await changes()).toBe(n);
   });
 
   it("a failing feed keeps the last rate but blocks quotes once it is too old, and alerts once", async () => {

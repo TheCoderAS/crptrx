@@ -60,10 +60,12 @@ export async function releaseHold(orderId: string, note: string | undefined, act
 
 export async function saveWalletCheck(orderId: string, input: { result: string; note: string }, actor: Actor) {
   if (input.result !== "CLEAN" && input.result !== "SUSPICIOUS") throw new AppError("Choose Clean or Suspicious.");
-  if (!input.note?.trim()) throw new AppError("Paste the wallet check result.");
+  // The note is optional; a Suspicious result needs one so the next admin knows why.
+  const note = input.note?.trim() || null;
+  if (input.result === "SUSPICIOUS" && !note) throw new AppError("Write what looked suspicious.");
   const o = await load(orderId);
   if (["PAID", "CLOSED_MANUAL"].includes(o.status)) throw new AppError("This order is closed.");
-  await prisma.order.update({ where: { id: orderId }, data: { walletCheckResult: input.result, walletCheckNote: input.note.trim(), walletCheckedBy: actor.id } });
+  await prisma.order.update({ where: { id: orderId }, data: { walletCheckResult: input.result, walletCheckNote: note, walletCheckedBy: actor.id } });
   await audit(actor, "WALLET_CHECK_SAVED", { targetType: "order", targetId: orderId, details: { result: input.result } });
 }
 
@@ -77,36 +79,44 @@ export function paymentProblem(o: { txid: string | null; receivedAmount: unknown
 
 export async function approveOrder(orderId: string, actor: Actor, overrideNote?: string) {
   const o = await load(orderId);
-  if (!o.walletCheckResult || !o.walletCheckNote) throw new AppError("Fill in the wallet check before approving.", 422, "WALLET_CHECK_REQUIRED");
   if (o.walletCheckResult === "SUSPICIOUS") throw new AppError("The wallet check says Suspicious. Put the order on hold instead.", 422);
   // The payout is fixed to the quoted amount, so only approve when that's what arrived,
   // unless an admin writes down why (e.g. the customer topped up in a second transfer).
   const problem = paymentProblem(o);
   const note = overrideNote?.trim();
   if (problem && (!note || note.length < 10)) throw new AppError(`${problem} To approve anyway, write why in the override note.`, 422, "PAYMENT_MISMATCH");
+  // The wallet check is optional: without one, the wallet counts as clean (recorded as such).
+  const walletDefault = !o.walletCheckResult;
   await prisma.$transaction((tx) =>
-    transition(tx, orderId, "APPROVED", actor, { from: "UNDER_REVIEW", publicMessage: "Approved. Payment is being sent.", privateNote: problem ? `Approved despite: ${problem} Reason: ${note}` : null }),
+    transition(tx, orderId, "APPROVED", actor, {
+      from: "UNDER_REVIEW",
+      publicMessage: "Approved. Payment is being sent.",
+      privateNote: problem ? `Approved despite: ${problem} Reason: ${note}` : null,
+      data: walletDefault ? { walletCheckResult: "CLEAN", walletCheckNote: null, walletCheckedBy: actor.id } : undefined,
+    }),
   );
+  if (walletDefault) await audit(actor, "WALLET_CHECK_DEFAULTED", { targetType: "order", targetId: orderId, details: { result: "CLEAN" } });
   if (problem) await audit(actor, "ORDER_APPROVED_OVERRIDE", { targetType: "order", targetId: orderId, details: { problem, note: note ?? null } });
 }
 
 /** Requires the caller to have re-checked the admin's 2FA code (spec 10.4). */
-export async function markPaid(orderId: string, input: { utr: string; amount: string; paidAt: string }, actor: Actor) {
+export async function markPaid(orderId: string, input: { utr?: string; amount: string; paidAt: string }, actor: Actor) {
   const o = await load(orderId);
-  const utr = (input.utr ?? "").trim().toUpperCase();
-  if (!UTR_RE.test(utr)) throw new AppError("UTR must be 12 to 22 letters or numbers.");
+  // UTR is optional: some payouts get stuck at the bank and get no reference for a while.
+  const utr = (input.utr ?? "").replace(/\s+/g, "").toUpperCase() || null;
+  if (utr && !UTR_RE.test(utr)) throw new AppError("UTR must be 12 to 22 letters or numbers.");
   if (!/^\d+(\.\d{1,2})?$/.test((input.amount ?? "").trim())) throw new AppError("Enter the amount paid, e.g. 8765.43");
   if (!D(input.amount.trim()).eq(D(o.net))) throw new AppError(`The amount paid must equal the order's net amount exactly (${D(o.net).toFixed(2)}).`, 422, "AMOUNT_MISMATCH");
   const paidAt = new Date(input.paidAt);
   if (isNaN(paidAt.getTime())) throw new AppError("Enter the date and time paid.");
   if (paidAt.getTime() > Date.now() + 5 * 60_000) throw new AppError("Paid time can't be in the future.");
-  const dupUtr = await prisma.order.findFirst({ where: { utr, id: { not: orderId } }, select: { id: true } });
+  const dupUtr = utr ? await prisma.order.findFirst({ where: { utr, id: { not: orderId } }, select: { id: true } }) : null;
   if (dupUtr) throw new AppError(`This UTR is already recorded on ${dupUtr.id}.`, 409);
   try {
     await prisma.$transaction((tx) =>
       transition(tx, orderId, "PAID", actor, {
         from: "APPROVED",
-        publicMessage: `Paid. Bank reference ${utr}.`,
+        publicMessage: utr ? `Paid. Bank reference ${utr}.` : "Paid.",
         data: { utr, paidAmount: D(o.net).toFixed(2), paidAt, paidByAdminId: actor.id },
       }),
     );

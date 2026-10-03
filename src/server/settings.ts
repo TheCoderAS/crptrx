@@ -353,15 +353,12 @@ export async function updateSetting(key: SettingKey, value: unknown, actor: Acto
   await writeSetting(key, clean, actor, ip);
 }
 
-/** Low-level write with history + audit. Callers must have validated `value`. */
+/** Low-level write with an audit entry (old and new value). Callers must have validated `value`. */
 export async function writeSetting(key: SettingKey, value: unknown, actor: Actor, ip?: string | null, tx?: Tx) {
   const run = async (t: Tx) => {
     const old = await t.setting.findUnique({ where: { key } });
     const json = value as Prisma.InputJsonValue;
     await t.setting.upsert({ where: { key }, create: { key, value: json, updatedBy: actor.id }, update: { value: json, updatedBy: actor.id } });
-    await t.settingsHistory.create({
-      data: { key, oldValue: (old?.value ?? undefined) as Prisma.InputJsonValue | undefined, newValue: json, changedBy: actor.id },
-    });
     await audit(actor, "SETTING_CHANGED", { targetType: "setting", targetId: key, details: { old: old?.value ?? null, new: json } as Prisma.InputJsonValue, ip }, t);
   };
   if (tx) return run(tx);

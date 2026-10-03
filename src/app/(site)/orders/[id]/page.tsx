@@ -141,9 +141,13 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         {o.status === "PAID" && (
           <div className="mt-6 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
             <div className="text-sm">
-              <p className="text-slate-500">Bank reference (UTR)</p>
-              <p className="font-mono font-semibold text-slate-900">{o.utr}</p>
-              <p className="mt-1 text-xs text-slate-500">Paid {fmtIST(o.paidAt)}</p>
+              {o.utr && (
+                <>
+                  <p className="text-slate-500">Bank reference (UTR)</p>
+                  <p className="font-mono font-semibold text-slate-900">{o.utr}</p>
+                </>
+              )}
+              <p className={o.utr ? "mt-1 text-xs text-slate-500" : "font-medium text-slate-700"}>Paid {fmtIST(o.paidAt)}</p>
             </div>
             <a href={`/api/orders/${o.id}/receipt`} className="btn-primary"><Download className="size-4" aria-hidden /> Download receipt (PDF)</a>
           </div>
