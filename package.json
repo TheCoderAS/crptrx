@@ -14,7 +14,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:dev": "prisma migrate dev",
-    "check:chains": "tsx scripts/check-chains.ts"
+    "check:chains": "tsx scripts/check-chains.ts",
+    "test:chat-rules": "npx -y firebase-tools emulators:exec --project demo-chat --only database,auth \"tsx scripts/check-chat-rules.ts\""
   },
   "engines": {
     "node": ">=20"
@@ -26,6 +27,7 @@
     "@walletconnect/ethereum-provider": "^2.25.0",
     "bcryptjs": "^3.0.3",
     "decimal.js": "^10.6.0",
+    "firebase-admin": "^13.10.0",
     "jose": "^6.2.12",
     "lucide-react": "^0.577.0",
     "next": "15.5",

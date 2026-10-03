@@ -9,3 +9,6 @@ out/
 next-env.d.ts
 coverage/
 e2e-output/
+
+# Firebase emulator logs
+*-debug.log

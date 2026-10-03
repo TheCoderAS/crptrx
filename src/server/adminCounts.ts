@@ -17,7 +17,8 @@ export const adminCounts = cache(async (): Promise<AdminCounts> => {
       (SELECT count(*) FROM kyc_submissions WHERE "autoApproved" AND "postReviewedAt" IS NULL AND status = 'APPROVED')::int AS kyc_auto,
       (SELECT count(*) FROM payout_methods WHERE status = 'PENDING' AND "deletedAt" IS NULL)::int AS payout,
       (SELECT count(*) FROM incoming_transfers WHERE status = 'UNMATCHED')::int AS unmatched,
-      (SELECT count(*) FROM support_messages WHERE handled = false)::int AS support`;
+      ((SELECT count(*) FROM support_threads WHERE status = 'OPEN' AND "lastFrom" = 'USER')
+        + (SELECT count(*) FROM support_messages WHERE "orderId" IS NULL AND handled = false))::int AS support`;
   const kyc = r.kyc_submitted + r.kyc_auto;
   return { work: r.work, kyc, kycSubmitted: r.kyc_submitted, kycAuto: r.kyc_auto, payout: r.payout, reviews: kyc + r.payout, unmatched: r.unmatched, support: r.support };
 });

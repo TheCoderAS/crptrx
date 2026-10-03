@@ -7,9 +7,11 @@ import { companyName } from "@/server/contact";
 import { Suspense } from "react";
 import { Dismissible } from "@/components/Dismissible";
 import { LivePulse } from "@/components/LivePulse";
+import { PushSync } from "@/components/PushSync";
 import { NavProgress } from "@/components/NavProgress";
 import { LogoutButton } from "@/components/LogoutButton";
 import { DesktopNav, MobileTabs } from "@/components/SiteNav";
+import { unreadForUser } from "@/server/chat/service";
 import { GuestNav } from "@/components/GuestNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/ui";
@@ -21,11 +23,13 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
   // Someone who still has to confirm their email only gets "Log out", not the app navigation.
   const pending = !!user && !user.emailVerified && s.auth_email_verification_required;
   const nav = !!user && !pending;
+  const ordersDot = nav && user ? (await unreadForUser(user.id)).length > 0 : false;
   // Header, content and footer share one width so their edges line up.
   const width = user ? "max-w-4xl" : "max-w-5xl";
   return (
     <div className="flex min-h-screen flex-col">
       {user && <LivePulse url="/api/me/pulse" everyMs={30_000} />}
+      {nav && <PushSync />}
       <Suspense fallback={null}><NavProgress /></Suspense>
       {s.network_mode === "TEST" && (
         <Dismissible id="test-mode-strip">
@@ -39,7 +43,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           </Link>
           {user ? (
             <div className="flex items-center gap-2">
-              {nav && <DesktopNav />}
+              {nav && <DesktopNav ordersDot={ordersDot} />}
               {nav && <span className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />}
               <ThemeToggle />
               <LogoutButton action="/api/auth/logout" />
@@ -75,7 +79,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         </div>
       </footer>
       )}
-      {nav && <MobileTabs />}
+      {nav && <MobileTabs ordersDot={ordersDot} />}
     </div>
   );
 }

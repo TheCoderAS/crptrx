@@ -51,6 +51,27 @@ export const env = {
         appId: opt("FIREBASE_APP_ID"),
       };
     },
+    /** Service account key (the JSON file, pasted as is or base64). Lets the server sign people into chat and send push. */
+    get serviceAccount(): { project_id: string; client_email: string; private_key: string } | null {
+      const raw = opt("FIREBASE_SERVICE_ACCOUNT");
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw.trim().startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8"));
+      } catch {
+        throw new Error("FIREBASE_SERVICE_ACCOUNT is not valid JSON (paste the key file's contents, or base64 of it)");
+      }
+    },
+    /** Realtime Database address, e.g. https://<project>-default-rtdb.asia-southeast1.firebasedatabase.app */
+    get databaseUrl() {
+      return opt("FIREBASE_DATABASE_URL");
+    },
+    get messagingSenderId() {
+      return opt("FIREBASE_MESSAGING_SENDER_ID");
+    },
+    /** Web push key pair (public half), from Cloud Messaging > Web configuration. */
+    get vapidKey() {
+      return opt("FIREBASE_VAPID_KEY");
+    },
   },
   storage: {
     /** Supabase whenever it's configured, so a missing STORAGE_DRIVER can't send files to a disk that's wiped on redeploy. */

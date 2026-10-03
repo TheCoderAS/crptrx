@@ -10,16 +10,18 @@ import { getSettings, rateIsStale } from "@/server/settings";
 import { onboardingState, type StepId } from "@/server/onboarding";
 import { Banner, EmptyState, Section } from "@/components/ui";
 import { OrderList } from "@/components/OrderList";
+import { unreadForUser } from "@/server/chat/service";
 
 export const metadata = { title: "Home", robots: { index: false, follow: false } };
 
 export default async function Dashboard() {
   const user = await userOrLogin();
-  const [orders, s, paidAgg, active] = await Promise.all([
+  const [orders, s, paidAgg, active, unread] = await Promise.all([
     prisma.order.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 5 }),
     getSettings(),
     prisma.order.aggregate({ where: { userId: user.id, status: "PAID" }, _sum: { net: true }, _count: true }),
     prisma.order.count({ where: { userId: user.id, status: { in: ["QUOTE_READY", "PAYMENT_SUBMITTED", "PAYMENT_CONFIRMED", "UNDER_REVIEW", "ON_HOLD", "APPROVED"] } } }),
+    unreadForUser(user.id),
   ]);
   // The checklist follows the admin's current onboarding settings.
   const o = await onboardingState(user, s);
@@ -128,7 +130,7 @@ export default async function Dashboard() {
             {ready ? "Your sales will appear here with their live status." : "Finish setting up to place your first order."}
           </EmptyState>
         ) : (
-          <OrderList orders={orders} />
+          <OrderList orders={orders} unread={unread} />
         )}
       </Section>
     </div>

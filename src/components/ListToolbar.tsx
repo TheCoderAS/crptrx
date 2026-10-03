@@ -12,7 +12,7 @@ export type SortOption = { value: string; label: string };
  * so results survive a refresh and can be shared. Other query params (tab,
  * status…) are kept; the page number resets.
  */
-export function ListToolbar({ placeholder, sorts, defaultSort, children }: { placeholder: string; sorts: SortOption[]; defaultSort: string; children?: ReactNode }) {
+export function ListToolbar({ placeholder, sorts = [], defaultSort = "", children }: { placeholder: string; sorts?: SortOption[]; defaultSort?: string; children?: ReactNode }) {
   const router = useRouter();
   const path = usePathname();
   const params = useSearchParams();
@@ -50,14 +50,14 @@ export function ListToolbar({ placeholder, sorts, defaultSort, children }: { pla
           </button>
         )}
       </form>
-      <Select
+      {sorts.length > 0 && <Select
         aria-label="Sort"
         value={sort}
         onChange={(v) => go({ sort: v })}
         options={sorts}
         icon={<ArrowDownUp className="size-4" aria-hidden />}
         className="w-52 max-w-full text-sm font-medium"
-      />
+      />}
       {children}
     </div>
   );
