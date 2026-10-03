@@ -1,4 +1,5 @@
-# Render Blueprint for the TEST deployment (Render → New → Blueprint → pick this repo).
+# Render Blueprint for STAGING (Render → New → Blueprint → pick this repo).
+# The live service is set up by hand from `main` (docs/DEPLOY.md, section 4).
 # One Docker service runs the website and the blockchain watcher together.
 # Database and ID documents live in Supabase; Google sign-in in Firebase.
 # Values marked sync: false are asked for when you create the Blueprint.
@@ -6,12 +7,15 @@ services:
   - type: web
     name: crptrx-test
     runtime: docker
+    branch: staging
     plan: free # 512 MB is enough. It sleeps after 15 min without visits; see docs/DEPLOY.md for keeping it awake.
     region: singapore # closest Render region to India
     dockerCommand: entrypoint all
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
+      - key: APP_MODE
+        value: TEST
       - key: APP_URL
         sync: false # e.g. https://crptrx-test.onrender.com
       - key: DATABASE_URL
