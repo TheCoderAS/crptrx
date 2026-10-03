@@ -26,7 +26,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const o = await prisma.order.findUnique({
     where: { id },
-    include: { user: true, events: { orderBy: { createdAt: "asc" } }, notes: { include: { admin: true }, orderBy: { createdAt: "asc" } }, transfers: true },
+    include: { user: true, events: { orderBy: { createdAt: "asc" } }, notes: { include: { admin: true }, orderBy: { createdAt: "asc" } }, transfers: true, supportThread: true },
   });
   if (!o) notFound();
   const [s, kyc, admins, senderKnown] = await Promise.all([
@@ -368,14 +368,17 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
             ))}
           </section>
 
-          <AdminOrderChat orderId={o.id} />
-
           <section className="card">
             <h2 className="h2 mb-3">Timeline</h2>
             <Timeline events={o.events} />
           </section>
         </div>
       </div>
+      <AdminOrderChat
+        orderId={o.id}
+        customer={o.user.email}
+        startUnread={!!o.supportThread && o.supportThread.lastFrom === "USER" && (!o.supportThread.adminReadAt || o.supportThread.adminReadAt < o.supportThread.lastMessageAt)}
+      />
     </div>
   );
 }

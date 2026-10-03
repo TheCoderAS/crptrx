@@ -4,10 +4,10 @@ name: Firebase rules
 # Pull requests: the rules are checked on the Firebase emulator.
 # Merge to main: checked again, then published to the real database.
 # Setup (repo Settings > Secrets and variables > Actions):
-#   FIREBASE_DEPLOY_KEY  key file of a service account that has only the
-#                        "Firebase Realtime Database Admin" role (not the app's key)
-#   FIREBASE_PROJECT_ID  the Firebase project ID
-# Without them the check still runs; publishing is skipped.
+#   FIREBASE_DEPLOY_KEY  the whole JSON key file of a service account that has only
+#                        the "Firebase Realtime Database Admin" role (not the app's key).
+#                        The project is read from the key's "project_id".
+# Without it the check still runs; publishing is skipped.
 # Edit rules only here: a change made in the Firebase console is overwritten by the next publish.
 
 on:
@@ -43,7 +43,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -56,10 +56,9 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           KEY: ${{ secrets.FIREBASE_DEPLOY_KEY }}
-          PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
         run: |
-          if [ -z "$KEY" ] || [ -z "$PROJECT" ]; then
-            echo "::notice::FIREBASE_DEPLOY_KEY / FIREBASE_PROJECT_ID not set; rules were checked but not published."
+          if [ -z "$KEY" ]; then
+            echo "::notice::FIREBASE_DEPLOY_KEY not set; rules were checked but not published."
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else
             echo "publish=true" >> "$GITHUB_OUTPUT"
@@ -68,9 +67,19 @@ jobs:
         if: steps.check.outputs.publish == 'true'
         env:
           KEY: ${{ secrets.FIREBASE_DEPLOY_KEY }}
-          PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
         run: |
           KEY_FILE="$RUNNER_TEMP/firebase-deploy-key.json"
-          printf '%s' "$KEY" > "$KEY_FILE"
           trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s' "$KEY" > "$KEY_FILE"
+          # The project comes from the key itself, so the two can never disagree.
+          PROJECT=$(node -e '
+            let k;
+            try { k = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); }
+            catch { console.error("FIREBASE_DEPLOY_KEY is not valid JSON: paste the whole key file, from { to }."); process.exit(1); }
+            if (k.type !== "service_account" || !/^[a-z0-9-]{4,40}$/.test(k.project_id || "")) {
+              console.error("FIREBASE_DEPLOY_KEY is not a service account key file (no valid project_id)."); process.exit(1);
+            }
+            console.log(k.project_id);
+          ' "$KEY_FILE")
+          echo "Publishing rules to project $PROJECT"
           GOOGLE_APPLICATION_CREDENTIALS="$KEY_FILE" npx -y firebase-tools@15.32.1 deploy --only database --project "$PROJECT" --non-interactive
