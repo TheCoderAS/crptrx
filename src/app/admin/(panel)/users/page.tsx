@@ -3,7 +3,7 @@ import { UserRound } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
-import { fmtIST } from "@/lib/time";
+import { fmtISTShort } from "@/lib/time";
 import { pickSort } from "@/lib/sort";
 import { ListToolbar } from "@/components/ListToolbar";
 import { EmptyState, PageHeader, StatusPill } from "@/components/ui";
@@ -37,25 +37,45 @@ export default async function Customers({ searchParams }: { searchParams: Promis
     <div className="space-y-4">
       <PageHeader title="Customers" subtitle={`${total} ${total === 1 ? "account" : "accounts"}.`} icon={<UserRound className="size-6" />} tile="tile-blue" />
       <ListToolbar placeholder="Email, mobile, name on ID" sorts={[...SORTS]} defaultSort="new" />
-      <div className="card overflow-x-auto">
+      <div className="card overflow-hidden p-0 sm:p-0">
         {users.length === 0 ? (
           <EmptyState icon={<UserRound className="size-6" />} title="No customers found">{term ? "Try part of the email or the mobile number." : "Sign-ups will appear here."}</EmptyState>
         ) : (
-          <table className="table">
-            <thead><tr><th>Email</th><th>Mobile</th><th>KYC</th><th>Orders</th><th>Account</th><th>Joined</th></tr></thead>
-            <tbody>
+          <>
+            <ul className="divide-y divide-slate-100 md:hidden">
               {users.map((u) => (
-                <tr key={u.id}>
-                  <td><Link className="font-medium text-brand-700 underline" href={`/admin/users/${u.id}`}>{u.email}</Link></td>
-                  <td className="whitespace-nowrap">{u.mobile ?? "—"}</td>
-                  <td><StatusPill status={u.kycStatus} /></td>
-                  <td>{u._count.orders}</td>
-                  <td><StatusPill status={u.status} /></td>
-                  <td className="whitespace-nowrap">{fmtIST(u.createdAt)}</td>
-                </tr>
+                <li key={u.id}>
+                  <Link href={`/admin/users/${u.id}`} className="block space-y-1 px-4 py-3 active:bg-slate-50">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate font-medium text-slate-900">{u.email}</span>
+                      <StatusPill status={u.kycStatus} />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                      <span>{u.mobile ?? "No mobile"} · {u._count.orders} {u._count.orders === 1 ? "order" : "orders"}{u.status !== "ACTIVE" ? ` · ${u.status.toLowerCase()}` : ""}</span>
+                      <span className="shrink-0">{fmtISTShort(u.createdAt)}</span>
+                    </div>
+                  </Link>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="table">
+                <thead><tr><th>Email</th><th>Mobile</th><th>KYC</th><th className="text-right">Orders</th><th>Account</th><th>Joined</th></tr></thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} className="relative hover:bg-slate-50">
+                      <td className="max-w-64 truncate"><Link className="font-medium text-brand-700 after:absolute after:inset-0" href={`/admin/users/${u.id}`}>{u.email}</Link></td>
+                      <td className="whitespace-nowrap text-slate-600">{u.mobile ?? "—"}</td>
+                      <td><StatusPill status={u.kycStatus} /></td>
+                      <td className="text-right">{u._count.orders}</td>
+                      <td><StatusPill status={u.status} /></td>
+                      <td className="whitespace-nowrap text-xs text-slate-500">{fmtISTShort(u.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
       {pages > 1 && (

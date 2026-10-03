@@ -28,7 +28,8 @@ const confirmIfAsked = async (p) => {
 };
 const user = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
 const shot = (p, n) => p.screenshot({ path: `${OUT}/${n}.png`, fullPage: true });
-const expectText = async (p, t) => { await p.getByText(t, { exact: false }).first().waitFor({ timeout: 15000 }); };
+// Only visible matches: some screens render a phone layout and a desktop layout, one of them hidden.
+const expectText = async (p, t) => { await p.getByText(t, { exact: false }).locator("visible=true").first().waitFor({ timeout: 15000 }); };
 
 // 1. Admin login + 2FA setup
 await admin.goto(BASE + "/admin/login");
@@ -220,5 +221,14 @@ console.log("unmatched payment confirmed from the order page");
 await admin.goto(BASE + "/admin/audit?action=KYC_DOC");
 await expectText(admin, "KYC_DOC_VIEWED");
 console.log("doc view logged");
+// Admin lists at phone width: cards, not squeezed tables.
+await admin.setViewportSize({ width: 390, height: 844 });
+for (const [path, name] of [["/admin/orders", "orders"], ["/admin/users", "users"], ["/admin/reviews", "reviews"], ["/admin/audit", "audit"]]) {
+  await admin.goto(BASE + path);
+  await shot(admin, `11-admin-${name}-phone`);
+}
+await admin.setViewportSize({ width: 1280, height: 900 });
+await admin.goto(BASE + "/admin/orders");
+await shot(admin, "12-admin-orders-desktop");
 await browser.close();
 console.log("E2E OK");
