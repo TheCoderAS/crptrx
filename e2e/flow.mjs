@@ -144,6 +144,7 @@ await user.waitForURL("**step=quote");
 await shot(user, "06-user-quote");
 await user.click("text=Confirm and get deposit address");
 await expectText(user, "Deposit address");
+await user.waitForURL((u) => !u.search.includes("step=quote")); // the order's own address, read below
 const amount = (await user.locator("text=/^\\d+\\.\\d+ USDT$/").first().innerText()).replace(" USDT", "");
 await shot(user, "07-user-deposit");
 const orderUrl = user.url();
