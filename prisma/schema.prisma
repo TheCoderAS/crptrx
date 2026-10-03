@@ -98,10 +98,11 @@ model User {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  kycSubmissions KycSubmission[]
-  payoutMethods  PayoutMethod[]
-  orders         Order[]
+  kycSubmissions  KycSubmission[]
+  payoutMethods   PayoutMethod[]
+  orders          Order[]
   supportMessages SupportMessage[]
+  supportThreads  SupportThread[]
   wallets         UserWallet[]
   emailTokens     EmailToken[]
 
@@ -109,27 +110,27 @@ model User {
 }
 
 model KycSubmission {
-  id            String    @id @default(cuid())
-  userId        String
-  fullName      String
-  dob           String // YYYY-MM-DD, no time zone games
-  panEncrypted  String
-  panMasked     String
-  address       String
-  panDocKey     String
+  id              String    @id @default(cuid())
+  userId          String
+  fullName        String
+  dob             String // YYYY-MM-DD, no time zone games
+  panEncrypted    String
+  panMasked       String
+  address         String
+  panDocKey       String
   aadhaarFrontKey String
   aadhaarBackKey  String
-  selfieKey     String
+  selfieKey       String
   maskedConfirmed Boolean
-  autoApproved  Boolean   @default(false) // approved instantly by the kyc_auto_approve setting
-  postReviewedAt DateTime? // when an admin looked at an auto-approved submission
-  postReviewedBy String?
-  status        KycStatus
-  reviewerId    String?
-  reason        String?
-  submittedAt   DateTime  @default(now())
-  reviewedAt    DateTime?
-  updatedAt     DateTime  @updatedAt
+  autoApproved    Boolean   @default(false) // approved instantly by the kyc_auto_approve setting
+  postReviewedAt  DateTime? // when an admin looked at an auto-approved submission
+  postReviewedBy  String?
+  status          KycStatus
+  reviewerId      String?
+  reason          String?
+  submittedAt     DateTime  @default(now())
+  reviewedAt      DateTime?
+  updatedAt       DateTime  @updatedAt
 
   user     User   @relation(fields: [userId], references: [id])
   reviewer Admin? @relation(fields: [reviewerId], references: [id])
@@ -166,52 +167,53 @@ model PayoutMethod {
 }
 
 model Order {
-  id                  String      @id // ORD-2026-000123
-  seq                 Int         @unique @default(autoincrement())
-  userId              String
-  status              OrderStatus
-  network             Network
-  networkMode         NetworkMode
-  depositAddress      String
-  tokenContract       String
-  usdtAmount          Decimal     @db.Decimal(38, 18)
-  rate                Decimal     @db.Decimal(14, 4)
-  gross               Decimal     @db.Decimal(14, 2)
-  taxPercent          Decimal     @db.Decimal(7, 4)
-  taxHeld             Decimal     @db.Decimal(14, 2)
-  feePercent          Decimal     @db.Decimal(7, 4)
-  fee                 Decimal     @db.Decimal(14, 2)
-  gstPercent          Decimal     @db.Decimal(7, 4)
-  gstOnFee            Decimal     @db.Decimal(14, 2)
-  net                 Decimal     @db.Decimal(14, 2)
-  payoutMethodId      String
-  payoutSnapshot      Json
-  quoteExpiresAt      DateTime
-  submittedTxid       String?
-  txid                String?
-  transferPosition    Int?
-  senderAddress       String?
-  receivedAmount      Decimal?    @db.Decimal(38, 18)
-  confirmedAt         DateTime?
-  holdReason          String?
-  holdMessage         String?
-  walletCheckResult   String? // CLEAN | SUSPICIOUS
-  walletCheckNote     String?
-  walletCheckedBy     String?
-  utr                 String?
-  paidAmount          Decimal?    @db.Decimal(14, 2)
-  paidAt              DateTime?
-  paidByAdminId       String?
-  resolutionNote      String?
-  returnTxid          String?
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  id                String      @id // ORD-2026-000123
+  seq               Int         @unique @default(autoincrement())
+  userId            String
+  status            OrderStatus
+  network           Network
+  networkMode       NetworkMode
+  depositAddress    String
+  tokenContract     String
+  usdtAmount        Decimal     @db.Decimal(38, 18)
+  rate              Decimal     @db.Decimal(14, 4)
+  gross             Decimal     @db.Decimal(14, 2)
+  taxPercent        Decimal     @db.Decimal(7, 4)
+  taxHeld           Decimal     @db.Decimal(14, 2)
+  feePercent        Decimal     @db.Decimal(7, 4)
+  fee               Decimal     @db.Decimal(14, 2)
+  gstPercent        Decimal     @db.Decimal(7, 4)
+  gstOnFee          Decimal     @db.Decimal(14, 2)
+  net               Decimal     @db.Decimal(14, 2)
+  payoutMethodId    String
+  payoutSnapshot    Json
+  quoteExpiresAt    DateTime
+  submittedTxid     String?
+  txid              String?
+  transferPosition  Int?
+  senderAddress     String?
+  receivedAmount    Decimal?    @db.Decimal(38, 18)
+  confirmedAt       DateTime?
+  holdReason        String?
+  holdMessage       String?
+  walletCheckResult String? // CLEAN | SUSPICIOUS
+  walletCheckNote   String?
+  walletCheckedBy   String?
+  utr               String?
+  paidAmount        Decimal?    @db.Decimal(14, 2)
+  paidAt            DateTime?
+  paidByAdminId     String?
+  resolutionNote    String?
+  returnTxid        String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  user      User             @relation(fields: [userId], references: [id])
-  events    OrderEvent[]
-  transfers IncomingTransfer[]
-  support   SupportMessage[]
-  notes     AdminNote[]
+  user          User               @relation(fields: [userId], references: [id])
+  events        OrderEvent[]
+  transfers     IncomingTransfer[]
+  support       SupportMessage[]
+  supportThread SupportThread?
+  notes         AdminNote[]
 
   @@unique([network, txid, transferPosition])
   @@index([status, createdAt])
@@ -248,20 +250,20 @@ model IncomingTransfer {
 }
 
 model WatcherState {
-  network         Network   @id
-  cursor          Json // BSC: { lastBlock }, TRON: { [address]: lastTimestampMs }
-  lastSuccessAt   DateTime?
-  lastErrorAt     DateTime?
-  lastError       String?
-  failingSince    DateTime?
-  alertSentAt     DateTime?
-  updatedAt       DateTime  @updatedAt
+  network       Network   @id
+  cursor        Json // BSC: { lastBlock }, TRON: { [address]: lastTimestampMs }
+  lastSuccessAt DateTime?
+  lastErrorAt   DateTime?
+  lastError     String?
+  failingSince  DateTime?
+  alertSentAt   DateTime?
+  updatedAt     DateTime  @updatedAt
 
   @@map("watcher_state")
 }
 
 model OrderEvent {
-  id            String      @id @default(cuid())
+  id            String       @id @default(cuid())
   orderId       String
   fromStatus    OrderStatus?
   toStatus      OrderStatus
@@ -269,7 +271,7 @@ model OrderEvent {
   actorId       String?
   publicMessage String?
   privateNote   String?
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime     @default(now())
 
   order Order @relation(fields: [orderId], references: [id])
 
@@ -297,13 +299,37 @@ model SupportMessage {
   message       String
   attachmentKey String?
   handled       Boolean  @default(false)
+  /// USER (the customer) or ADMIN. Chat replies from support are ADMIN.
+  authorType    String   @default("USER")
+  adminId       String?
   createdAt     DateTime @default(now())
 
   order Order? @relation(fields: [orderId], references: [id])
   user  User   @relation(fields: [userId], references: [id])
 
   @@index([handled, createdAt])
+  @@index([orderId, createdAt])
   @@map("support_messages")
+}
+
+/// One support chat per order: who spoke last, who has read what, open or resolved.
+model SupportThread {
+  orderId       String    @id
+  userId        String
+  status        String    @default("OPEN") // OPEN | RESOLVED
+  lastMessageAt DateTime
+  lastFrom      String // USER | ADMIN
+  userReadAt    DateTime?
+  adminReadAt   DateTime?
+  resolvedAt    DateTime?
+  resolvedBy    String?
+
+  order Order @relation(fields: [orderId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([status, lastFrom, lastMessageAt])
+  @@index([userId])
+  @@map("support_threads")
 }
 
 model Setting {
@@ -328,25 +354,25 @@ model SettingsHistory {
 }
 
 model DepositAddressChange {
-  id              String    @id @default(cuid())
+  id              String      @id @default(cuid())
   network         Network
   networkMode     NetworkMode
   newAddress      String
   oldAddress      String?
   requestedBy     String
-  cancelTokenHash String    @unique
+  cancelTokenHash String      @unique
   effectiveAt     DateTime
   cancelledAt     DateTime?
   cancelledBy     String?
   appliedAt       DateTime?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime    @default(now())
 
   @@index([network, networkMode, effectiveAt])
   @@map("deposit_address_changes")
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   actorType  ActorType
   actorId    String?
   action     String
@@ -354,7 +380,7 @@ model AuditLog {
   targetId   String?
   details    Json?
   ip         String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([action, createdAt])
   @@index([createdAt])
@@ -398,14 +424,14 @@ model Session {
 }
 
 model OtpCode {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   mobile    String
   codeHash  String
-  attempts  Int      @default(0)
+  attempts  Int       @default(0)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
   @@map("otp_codes")

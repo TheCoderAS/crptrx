@@ -17,7 +17,8 @@ export async function adminPulse(): Promise<{ sig: string; counts: AdminCounts }
         (SELECT max("updatedAt") FROM kyc_submissions) AS kyc,
         (SELECT max(coalesce("reviewedAt", "createdAt")) FROM payout_methods) AS payout,
         (SELECT count(*) FROM incoming_transfers)::int AS transfers,
-        (SELECT count(*) FROM support_messages)::int AS support`,
+        (SELECT count(*) FROM support_messages)::int AS support,
+        (SELECT max(greatest("lastMessageAt", coalesce("resolvedAt", "lastMessageAt"))) FROM support_threads) AS chats`,
   ]);
   return { sig: `${signature(counts)}|${signature(r)}`, counts };
 }
@@ -31,6 +32,7 @@ export async function userPulse(userId: string): Promise<{ sig: string }> {
       (SELECT count(*) FROM orders WHERE "userId" = ${userId})::int AS order_count,
       (SELECT max("updatedAt") FROM kyc_submissions WHERE "userId" = ${userId}) AS kyc,
       (SELECT max(coalesce("reviewedAt", "createdAt")) FROM payout_methods WHERE "userId" = ${userId}) AS payout,
-      (SELECT "updatedAt" FROM settings WHERE key = 'rate') AS rate`;
+      (SELECT "updatedAt" FROM settings WHERE key = 'rate') AS rate,
+      (SELECT max("lastMessageAt") FROM support_threads WHERE "userId" = ${userId}) AS chats`;
   return { sig: signature(r) };
 }

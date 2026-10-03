@@ -16,7 +16,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { PayWithWallet } from "@/components/PayWithWallet";
 import { InfoTip } from "@/components/InfoTip";
 import { env } from "@/server/env";
-import { SupportPanel } from "@/components/SupportPanel";
+import { ChatLauncher } from "@/components/chat/ChatLauncher";
 import { AutoRefresh, Countdown } from "@/components/Countdown";
 import { BackLink, NetworkBadge, Row, Section, StatusPill, Steps, Timeline } from "@/components/ui";
 
@@ -32,13 +32,21 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const { id } = await params;
   const { step } = await searchParams;
   // In parallel; the events are only used once the order is confirmed to be theirs.
-  const [o, s, events] = await Promise.all([
+  const [o, s, events, thread] = await Promise.all([
     prisma.order.findFirst({ where: { id, userId: user.id } }),
     getSettings(),
     // Users never see private admin notes.
     prisma.orderEvent.findMany({ where: { orderId: id }, orderBy: { createdAt: "asc" }, select: { id: true, toStatus: true, createdAt: true, publicMessage: true } }),
+    prisma.supportThread.findFirst({ where: { orderId: id, userId: user.id }, select: { lastFrom: true, lastMessageAt: true, userReadAt: true } }),
   ]);
   if (!o) notFound();
+  const chat = (
+    <ChatLauncher
+      orderId={o.id}
+      hours={s.business_hours_text}
+      startUnread={!!thread && thread.lastFrom === "ADMIN" && (!thread.userReadAt || thread.userReadAt < thread.lastMessageAt)}
+    />
+  );
   const n = o.network as NetworkCode;
   const nw = NETWORK_INFO[n].name;
   const snap = o.payoutSnapshot as unknown as PayoutSnapshot;
@@ -206,9 +214,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           <Section title="Timeline" info="All times are Indian Standard Time.">
             <Timeline events={events} />
           </Section>
-          <SupportPanel orderId={o.id} defaultOpen={o.status === "ON_HOLD"} hours={s.business_hours_text} />
         </div>
       </div>
+      {chat}
     </div>
   );
 }

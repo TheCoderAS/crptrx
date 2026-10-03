@@ -9,6 +9,7 @@ import { EmptyState, PageHeader, Section, statusLabel } from "@/components/ui";
 import { FilterMenu } from "@/components/FilterMenu";
 import { ListToolbar } from "@/components/ListToolbar";
 import { OrderList } from "@/components/OrderList";
+import { unreadForUser } from "@/server/chat/service";
 
 export const metadata = { title: "My orders", robots: { index: false, follow: false } };
 
@@ -39,7 +40,10 @@ export default async function Orders({ searchParams }: { searchParams: Promise<{
         ],
       }
     : {};
-  const orders = await prisma.order.findMany({ where: { userId: user.id, ...(filter ? { status: filter } : {}), ...search }, orderBy: [ORDER_BY[sort], { createdAt: "desc" }], take: 200 });
+  const [orders, unread] = await Promise.all([
+    prisma.order.findMany({ where: { userId: user.id, ...(filter ? { status: filter } : {}), ...search }, orderBy: [ORDER_BY[sort], { createdAt: "desc" }], take: 200 }),
+    unreadForUser(user.id),
+  ]);
   // No tools until there's something to search.
   const hasAny = orders.length > 0 || (filter || q ? (await prisma.order.count({ where: { userId: user.id } })) > 0 : false);
   const statusHref = (s?: string) => {
@@ -58,7 +62,7 @@ export default async function Orders({ searchParams }: { searchParams: Promise<{
         {orders.length === 0 ? (
           <EmptyState icon={<Inbox className="size-6" />} title={filter || q ? "No matching orders" : "No orders yet"} action={!filter && !q ? <Link href="/sell" className="btn-primary">Sell USDT</Link> : undefined} />
         ) : (
-          <OrderList orders={orders} />
+          <OrderList orders={orders} unread={unread} />
         )}
       </Section>
     </div>

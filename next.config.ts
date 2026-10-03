@@ -9,13 +9,21 @@ import type { NextConfig } from "next";
 const WALLETCONNECT = "https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com https://*.web3modal.org https://*.web3modal.com";
 const WALLETCONNECT_WS = "wss://*.walletconnect.com wss://*.walletconnect.org wss://*.reown.com";
 const BSC_RPC = "https://bsc-testnet-rpc.publicnode.com https://bsc-dataseed.bnbchain.org";
+// Live support chat: the WebSocket on our own address (read when the server starts).
+const CHAT_WS = (() => {
+  try {
+    return process.env.APP_URL ? new URL(process.env.APP_URL).origin.replace(/^http/, "ws") : "";
+  } catch {
+    return "";
+  }
+})();
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""} https://apis.google.com https://www.gstatic.com`,
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: https://lh3.googleusercontent.com ${WALLETCONNECT}`,
   "font-src 'self' data: https://fonts.reown.com",
-  `connect-src 'self' https://*.googleapis.com https://*.firebaseio.com ${WALLETCONNECT} ${WALLETCONNECT_WS} ${BSC_RPC}`,
+  `connect-src 'self' https://*.googleapis.com https://*.firebaseio.com ${WALLETCONNECT} ${WALLETCONNECT_WS} ${BSC_RPC} ${CHAT_WS}`,
   "frame-src 'self' https://*.firebaseapp.com https://*.web.app https://accounts.google.com https://apis.google.com https://verify.walletconnect.com https://verify.walletconnect.org",
   "object-src 'none'",
   "base-uri 'self'",

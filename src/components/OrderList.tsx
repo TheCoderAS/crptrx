@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MessageCircle } from "lucide-react";
 import type { Order } from "@prisma/client";
 import { fmtInr, fmtUsdt } from "@/server/money";
 import { fmtISTShort } from "@/lib/time";
 import { NetworkMark, StatusPill } from "./ui";
 
 /** Tappable order rows, used on the dashboard and the orders page. */
-export function OrderList({ orders }: { orders: Order[] }) {
+export function OrderList({ orders, unread = [] }: { orders: Order[]; unread?: string[] }) {
   return (
     <ul className="-mx-2 divide-y divide-slate-100">
       {orders.map((o) => (
@@ -15,7 +15,14 @@ export function OrderList({ orders }: { orders: Order[] }) {
             <NetworkMark network={o.network} size={32} />
             <div className="min-w-0 flex-1 space-y-1">
               <p className="money text-slate-900">{fmtUsdt(o.usdtAmount)} USDT</p>
-              <StatusPill status={o.status} />
+              <p className="flex flex-wrap items-center gap-1.5">
+                <StatusPill status={o.status} />
+                {unread.includes(o.id) && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 ring-1 ring-rose-200 ring-inset">
+                    <MessageCircle className="size-3" aria-hidden /> New reply
+                  </span>
+                )}
+              </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
               <p className="money text-slate-900">{fmtInr(o.net)}</p>

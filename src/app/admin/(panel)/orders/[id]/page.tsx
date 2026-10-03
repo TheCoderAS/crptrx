@@ -18,6 +18,7 @@ import { ApiForm } from "@/components/ApiForm";
 import { CopyButton } from "@/components/CopyButton";
 import { ModalForm } from "@/components/Modal";
 import { Select } from "@/components/Select";
+import { AdminOrderChat } from "@/components/chat/AdminOrderChat";
 import { BackLink, NetworkBadge, Row, StatusPill, Timeline } from "@/components/ui";
 
 export default async function AdminOrder({ params }: { params: Promise<{ id: string }> }) {
@@ -25,7 +26,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const o = await prisma.order.findUnique({
     where: { id },
-    include: { user: true, events: { orderBy: { createdAt: "asc" } }, notes: { include: { admin: true }, orderBy: { createdAt: "asc" } }, transfers: true, support: { orderBy: { createdAt: "desc" } } },
+    include: { user: true, events: { orderBy: { createdAt: "asc" } }, notes: { include: { admin: true }, orderBy: { createdAt: "asc" } }, transfers: true },
   });
   if (!o) notFound();
   const [s, kyc, admins, senderKnown] = await Promise.all([
@@ -367,12 +368,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
             ))}
           </section>
 
-          {o.support.length > 0 && (
-            <section className="card space-y-3">
-              <h2 className="h2">Support messages</h2>
-              {o.support.map((m) => <p key={m.id} className="text-sm"><span className="text-xs text-slate-500">{fmtIST(m.createdAt)}</span><br />{m.message}{m.attachmentKey && <> · <a className="underline" target="_blank" rel="noreferrer" href={`/api/admin/support/${m.id}/file`}>attachment</a></>}</p>)}
-            </section>
-          )}
+          <AdminOrderChat orderId={o.id} />
 
           <section className="card">
             <h2 className="h2 mb-3">Timeline</h2>

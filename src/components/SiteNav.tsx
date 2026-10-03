@@ -13,7 +13,7 @@ const ITEMS = [
 const isActive = (path: string, href: string) => path === href || (href !== "/dashboard" && path.startsWith(href));
 
 /** Desktop: links in the header. */
-export function DesktopNav() {
+export function DesktopNav({ ordersDot = false }: { ordersDot?: boolean }) {
   const path = usePathname();
   return (
     <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
@@ -22,9 +22,10 @@ export function DesktopNav() {
           key={href}
           href={href}
           aria-current={isActive(path, href) ? "page" : undefined}
-          className={`rounded-lg px-3 py-2 text-sm font-medium transition ${isActive(path, href) ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:text-slate-900"}`}
+          className={`relative rounded-lg px-3 py-2 text-sm font-medium transition ${isActive(path, href) ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:text-slate-900"}`}
         >
           {label}
+          {ordersDot && href === "/orders" && <Dot />}
         </Link>
       ))}
     </nav>
@@ -32,7 +33,7 @@ export function DesktopNav() {
 }
 
 /** Mobile: app-style tab bar pinned to the bottom. */
-export function MobileTabs() {
+export function MobileTabs({ ordersDot = false }: { ordersDot?: boolean }) {
   const path = usePathname();
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main">
@@ -40,13 +41,19 @@ export function MobileTabs() {
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = isActive(path, href);
           return (
-            <Link key={href} href={href} aria-current={active ? "page" : undefined} className={`flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium ${active ? "text-brand-700" : "text-slate-500"}`}>
+            <Link key={href} href={href} aria-current={active ? "page" : undefined} className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium ${active ? "text-brand-700" : "text-slate-500"}`}>
               <Icon className="size-5" strokeWidth={active ? 2.4 : 2} aria-hidden />
               {label}
+              {ordersDot && href === "/orders" && <Dot />}
             </Link>
           );
         })}
       </div>
     </nav>
   );
+}
+
+/** "Support replied" mark on the Orders link. */
+function Dot() {
+  return <span className="absolute top-1.5 right-[calc(50%-1.1rem)] size-2 rounded-full bg-rose-500 ring-2 ring-white md:top-1 md:right-1" aria-label="New support reply" />;
 }
