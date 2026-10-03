@@ -96,9 +96,11 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
     if (sending || (!text.trim() && !file)) return;
     setSending(true);
     setError(null);
+    const sentText = text;
+    const sentFile = file;
     const fd = new FormData();
-    fd.set("text", text);
-    if (file) fd.set("file", file);
+    fd.set("text", sentText);
+    if (sentFile) fd.set("file", sentFile);
     try {
       let res = await fetch(base, { method: "POST", body: fd });
       let d = await res.json().catch(() => ({}));
@@ -109,8 +111,10 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
       }
       if (!res.ok) throw new Error(d.error ?? "Couldn't send. Try again.");
       setMessages((prev) => (prev.some((x) => x.id === d.message.id) ? prev : [...prev, d.message]));
-      setText("");
-      setFile(null);
+      // Clear only what was sent: the next message may already be typed or picked
+      // while this one was on its way (the live update can show it before we get here).
+      setText((cur) => (cur === sentText ? "" : cur));
+      setFile((cur) => (cur === sentFile ? null : cur));
     } catch (e) {
       setError((e as Error).message);
     } finally {
