@@ -28,7 +28,7 @@ object AppConfig {
         private set
 
     fun load(ctx: Context) {
-        if (current == null) current = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("json", null)?.let(::parse)
+        if (current == null) current = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("json", null)?.let { parse(it) }
     }
 
     suspend fun refresh(ctx: Context): ServerConfig? = withContext(Dispatchers.IO) {

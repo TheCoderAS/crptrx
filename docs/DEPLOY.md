@@ -63,3 +63,21 @@ A second Render service, built from `main`. Every `staging` → `main` merge is 
 6. Do one small real order end to end before telling customers.
 
 Supabase backups: the free plan has none you can restore yourself. Before real money, use a paid plan with daily backups and do one test restore.
+
+## 5. Android app (VisionPay)
+
+The app in `android/` shows the website full screen and adds native Google sign-in, notifications, camera uploads and downloads. Screens come from the website, so website releases update the app straight away; a new app file is only needed for changes inside `android/`.
+
+**Builds (automatic)**
+- Every merge into `staging` → GitHub pre-release `vX.Y.Z-test.N` with `VisionPay-Test-vX.Y.Z-test.N.apk` ("VisionPay Test", `com.visionpay.live.app.test`, opens the staging website).
+- Every merge into `main` → the `vX.Y.Z` release gets `VisionPay-vX.Y.Z.apk` ("VisionPay", `com.visionpay.live.app`, opens the live website). Same version as the release.
+- Each website's `/app` page links the newest file for it, and the app offers updates by itself.
+
+**One-time setup**
+1. Signing key (on your own computer; keep the `.jks` file and passwords backed up in two places, a lost key means no more updates):
+   `keytool -genkeypair -v -keystore visionpay-release.jks -alias visionpay -keyalg RSA -keysize 4096 -validity 10000`
+2. GitHub → repository → Settings → Secrets and variables → Actions → **Secrets**:
+   `ANDROID_KEYSTORE_BASE64` (output of `base64 -w0 visionpay-release.jks`, on macOS `base64 -i visionpay-release.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`visionpay`), `ANDROID_KEY_PASSWORD`.
+3. Optional **Variables** (same page): `ANDROID_LIVE_URL`, `ANDROID_TEST_URL` when the websites move to your own domain. Changing them needs a new app file.
+4. Firebase → Project settings → Your apps → **Add app → Android**, twice: `com.visionpay.live.app` and `com.visionpay.live.app.test`. In each, add the **SHA-1** fingerprint shown in the "Signing key fingerprints" note of the app build on GitHub (Actions → Android app / Release). No need to download `google-services.json`.
+5. Render, staging service: `GOOGLE_WEB_CLIENT_ID` (Google Cloud → APIs & Services → Credentials → "Web client (auto created by Google Service)" → Client ID) and `FIREBASE_ANDROID_APP_ID` (the test app's App ID, `1:…:android:…`). Live service: the same client ID and the live app's App ID. `FIREBASE_MESSAGING_SENDER_ID` must be set too (Project settings → Cloud Messaging → Sender ID).
