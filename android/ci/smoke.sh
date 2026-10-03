@@ -42,9 +42,11 @@ note "Loaded" "$(grep page-finished "$OUT/app-log.txt" | tail -1 | sed 's/.*page
 texts=$(grep -o 'text="[^"]\+"' "$OUT/1-start.xml" 2>/dev/null | sed 's/^text="//;s/"$//' | head -25 | paste -sd '|' -)
 note "On screen" "${texts:-<no text found in the screen dump>}"
 # Signed out, the app opens the login page: it must show our page, not an error.
+# (The screen dump often can't see inside a WebView, so the page title is the proof.)
 if echo "$texts" | grep -qiE "Webpage not available|ERR_|You're offline"; then fail "The app shows an error page instead of the website"; exit 1; fi
-if ! echo "$texts" | grep -qiE "Welcome back|Log in|Continue with"; then fail "The login page didn't appear on screen"; exit 1; fi
-note "Login page" "The website's login page is on screen inside the app"
+last=$(grep page-finished "$OUT/app-log.txt" | tail -1)
+if ! echo "$last" | grep -qE "url=https://$HOST/login .*title=Log in"; then fail "Expected the website's login page, got: ${last#*page-finished }"; exit 1; fi
+note "Login page" "The website's login page loaded inside the app"
 
 # Back button on the start page: the app goes to the background, it doesn't crash.
 adb shell input keyevent 4; sleep 2
