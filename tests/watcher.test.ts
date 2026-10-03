@@ -44,8 +44,10 @@ function fakeBsc(logs: FakeLog[], opts: { finalized: bigint; failGetLogsAt?: big
           removed: false,
         }));
     },
+    // Like the free PublicNode address: single-transaction lookups are refused.
+    // Scanning must not need them.
     async getTransactionReceipt() {
-      return { status: "success" };
+      throw new Error("Archive requests require a personal token.");
     },
   };
   return client;
