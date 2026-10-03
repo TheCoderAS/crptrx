@@ -140,7 +140,6 @@ describe("admin order workflow (spec 5.4, M7)", () => {
     const { order } = await makeOrder("TRON");
     await toStatus(order.id, ["PAYMENT_CONFIRMED"]);
     await startReview(order.id, ADMIN);
-    await expect(approveOrder(order.id, ADMIN)).rejects.toThrow(/wallet check/);
     await saveWalletCheck(order.id, { result: "CLEAN", note: "Checked on tool X: no flags" }, ADMIN);
     // No payment linked yet: approval needs a written reason.
     await expect(approveOrder(order.id, ADMIN)).rejects.toThrow(/No blockchain payment/);
@@ -156,6 +155,39 @@ describe("admin order workflow (spec 5.4, M7)", () => {
     expect(paid.paidAmount!.toString()).toBe(D(order.net).toString());
     const ev = await prisma.orderEvent.findMany({ where: { orderId: order.id }, orderBy: { createdAt: "asc" } });
     expect(ev.map((e) => e.toStatus)).toEqual(["QUOTE_READY", "PAYMENT_CONFIRMED", "UNDER_REVIEW", "APPROVED", "PAID"]);
+  });
+
+  it("wallet check is optional: approving without one records the wallet as clean", async () => {
+    const { order } = await makeOrder("TRON");
+    await toStatus(order.id, ["PAYMENT_CONFIRMED", "UNDER_REVIEW"]);
+    await prisma.order.update({ where: { id: order.id }, data: { txid: randTxid("TRON"), receivedAmount: order.usdtAmount } });
+    await approveOrder(order.id, ADMIN);
+    const o = await orderById(order.id);
+    expect(o.status).toBe("APPROVED");
+    expect(o.walletCheckResult).toBe("CLEAN");
+    expect(o.walletCheckedBy).toBe(ADMIN.id);
+    expect(await prisma.auditLog.count({ where: { action: "WALLET_CHECK_DEFAULTED", targetId: order.id } })).toBe(1);
+  });
+
+  it("a Suspicious wallet check needs a note; Clean doesn't", async () => {
+    const { order } = await makeOrder("TRON");
+    await toStatus(order.id, ["PAYMENT_CONFIRMED", "UNDER_REVIEW"]);
+    await expect(saveWalletCheck(order.id, { result: "SUSPICIOUS", note: "  " }, ADMIN)).rejects.toThrow(/suspicious/);
+    await saveWalletCheck(order.id, { result: "CLEAN", note: "" }, ADMIN);
+    expect((await orderById(order.id)).walletCheckNote).toBeNull();
+  });
+
+  it("UTR is optional when marking paid", async () => {
+    const { order } = await makeOrder("TRON");
+    await toStatus(order.id, ["PAYMENT_CONFIRMED", "UNDER_REVIEW"]);
+    await prisma.order.update({ where: { id: order.id }, data: { txid: randTxid("TRON"), receivedAmount: order.usdtAmount } });
+    await approveOrder(order.id, ADMIN);
+    await markPaid(order.id, { utr: "  ", amount: D(order.net).toFixed(2), paidAt: new Date().toISOString() }, ADMIN);
+    const o = await orderById(order.id);
+    expect(o.status).toBe("PAID");
+    expect(o.utr).toBeNull();
+    const ev = await prisma.orderEvent.findFirst({ where: { orderId: order.id, toStatus: "PAID" } });
+    expect(ev?.publicMessage).toBe("Paid.");
   });
 
   it("suspicious wallet check blocks approval", async () => {

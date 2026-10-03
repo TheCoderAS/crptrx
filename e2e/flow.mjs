@@ -187,16 +187,14 @@ await admin.goto(`${BASE}/admin/orders/${orderId}`);
 await admin.click("button:has-text('Start review')");
 await expectText(admin, "In review");
 await shot(admin, "07c-admin-review");
-await admin.fill("textarea[name=note]", "Checked sender on scam tool: no flags");
-await admin.click("label:has-text('Clean')");
-await admin.click("text=Save wallet check");
-await expectText(admin, "Change"); // the saved check collapses to a summary
+// The wallet check is optional: approve straight away (recorded as clean).
+await expectText(admin, "Wallet: clean");
 await admin.click("button:has-text('Approve')");
 await confirmIfAsked(admin);
 await expectText(admin, "Mark as paid");
 await shot(admin, "07d-admin-approved");
 const net = await admin.getAttribute("input[name=amount]", "placeholder");
-await admin.fill("input[name=utr]", "HDFCN52026092812");
+// UTR left empty: it's optional.
 await admin.fill("input[name=amount]", (Number(net) + 1).toFixed(2));
 await admin.click("button:has-text('Mark as paid')");
 await confirmIfAsked(admin);
@@ -216,7 +214,8 @@ console.log("marked paid");
 
 // 8. User sees paid + receipt
 await user.goto(orderUrl);
-await expectText(user, "HDFCN52026092812");
+await expectText(user, "Download receipt");
+if (await user.getByText("Bank reference (UTR)").count()) throw new Error("UTR row shown although no UTR was entered");
 await shot(user, "09-user-order-paid");
 const r = await user.request.get(`${BASE}/api/orders/${orderId}/receipt`);
 console.log("receipt", r.status(), r.headers()["content-type"], (await r.body()).length, "bytes");
@@ -247,8 +246,9 @@ await expectText(admin, "Start review");
 console.log("unmatched payment confirmed from the order page");
 
 // Audit log shows doc views
-await admin.goto(BASE + "/admin/audit?action=KYC_DOC");
-await expectText(admin, "KYC_DOC_VIEWED");
+await admin.goto(BASE + "/admin/audit?type=KYC_DOC_VIEWED");
+await expectText(admin, "KYC doc viewed");
+await shot(admin, "10b-admin-audit-filter");
 console.log("doc view logged");
 // Admin lists at phone width: cards, not squeezed tables.
 await admin.setViewportSize({ width: 390, height: 844 });

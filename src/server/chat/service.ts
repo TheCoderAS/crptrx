@@ -3,7 +3,7 @@ import { audit } from "../audit";
 import { prisma } from "../db";
 import { AppError } from "../errors";
 import { signalChat } from "../firebase/chatSignal";
-import { pushToUser } from "../firebase/push";
+import { pushToAdmins, pushToUser } from "../firebase/push";
 import { getSettings } from "../settings";
 
 // Support chat on an order: the customer who owns it and any admin.
@@ -104,6 +104,7 @@ export async function sendChat(orderId: string, viewer: ChatViewer, text: string
   const dto = toDTO(m, await namesFor([m]), viewer);
   signalChat(o.userId, orderId, "message", from);
   if (from === "ADMIN") void notifyReply(o.userId, orderId);
+  else void notifySupport(orderId);
   return dto;
 }
 
@@ -139,6 +140,17 @@ async function notifyReply(userId: string, orderId: string) {
     link: `/orders/${orderId}`,
     tag: `chat-${orderId}`,
     data: { type: "chat_reply", orderId },
+  });
+}
+
+/** "Customer wrote" push to support staff's devices. No message text, same as for customers. */
+async function notifySupport(orderId: string) {
+  await pushToAdmins({
+    title: "New customer message",
+    body: `Order ${orderId}`,
+    link: `/admin/orders/${orderId}`,
+    tag: `admin-chat-${orderId}`,
+    data: { type: "chat_customer", orderId },
   });
 }
 

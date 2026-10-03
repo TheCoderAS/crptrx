@@ -17,7 +17,7 @@ import { prisma } from "@/server/db";
 import { randomToken } from "@/server/crypto";
 import { adminCounts } from "@/server/adminCounts";
 import { listChat, markChatRead, sendChat, setChatResolved, unreadForUser, waitingOnUsCount } from "@/server/chat/service";
-import { pushToUser, registerPushDevice } from "@/server/firebase/push";
+import { pushToUser, registerAdminPushDevice, registerPushDevice } from "@/server/firebase/push";
 import { baseSettings, makeOrder, makeUser, resetDb } from "./helpers";
 
 beforeEach(async () => {
@@ -115,6 +115,25 @@ describe("live signal and push", () => {
     const m = fb.sends[0] as { tokens: string[]; data: Record<string, string>; android: { notification: { body: string } } };
     expect(m.tokens.sort()).toEqual(["android-token-bbbbbbbbbbbbbbbbbb", "web-token-aaaaaaaaaaaaaaaaaaaa"]);
     expect(m.data).toMatchObject({ type: "chat_reply", orderId: order.id, link: `/orders/${order.id}`, tag: `chat-${order.id}` });
+    expect(JSON.stringify(m)).not.toContain("1234");
+  });
+
+  it("customer messages push to active admins' devices; support replies don't", async () => {
+    const { order, user } = await makeOrder("TRON", "100");
+    const admin = await makeAdmin();
+    const gone = await makeAdmin("Left Company");
+    await prisma.admin.update({ where: { id: gone.id }, data: { status: "DISABLED" } });
+    await registerAdminPushDevice(admin.id, "admin-browser-token-aaaaaaaaaaaa", "WEB");
+    await registerAdminPushDevice(gone.id, "old-admin-token-bbbbbbbbbbbbbbbbb", "WEB");
+    await sendChat(order.id, { type: "ADMIN", adminId: admin.id }, "Hello, how can we help?");
+    await settle();
+    expect(fb.sends).toHaveLength(0); // no customer devices, and admins aren't told about their own replies
+    await sendChat(order.id, { type: "USER", userId: user.id }, "My payment details: 1234");
+    await settle();
+    expect(fb.sends).toHaveLength(1);
+    const m = fb.sends[0] as { tokens: string[]; data: Record<string, string> };
+    expect(m.tokens).toEqual(["admin-browser-token-aaaaaaaaaaaa"]);
+    expect(m.data).toMatchObject({ type: "chat_customer", orderId: order.id, link: `/admin/orders/${order.id}` });
     expect(JSON.stringify(m)).not.toContain("1234");
   });
 

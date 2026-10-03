@@ -349,6 +349,21 @@ model PushDevice {
   @@map("push_devices")
 }
 
+// The same for support staff: an admin's browsers get "customer wrote" alerts.
+model AdminPushDevice {
+  id         String   @id @default(cuid())
+  adminId    String
+  token      String   @unique
+  platform   String // WEB | ANDROID | IOS
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@map("admin_push_devices")
+}
+
 model Setting {
   key       String   @id
   value     Json
@@ -422,6 +437,7 @@ model Admin {
   kycReviews    KycSubmission[]
   payoutReviews PayoutMethod[]
   notes         AdminNote[]
+  pushDevices   AdminPushDevice[]
 
   @@map("admins")
 }

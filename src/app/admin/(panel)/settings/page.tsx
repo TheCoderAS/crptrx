@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Select } from "@/components/Select";
 import {
   ArrowLeftRight,
@@ -6,7 +7,6 @@ import {
   Coins,
   FileText,
   Gauge,
-  History,
   Landmark,
   LockKeyhole,
   Network,
@@ -38,10 +38,9 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   await adminOrLogin("SUPER_ADMIN");
-  const [s, pending, history, feed, autoKycToReview] = await Promise.all([
+  const [s, pending, feed, autoKycToReview] = await Promise.all([
     getSettings(),
     prisma.depositAddressChange.findMany({ where: { appliedAt: null, cancelledAt: null }, orderBy: { createdAt: "desc" } }),
-    prisma.settingsHistory.findMany({ orderBy: { createdAt: "desc" }, take: 30 }),
     rateFeedState(),
     prisma.kycSubmission.count({ where: { autoApproved: true, postReviewedAt: null, status: "APPROVED" } }),
   ]);
@@ -53,7 +52,12 @@ export default async function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Changes are logged. Risky ones ask for your 2FA code." icon={<Gauge className="size-5" />} tile="tile-slate" />
+      <PageHeader
+        title="Settings"
+        subtitle={<>Changes are <Link href="/admin/audit?type=SETTING_CHANGED" className="underline">logged</Link>. Risky ones ask for your 2FA code.</>}
+        icon={<Gauge className="size-5" />}
+        tile="tile-slate"
+      />
       <Tabs
         layout="side"
         tabs={[
@@ -387,29 +391,6 @@ export default async function SettingsPage() {
                   <SettingRow label="Tron: look back on first start" htmlFor="tron_initial_lookback_seconds"><UnitInput name="tron_initial_lookback_seconds" value={s.tron_initial_lookback_seconds} unit="sec" type="number" /></SettingRow>
                 </Group>
               </SettingsForm>
-            ),
-          },
-          {
-            id: "history",
-            label: "History",
-            icon: <History />,
-            content: (
-              <div className="card overflow-x-auto p-0 sm:p-0">
-                <table className="table">
-                  <thead><tr><th>When</th><th>Setting</th><th>From</th><th>To</th><th>By</th></tr></thead>
-                  <tbody>
-                    {history.map((h) => (
-                      <tr key={h.id}>
-                        <td className="whitespace-nowrap text-slate-500">{fmtIST(h.createdAt)}</td>
-                        <td className="font-medium">{h.key}</td>
-                        <td className="max-w-48 truncate font-mono text-xs text-slate-500" title={JSON.stringify(h.oldValue)}>{JSON.stringify(h.oldValue)}</td>
-                        <td className="max-w-48 truncate font-mono text-xs" title={JSON.stringify(h.newValue)}>{JSON.stringify(h.newValue)}</td>
-                        <td className="text-xs text-slate-500">{h.changedBy ?? "system"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             ),
           },
         ]}

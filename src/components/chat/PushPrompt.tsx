@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { BellRing, X } from "lucide-react";
-import { enablePush, pushAvailable } from "@/lib/push";
+import { enablePush, pushAvailable, type Who } from "@/lib/push";
 
-const DISMISSED = "push-prompt-dismissed";
-
-/** One slim line under the chat: "Get notified when we reply". Shown until answered or closed. */
-export function PushPrompt() {
+/** One slim line under the chat: "Get notified when …". Shown until answered or closed. */
+export function PushPrompt({ who = "user" }: { who?: Who }) {
+  const DISMISSED = `push-prompt-dismissed-${who}`;
   const [show, setShow] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => {
@@ -19,11 +18,11 @@ export function PushPrompt() {
     }
     if (dismissed || !("Notification" in window) || Notification.permission !== "default") return;
     let on = true;
-    void pushAvailable().then((ok) => on && setShow(ok));
+    void pushAvailable(who).then((ok) => on && setShow(ok));
     return () => {
       on = false;
     };
-  }, []);
+  }, [who, DISMISSED]);
   const close = () => {
     try {
       localStorage.setItem(DISMISSED, "1");
@@ -37,12 +36,12 @@ export function PushPrompt() {
   return (
     <p className="mb-2 flex items-center gap-2 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs text-brand-800 ring-1 ring-brand-200 ring-inset">
       <BellRing className="size-3.5 shrink-0" aria-hidden />
-      <span className="flex-1">Get notified when we reply</span>
+      <span className="flex-1">{who === "user" ? "Get notified when we reply" : "Get notified when customers write"}</span>
       <button
         type="button"
         className="font-semibold underline"
         onClick={async () => {
-          const r = await enablePush();
+          const r = await enablePush(who);
           setShow(false);
           setNote(r === "on" ? "Notifications on." : r === "denied" ? "Notifications blocked in your browser settings." : null);
           if (r !== "on") close();

@@ -17,6 +17,7 @@ import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { CopyButton } from "@/components/CopyButton";
 import { ModalForm } from "@/components/Modal";
+import { InfoTip } from "@/components/InfoTip";
 import { Select } from "@/components/Select";
 import { AdminOrderChat } from "@/components/chat/AdminOrderChat";
 import { BackLink, NetworkBadge, Row, StatusPill, Timeline } from "@/components/ui";
@@ -96,14 +97,14 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
         </div>
       )}
       <div>
-        <label className="label" htmlFor="wc-note">Result from your scam-check tool</label>
-        <textarea id="wc-note" name="note" required rows={2} className="input" defaultValue={o.walletCheckNote ?? ""} placeholder="Paste the result" />
+        <label className="label" htmlFor="wc-note">Result from your scam-check tool <span className="font-normal text-slate-500">(needed for Suspicious)</span></label>
+        <textarea id="wc-note" name="note" rows={2} className="input" defaultValue={o.walletCheckNote ?? ""} placeholder="Paste the result" />
       </div>
       <fieldset className="grid grid-cols-2 gap-2">
         <legend className="sr-only">Result</legend>
         {(["CLEAN", "SUSPICIOUS"] as const).map((r) => (
           <label key={r} className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium ring-1 transition has-[:checked]:ring-2 ${r === "CLEAN" ? "ring-slate-200 has-[:checked]:bg-emerald-50 has-[:checked]:text-emerald-800 has-[:checked]:ring-emerald-500" : "ring-slate-200 has-[:checked]:bg-rose-50 has-[:checked]:text-rose-800 has-[:checked]:ring-rose-500"}`}>
-            <input type="radio" name="result" value={r} required defaultChecked={o.walletCheckResult === r} className="sr-only" />
+            <input type="radio" name="result" value={r} required defaultChecked={(o.walletCheckResult ?? "CLEAN") === r} className="sr-only" />
             {r === "CLEAN" ? <ShieldCheck className="size-4" aria-hidden /> : <ShieldAlert className="size-4" aria-hidden />}
             {r === "CLEAN" ? "Clean" : "Suspicious"}
           </label>
@@ -197,55 +198,48 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
 
             {o.status === "UNDER_REVIEW" && (
               <>
-                <NextStep icon={<ShieldCheck className="size-5" />} tile="tile-violet" title="Review: check the wallet, then approve" actions={holdButton("Put on hold")} />
-                <ol className="space-y-3">
-                  <li className="rounded-xl p-4 ring-1 ring-slate-200">
-                    <StepHead n={1} done={!!o.walletCheckResult} title="Wallet check" />
+                <NextStep icon={<ShieldCheck className="size-5" />} tile="tile-violet" title={`Review, then approve ${fmtInr(o.net)}`} actions={holdButton("Put on hold")} />
+                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-2.5 text-sm ring-1 ring-slate-200 ring-inset">
+                  {o.walletCheckResult === "SUSPICIOUS" ? <ShieldAlert className="size-4 shrink-0 text-rose-600" aria-hidden /> : <ShieldCheck className="size-4 shrink-0 text-emerald-600" aria-hidden />}
+                  <span className={`min-w-0 flex-1 ${o.walletCheckResult === "SUSPICIOUS" ? "text-rose-800" : "text-slate-700"}`}>
                     {o.walletCheckResult ? (
-                      <div className="mt-2 flex flex-wrap items-start gap-3">
-                        <p className={`min-w-0 flex-1 text-sm ${o.walletCheckResult === "CLEAN" ? "text-emerald-800" : "text-rose-800"}`}>
-                          <b>{o.walletCheckResult === "CLEAN" ? "Clean" : "Suspicious"}</b> · {adminName(o.walletCheckedBy)}: {o.walletCheckNote}
-                        </p>
-                        <ModalForm button="Change" buttonClassName="btn-ghost min-h-8 px-2.5 text-xs" title="Wallet check" description="Check the sender wallet in your scam-check tool." action={act} submitLabel="Save wallet check">{walletForm}</ModalForm>
-                      </div>
+                      <><b>Wallet {o.walletCheckResult === "CLEAN" ? "clean" : "suspicious"}</b> · {adminName(o.walletCheckedBy)}{o.walletCheckNote ? `: ${o.walletCheckNote}` : ""}</>
                     ) : (
-                      <ApiForm action={act} className="mt-3 space-y-3">
-                        {walletForm}
-                        <button className="btn-secondary">Save wallet check</button>
-                      </ApiForm>
+                      <span className="inline-flex items-center gap-1">
+                        <b>Wallet: clean</b> (default)
+                        <InfoTip>Not checked separately. Approving records the wallet as clean. Check it in your scam-check tool if anything looks off.</InfoTip>
+                      </span>
                     )}
-                  </li>
-                  <li className={`rounded-xl p-4 ring-1 ring-slate-200 ${o.walletCheckResult ? "" : "opacity-60"}`}>
-                    <StepHead n={2} done={false} title={`Approve ${fmtInr(o.net)}`} />
-                    {o.walletCheckResult === "SUSPICIOUS" && <p className="mt-2 text-sm text-rose-700">The wallet looked suspicious. Usually you&apos;d put this on hold instead.</p>}
-                    {!payProblem ? (
-                      <ApiForm action={act} className="mt-3" confirm={`Approve ${o.id} for ${fmtInr(o.net)}?`}>
-                        <input type="hidden" name="action" value="approve" />
-                        <button className="btn-primary" disabled={!o.walletCheckResult}>Approve</button>
-                        {!o.walletCheckResult && <span className="ml-3 text-xs text-slate-500">Save the wallet check first.</span>}
-                      </ApiForm>
-                    ) : (
-                      <div className="mt-3 space-y-2">
-                        <p className="text-sm font-medium text-rose-800">{payProblem}</p>
-                        <p className="text-sm text-slate-600">The payout stays {fmtInr(o.net)}. Usually you&apos;d put this on hold and sort it out with the customer.</p>
-                        <ModalForm button="Approve anyway…" buttonClassName="btn-danger" title="Approve even though the payment doesn't match?" description={payProblem} action={act} submitLabel="Approve anyway">
-                          <input type="hidden" name="action" value="approve" />
-                          <div>
-                            <label className="label" htmlFor="overrideNote">Why? (logged)</label>
-                            <textarea id="overrideNote" name="overrideNote" required minLength={10} rows={3} className="input" placeholder="e.g. Customer sent the missing 0.37 USDT in tx 0x…, checked on explorer" />
-                          </div>
-                        </ModalForm>
+                  </span>
+                  <ModalForm button={o.walletCheckResult ? "Change" : "Check wallet"} buttonClassName="btn-ghost min-h-8 px-2.5 text-xs" title="Wallet check" description="Check the sender wallet in your scam-check tool." action={act} submitLabel="Save wallet check">{walletForm}</ModalForm>
+                </div>
+                {o.walletCheckResult === "SUSPICIOUS" ? (
+                  <p className="text-sm text-rose-700">The wallet looked suspicious, so it can&apos;t be approved. Put it on hold, or change the wallet check.</p>
+                ) : !payProblem ? (
+                  <ApiForm action={act} confirm={`Approve ${o.id} for ${fmtInr(o.net)}?`}>
+                    <input type="hidden" name="action" value="approve" />
+                    <button className="btn-primary">Approve</button>
+                  </ApiForm>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-rose-800">{payProblem}</p>
+                    <p className="text-sm text-slate-600">The payout stays {fmtInr(o.net)}. Usually you&apos;d put this on hold and sort it out with the customer.</p>
+                    <ModalForm button="Approve anyway…" buttonClassName="btn-danger" title="Approve even though the payment doesn't match?" description={payProblem} action={act} submitLabel="Approve anyway">
+                      <input type="hidden" name="action" value="approve" />
+                      <div>
+                        <label className="label" htmlFor="overrideNote">Why? (logged)</label>
+                        <textarea id="overrideNote" name="overrideNote" required minLength={10} rows={3} className="input" placeholder="e.g. Customer sent the missing 0.37 USDT in tx 0x…, checked on explorer" />
                       </div>
-                    )}
-                  </li>
-                </ol>
+                    </ModalForm>
+                  </div>
+                )}
               </>
             )}
 
             {o.status === "APPROVED" && (
               <>
                 <NextStep icon={<CheckCircle2 className="size-5" />} tile="tile-emerald" title={`Pay ${fmtInr(o.net)}, then record it`}>
-                  Send it from the company bank account to the details below, then enter the bank reference.
+                  Send it from the company bank account to the details below, then record it here.
                 </NextStep>
                 <div className="grid gap-2 rounded-xl bg-slate-50 p-4 text-sm ring-1 ring-slate-200 ring-inset sm:grid-cols-2">
                   <p><span className="block text-xs text-slate-500">Name</span><span className="font-medium text-slate-900">{snap.holderName}</span></p>
@@ -256,7 +250,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
                 <ApiForm action={act} className="space-y-3" confirm={`Record ${fmtInr(o.net)} as paid for ${o.id}? The customer is told at once.`}>
                   <input type="hidden" name="action" value="mark_paid" />
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div><label className="label" htmlFor="utr">UTR / bank reference</label><input id="utr" name="utr" required pattern="[A-Za-z0-9]{12,22}" className="input font-mono" placeholder="12–22 characters" /></div>
+                    <div><label className="label" htmlFor="utr">UTR / bank reference <span className="font-normal text-slate-500">(optional)</span></label><input id="utr" name="utr" pattern="[A-Za-z0-9 ]{12,30}" className="input font-mono" placeholder="12–22 characters" /></div>
                     <div><label className="label" htmlFor="paid-amount">Amount paid</label><input id="paid-amount" name="amount" required inputMode="decimal" className="input" placeholder={D(o.net).toFixed(2)} /></div>
                     <div><label className="label" htmlFor="paidAt">Paid at (IST)</label><input id="paidAt" name="paidAt" type="datetime-local" required defaultValue={nowIst} className="input" /></div>
                   </div>
@@ -291,7 +285,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
 
             {o.status === "PAID" && (
               <NextStep icon={<CheckCircle2 className="size-5" />} tile="tile-emerald" title={`Paid ${fmtInr(o.paidAmount ?? o.net)}`} actions={<a className="btn-secondary" href={`/api/orders/${o.id}/receipt`}><Download className="size-4" aria-hidden /> Receipt PDF</a>}>
-                UTR <span className="font-mono">{o.utr}</span> · {fmtIST(o.paidAt)} · by {adminName(o.paidByAdminId)}
+                {o.utr ? <>UTR <span className="font-mono">{o.utr}</span> · </> : <>No UTR · </>}{fmtIST(o.paidAt)} · by {adminName(o.paidByAdminId)}
               </NextStep>
             )}
 
@@ -393,14 +387,5 @@ function NextStep({ icon, tile, title, children, actions }: { icon: ReactNode; t
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
-  );
-}
-
-function StepHead({ n, done, title }: { n: number; done: boolean; title: string }) {
-  return (
-    <p className="flex items-center gap-2 font-medium text-slate-900">
-      <span className={`grid size-6 place-items-center rounded-full text-xs font-bold ${done ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"}`}>{done ? <CheckCircle2 className="size-3.5" aria-hidden /> : n}</span>
-      {title}
-    </p>
   );
 }
