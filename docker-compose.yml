@@ -20,6 +20,8 @@ x-app: &app
     SECURE_COOKIES: ${SECURE_COOKIES:-false}
     AUTO_GENERATE_SECRETS: "true"
     ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+    # Local Docker runs the test networks.
+    APP_MODE: ${APP_MODE:-TEST}
     # Test helpers: email-only test sign-in, OTP shown on screen, payment simulator.
     DEV_LOGIN_ENABLED: ${DEV_LOGIN_ENABLED:-true}
     DEV_TOOLS_ENABLED: ${DEV_TOOLS_ENABLED:-true}

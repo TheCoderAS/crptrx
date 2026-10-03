@@ -24,13 +24,28 @@ export const env = {
   get nodeEnv() {
     return process.env.NODE_ENV ?? "development";
   },
-  /** Allows the "test login" form for users when Firebase is not configured. Never enable in production. */
-  get devLoginEnabled() {
-    return process.env.DEV_LOGIN_ENABLED === "true";
+  /**
+   * LIVE (real networks, real money) or TEST, fixed per deployment: the live
+   * service sets APP_MODE=LIVE, staging APP_MODE=TEST. Required when the app
+   * runs in production, so a service with the setting missing fails at deploy
+   * instead of quietly watching the wrong network. Unset in development and
+   * tests: the mode stored in the database is used.
+   */
+  get appMode(): "LIVE" | "TEST" | null {
+    const v = opt("APP_MODE")?.trim().toUpperCase();
+    if (v === "LIVE" || v === "TEST") return v;
+    if (v) throw new Error(`APP_MODE must be LIVE or TEST (it is "${v}")`);
+    const building = process.env.NEXT_PHASE === "phase-production-build";
+    if (process.env.NODE_ENV === "production" && !building) throw new Error("Missing environment setting APP_MODE: set it to LIVE on the live service, TEST on staging");
+    return null;
   },
-  /** Shows OTP codes on screen and enables the test-transfer simulator. Test phases only. */
+  /** Allows the "test login" form for users. Never on in Live, whatever the setting says. */
+  get devLoginEnabled() {
+    return process.env.DEV_LOGIN_ENABLED === "true" && this.appMode !== "LIVE";
+  },
+  /** Shows OTP codes on screen and enables the test-transfer simulator. Never on in Live. */
   get devToolsEnabled() {
-    return process.env.DEV_TOOLS_ENABLED === "true";
+    return process.env.DEV_TOOLS_ENABLED === "true" && this.appMode !== "LIVE";
   },
   get secureCookies() {
     return (process.env.SECURE_COOKIES ?? (this.appUrl.startsWith("https") ? "true" : "false")) === "true";

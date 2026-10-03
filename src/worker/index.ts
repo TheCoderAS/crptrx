@@ -5,6 +5,7 @@
  */
 import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { prisma } from "@/server/db";
+import { env } from "@/server/env";
 import { applyDueAddressChanges } from "@/server/deposit";
 import { notifyOrder } from "@/server/notify";
 import { expireQuotes } from "@/server/orders/quote";
@@ -51,7 +52,9 @@ async function housekeeping() {
 }
 
 async function main() {
-  log("worker starting");
+  // Refuse to start in production without APP_MODE (LIVE or TEST): watching the
+  // wrong network silently would miss real payments.
+  log(`worker starting (APP_MODE=${env.appMode ?? "not set, using the stored mode"})`);
   process.on("SIGTERM", () => (stopping = true));
   process.on("SIGINT", () => (stopping = true));
   await Promise.all([

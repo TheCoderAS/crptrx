@@ -113,6 +113,9 @@ async function loadSettings(tx: Tx): Promise<Settings & { rateUpdatedAt: Date | 
   }
   // In Auto mode the rate is "fresh" when the live feed last succeeded, even if the value didn't change.
   if (out.rate_mode === "AUTO") out.rateUpdatedAt = feed?.lastOkAt ?? null;
+  // The deployment decides Live or Test (APP_MODE), not a setting anyone can flip.
+  const fixed = (await import("./env")).env.appMode;
+  if (fixed) out.network_mode = fixed;
   return out;
 }
 
@@ -367,15 +370,6 @@ export async function writeSetting(key: SettingKey, value: unknown, actor: Actor
 
 /** False for empty values and the "[placeholder]" defaults, so unset details are never shown as claims. */
 export const isRealValue = (v: string | null | undefined) => !!v && !/^\s*\[.*\]\s*$/.test(v);
-
-export const LIVE_CONFIRM_PHRASE = "SWITCH TO LIVE";
-
-export async function setNetworkMode(mode: Mode, typedConfirmation: string, actor: Actor, ip?: string | null) {
-  if (mode === "LIVE" && typedConfirmation !== LIVE_CONFIRM_PHRASE)
-    throw new AppError(`Type ${LIVE_CONFIRM_PHRASE} exactly to switch to Live`);
-  if (mode !== "LIVE" && mode !== "TEST") throw new AppError("Unknown mode");
-  await writeSetting("network_mode", mode, actor, ip);
-}
 
 /** The official token contract for a network in the current mode (spec 8.1). */
 export function tokenContractFor(s: Settings, n: NetworkCode, mode: Mode = s.network_mode): string {
