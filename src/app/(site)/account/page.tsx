@@ -11,6 +11,8 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { ContactLinks } from "@/components/ContactLinks";
 import { contactChannels } from "@/server/contact";
 import { PageHeader, StatusPill } from "@/components/ui";
+import { PushSetting } from "@/components/PushSetting";
+import { webPushReady } from "@/server/firebase/push";
 
 export const metadata = { title: "Account", robots: { index: false, follow: false } };
 
@@ -90,6 +92,7 @@ export default async function Account() {
         <h2 className="mb-2 px-1 text-sm font-semibold text-slate-900">Sign-in &amp; security</h2>
         <div className="card divide-y divide-slate-100 p-0 sm:p-0">
           <SecurityRow icon={<ShieldCheck className="size-4" aria-hidden />} label="Sign-in methods" detail={methods.join(" · ") || "None"} />
+          {webPushReady() && <PushSetting />}
           {(mobileOk || !s.onboarding_mobile_required) && (
             <SecurityRow
               icon={<Smartphone className="size-4" aria-hidden />}

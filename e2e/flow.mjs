@@ -160,7 +160,6 @@ await expectText(user, "Send us a message");
 await user.fill("[role=dialog] textarea[aria-label=Message]", "Is my payment okay?");
 await user.click("[role=dialog] button[aria-label=Send]");
 await expectText(user, "Is my payment okay?");
-await expectText(user, "Get notified when we reply");
 await shot(user, "07e-user-chat");
 await admin.goto(BASE + "/admin/support");
 await expectText(admin, "tester@example.com");

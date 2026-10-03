@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BellRing, X } from "lucide-react";
-import { enablePush, pushSupported } from "@/lib/push";
+import { enablePush, pushAvailable } from "@/lib/push";
 
 const DISMISSED = "push-prompt-dismissed";
 
@@ -17,7 +17,12 @@ export function PushPrompt() {
     } catch {
       /* private mode */
     }
-    setShow(pushSupported() && Notification.permission === "default" && !dismissed);
+    if (dismissed || !("Notification" in window) || Notification.permission !== "default") return;
+    let on = true;
+    void pushAvailable().then((ok) => on && setShow(ok));
+    return () => {
+      on = false;
+    };
   }, []);
   const close = () => {
     try {

@@ -1,5 +1,6 @@
 import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
 import { prisma } from "../db";
+import { env } from "../env";
 import { firebaseApp, logFirebaseError } from "./admin";
 
 // Push notifications to customers through Firebase Cloud Messaging. One message
@@ -18,6 +19,12 @@ export interface PushNote {
   tag: string;
   /** Extra fields for the apps, e.g. { type: "chat_reply", orderId }. */
   data?: Record<string, string>;
+}
+
+/** Push is set up for browsers: the server key plus the web settings. */
+export function webPushReady(): boolean {
+  const cfg = env.firebase.webConfig;
+  return !!(cfg?.appId && env.firebase.serviceAccount && env.firebase.messagingSenderId && env.firebase.vapidKey);
 }
 
 /** Remember (or move) a device for this customer. A token belongs to one customer at a time. */

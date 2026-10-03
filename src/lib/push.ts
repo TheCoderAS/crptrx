@@ -36,8 +36,16 @@ async function messaging(cfg: Cfg) {
   return { m, msg: m.getMessaging(app) };
 }
 
+let cfgCache: Promise<Cfg> | null = null;
+const loadCfg = () => (cfgCache ??= fetch("/api/me/push").then((r) => (r.ok ? r.json() : { enabled: false })).catch(() => ({ enabled: false })));
+
+/** Push is set up on the server and this browser can do it. */
+export async function pushAvailable(): Promise<boolean> {
+  return pushSupported() && !!(await loadCfg()).enabled;
+}
+
 async function register(): Promise<"on" | "unavailable" | "denied"> {
-  const cfg = (await (await fetch("/api/me/push")).json()) as Cfg;
+  const cfg = await loadCfg();
   if (!cfg.enabled || !cfg.config || !cfg.vapidKey) return "unavailable";
   const fm = await messaging(cfg);
   if (!fm) return "unavailable";
@@ -51,9 +59,12 @@ async function register(): Promise<"on" | "unavailable" | "denied"> {
   return "on";
 }
 
+/** This browser is signed up (and still allowed). */
+export const pushOnHere = () => pushSupported() && Notification.permission === "granted" && !!store.get(KEY);
+
 /** Ask permission (must come from a tap) and sign this browser up. */
 export async function enablePush(): Promise<"on" | "unavailable" | "denied"> {
-  if (!pushSupported()) return "unavailable";
+  if (!(await pushAvailable())) return "unavailable";
   const p = await Notification.requestPermission();
   if (p !== "granted") return "denied";
   return register().catch(() => "unavailable" as const);
