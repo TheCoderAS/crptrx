@@ -7,6 +7,9 @@ name: Android app
 
 on:
   pull_request:
+    # Not for staging -> main releases: staging already built and tested this exact app,
+    # and release.yml builds the signed live app once main is tagged.
+    branches-ignore: [main]
     paths:
       - "android/**"
       - ".github/workflows/android*.yml"
