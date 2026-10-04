@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import { Gift, Link2, Percent, UserRound } from "lucide-react";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
+import { earningTotals } from "@/server/earnings";
+import { fmtInr } from "@/server/money";
+import Link from "next/link";
 import { env } from "@/server/env";
 import { getSettings } from "@/server/settings";
 import { CopyButton } from "@/components/CopyButton";
@@ -14,11 +17,13 @@ export const metadata = { title: "My invite" };
 export default async function Referrals() {
   const admin = await adminOrLogin();
   if (admin.role === "SUPER_ADMIN") redirect("/admin/admins");
-  const [me, customers, s] = await Promise.all([
+  const [me, customers, s, totals] = await Promise.all([
     prisma.admin.findUniqueOrThrow({ where: { id: admin.id }, select: { inviteCode: true, profitPercent: true } }),
     prisma.user.count({ where: { adminId: admin.id } }),
     getSettings(),
+    earningTotals({ adminId: admin.id }),
   ]);
+  const t = totals.get(admin.id);
   const link = me.inviteCode ? `${env.appUrl.replace(/\/$/, "")}/signup?ref=${me.inviteCode}` : null;
   return (
     <div className="space-y-4">
@@ -42,6 +47,13 @@ export default async function Referrals() {
           <p className="mt-1 text-2xl font-bold text-slate-900">{customers}</p>
         </div>
       </div>
+      <Link href="/admin/earnings" className="card flex items-center justify-between gap-3 transition hover:bg-slate-50">
+        <span>
+          <span className="block text-xs font-medium text-slate-500">Owed to you</span>
+          <span className="text-2xl font-bold text-slate-900">{fmtInr(t?.pending ?? 0)}</span>
+        </span>
+        <span className="text-right text-sm text-slate-600">Paid to you so far<br /><b className="text-slate-900">{fmtInr(t?.settled ?? 0)}</b></span>
+      </Link>
       {link && (
         <div className="card space-y-3">
           <h2 className="h2 flex items-center gap-2"><Link2 className="size-5 text-brand-600" aria-hidden /> Invite link</h2>

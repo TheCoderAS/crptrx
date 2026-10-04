@@ -46,6 +46,7 @@ export default async function Sell() {
           gstPercent={s.gst_percent}
           feeMin={s.fee_min_inr}
           feeMax={s.fee_max_inr}
+          rewardPercent={user.rewardPercent.toString()}
           min={s.limit_min_order_usdt}
           max={s.limit_max_order_usdt}
           available={available}

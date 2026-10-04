@@ -15,6 +15,8 @@ interface Props {
   gstPercent: string;
   feeMin?: string;
   feeMax?: string;
+  /** The customer's bonus %, if their admin (or we) set one. The exact amount is fixed in the quote. */
+  rewardPercent?: string;
   min: string;
   max: string;
   available: Record<NetworkCode, boolean>;
@@ -144,6 +146,9 @@ export function SellForm(p: Props) {
           )}
           {p.gstEnabled && Number(p.gstPercent) > 0 && (estimate ? estimate.fee.gt(0) : Number(p.feePercent) > 0 || !!p.feeMin) && (
             <div className="flex justify-between"><dt className="text-slate-500">GST on fee ({p.gstPercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.gstOnFee)}` : "—"}</dd></div>
+          )}
+          {Number(p.rewardPercent ?? 0) > 0 && (
+            <div className="flex justify-between"><dt className="flex items-center gap-1 text-emerald-700">Your bonus ({p.rewardPercent}%)<InfoTip>Added to your payout. The exact amount is shown on your quote; it can be lower on a thin market day.</InfoTip></dt><dd className="tabular-nums text-emerald-700">{estimate ? `+ up to ${fmtInr(estimate.gross.mul(Number(p.rewardPercent)).div(100).toDecimalPlaces(2))}` : "—"}</dd></div>
           )}
         </dl>
         <div className="mt-4 flex items-baseline justify-between border-t border-slate-100 pt-4">

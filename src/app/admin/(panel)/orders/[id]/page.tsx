@@ -8,7 +8,7 @@ import { currentDepositAddresses } from "@/server/deposit";
 import { getAdapter } from "@/server/networks";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
-import { D, feeLabel, fmtInr, fmtUsdt } from "@/server/money";
+import { D, Decimal, feeLabel, fmtInr, fmtUsdt } from "@/server/money";
 import { fullAccountNumber, type PayoutSnapshot } from "@/server/payouts";
 import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
 import { getSettings } from "@/server/settings";
@@ -337,7 +337,24 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
               {D(o.taxHeld).gt(0) && <Row k={`Tax held (${D(o.taxPercent)}%)`} v={`– ${fmtInr(o.taxHeld)}`} />}
               {D(o.fee).gt(0) && <Row k={feeLabel("Fee", o)} v={`– ${fmtInr(o.fee)}`} />}
               {D(o.gstOnFee).gt(0) && <Row k={`GST on fee (${D(o.gstPercent)}%)`} v={`– ${fmtInr(o.gstOnFee)}`} />}
+              {D(o.reward).gt(0) && <Row k={`Customer bonus (${D(o.rewardPercent ?? 0)}%)`} v={`+ ${fmtInr(o.reward)}`} />}
               <Row k={<b>Net to pay</b>} v={<b>{fmtInr(o.net)}</b>} />
+              {(sup || o.adminId === me.id) && o.margin !== null && (
+                <div className="mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 ring-inset">
+                  <p className="mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">Margin</p>
+                  <Row k="Market price" v={fmtInr(o.marketRate ?? 0)} />
+                  <Row k="Margin on this order" v={fmtInr(o.margin)} />
+                  {o.adminShare !== null && (
+                    <>
+                      <Row k={`${sup ? `${adminName(o.adminId)}'s` : "Your"} share (${D(o.adminSharePercent ?? 0)}%)`} v={fmtInr(o.adminShare)} />
+                      {D(o.reward).gt(0) && <Row k="Less customer bonus" v={`– ${fmtInr(o.reward)}`} />}
+                      <Row k={<b>{sup ? "Admin earns" : "You earn"}</b>} v={<b>{fmtInr(Decimal.max(D(o.adminShare).minus(D(o.reward)), 0))}</b>} />
+                    </>
+                  )}
+                  {sup && <Row k="House keeps from the margin" v={fmtInr(Decimal.max(D(o.margin), 0).minus(o.adminShare !== null ? D(o.adminShare) : D(o.reward)))} />}
+                  <p className="mt-1 text-xs text-slate-500">{o.status === "PAID" ? "Booked when paid." : "Booked when the order is paid."} The platform fee is not shared.</p>
+                </div>
+              )}
             </section>
             <section className="card">
               <h2 className="h2 mb-2">Pay to</h2>

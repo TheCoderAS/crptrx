@@ -98,6 +98,9 @@ model User {
   // The admin who brought this customer (invite code at sign-up). Null = house (super admin only).
   adminId          String?
   referredAt       DateTime?
+  // Bonus on each order, as % of the order value, paid from the margin share of whoever owns
+  // the customer (their admin, or the house). Capped at that share. 0 = none.
+  rewardPercent    Decimal    @default(0) @db.Decimal(7, 4)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
@@ -199,6 +202,13 @@ model Order {
   feeMax            Decimal?    @db.Decimal(14, 2)
   marketRate        Decimal?    @db.Decimal(14, 4) // market price behind the rate; null = unknown
   margin            Decimal?    @db.Decimal(14, 2) // usdt x (market - rate) in rupees; can be negative
+  // Fixed at quote time: the customer's admin (null = house), their share of the margin
+  // before the reward, and the reward added to the payout (already included in net).
+  adminId           String?
+  adminSharePercent Decimal?    @db.Decimal(7, 4)
+  adminShare        Decimal?    @db.Decimal(14, 2)
+  rewardPercent     Decimal?    @db.Decimal(7, 4)
+  reward            Decimal     @default(0) @db.Decimal(14, 2)
   payoutMethodId    String
   payoutSnapshot    Json
   quoteExpiresAt    DateTime
@@ -452,6 +462,8 @@ model Admin {
   updatedAt           DateTime    @updatedAt
 
   customers     User[]            @relation("AdminCustomers")
+  earnings      AdminEarning[]
+  settlements   AdminSettlement[]
   kycReviews    KycSubmission[]
   payoutReviews PayoutMethod[]
   notes         AdminNote[]
@@ -568,4 +580,52 @@ model BrandAsset {
   updatedAt DateTime @updatedAt
 
   @@map("brand_assets")
+}
+
+enum EarningStatus {
+  PENDING // owed to the admin
+  SETTLED // paid out to the admin (see settlement)
+  VOID // cancelled by a super admin (reason kept)
+}
+
+/// An admin's share of one paid order's margin, minus the reward their customer got.
+model AdminEarning {
+  id           String        @id @default(cuid())
+  adminId      String
+  orderId      String        @unique
+  margin       Decimal       @db.Decimal(14, 2)
+  sharePercent Decimal       @db.Decimal(7, 4)
+  share        Decimal       @db.Decimal(14, 2) // before the reward
+  reward       Decimal       @db.Decimal(14, 2)
+  amount       Decimal       @db.Decimal(14, 2) // share - reward, never below 0
+  status       EarningStatus @default(PENDING)
+  settlementId String?
+  voidReason   String?
+  voidedBy     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  admin      Admin            @relation(fields: [adminId], references: [id])
+  settlement AdminSettlement? @relation(fields: [settlementId], references: [id])
+
+  @@index([adminId, status])
+  @@map("admin_earnings")
+}
+
+/// A payout of pending earnings to an admin, recorded by a super admin.
+model AdminSettlement {
+  id        String   @id @default(cuid())
+  adminId   String
+  amount    Decimal  @db.Decimal(14, 2)
+  count     Int
+  reference String? // bank reference / UTR
+  note      String?
+  createdBy String
+  createdAt DateTime @default(now())
+
+  admin    Admin          @relation(fields: [adminId], references: [id])
+  earnings AdminEarning[]
+
+  @@index([adminId, createdAt])
+  @@map("admin_settlements")
 }
