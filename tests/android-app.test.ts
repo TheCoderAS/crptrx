@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apkName, pickLatest, versionCodeFor } from "@/server/appRelease";
+import { apkName, clearAppReleaseCacheForTests, latestAppRelease, manifestUrl, parseManifest, pickLatest, versionCodeFor } from "@/server/appRelease";
 import { firebaseIdTokenFromGoogle } from "@/server/auth/googleNative";
 
 const rel = (tag: string, prerelease: boolean, assets: string[] = [], published = "2026-10-03T10:00:00Z") => ({
@@ -62,5 +62,44 @@ describe("Google sign-in from the app", () => {
     await expect(firebaseIdTokenFromGoogle("short")).rejects.toMatchObject({ status: 400 });
     vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ error: { message: "INVALID_IDP_RESPONSE" } }), { status: 400 }));
     await expect(firebaseIdTokenFromGoogle("g".repeat(200))).rejects.toMatchObject({ status: 401 });
+  });
+});
+
+describe("finding the newest app file", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearAppReleaseCacheForTests();
+  });
+  const manifest = { channel: "test", versionName: "1.3.0-test.7", versionCode: 7, url: "https://github.com/x/y/releases/download/v1.3.0-test.7/VisionPay-Test-v1.3.0-test.7.apk", size: 2_300_000, publishedAt: "2026-10-04T06:00:00Z", pageUrl: "https://github.com/x/y/releases/tag/v1.3.0-test.7" };
+
+  it("trusts only a manifest that matches its channel and version rules", () => {
+    expect(parseManifest("test", manifest)).toMatchObject({ versionCode: 7 });
+    expect(parseManifest("live", manifest)).toBeNull();
+    expect(parseManifest("test", { ...manifest, versionCode: 8 })).toBeNull();
+    expect(parseManifest("test", { ...manifest, url: "https://evil.example/app.apk" })).toBeNull();
+  });
+
+  it("reads the manifest (a plain download, no API limit) and caches it", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      urls.push(url);
+      return new Response(JSON.stringify(manifest), { status: 200 });
+    });
+    expect(await latestAppRelease("test")).toMatchObject({ versionName: "1.3.0-test.7" });
+    expect(await latestAppRelease("test")).toMatchObject({ versionName: "1.3.0-test.7" });
+    expect(urls).toEqual([manifestUrl("test")]);
+    expect(urls[0]).toContain("/releases/download/app-latest/latest-test.json");
+  });
+
+  it("falls back to the releases list, and a GitHub refusal shows nothing rather than an error", async () => {
+    vi.stubGlobal("fetch", async (url: string) =>
+      url.includes("api.github.com")
+        ? new Response(JSON.stringify([rel("v1.3.0-test.5", true, ["VisionPay-Test-v1.3.0-test.5.apk"])]), { status: 200 })
+        : new Response("Not Found", { status: 404 }),
+    );
+    expect(await latestAppRelease("test")).toMatchObject({ versionCode: 5 });
+    clearAppReleaseCacheForTests();
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ message: "API rate limit exceeded" }), { status: 403 }));
+    expect(await latestAppRelease("test")).toBeNull();
   });
 });
