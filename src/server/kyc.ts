@@ -2,7 +2,8 @@ import { audit, SYSTEM, type Actor } from "./audit";
 import { decrypt, encrypt } from "./crypto";
 import { prisma } from "./db";
 import { AppError } from "./errors";
-import { notifyKyc } from "./notify";
+import { notifyKyc, notifySuperAdmins } from "./notify";
+import { env } from "./env";
 import { getSettings } from "./settings";
 import { checkUpload, putFile, signedUrl } from "./storage";
 
@@ -63,7 +64,8 @@ export async function submitKyc(userId: string, input: KycInput, actor: Actor) {
   }
   // Automatic approval: the basic checks above passed, so approve now and
   // leave the submission in the admin's "review later" queue.
-  const auto = set.kyc_auto_approve;
+  // Customers of an admin always wait for a person: their admin, then a super admin.
+  const auto = set.kyc_auto_approve && !user.adminId;
   const status = auto ? "APPROVED" : "SUBMITTED";
   const sub = await prisma.$transaction(async (tx) => {
     const s = await tx.kycSubmission.create({
@@ -83,10 +85,21 @@ export async function submitKyc(userId: string, input: KycInput, actor: Actor) {
   return sub;
 }
 
-export async function reviewKyc(submissionId: string, decision: "APPROVED" | "NEEDS_CHANGES" | "DECLINED", reason: string | undefined, actor: Actor) {
+/**
+ * `superAdmin`: false for an admin reviewing their own customer. Their "approve" is a
+ * recommendation; the customer stays waiting until a super admin approves (fraud control).
+ */
+export async function reviewKyc(submissionId: string, decision: "APPROVED" | "NEEDS_CHANGES" | "DECLINED", reason: string | undefined, actor: Actor, superAdmin = true) {
   if (decision !== "APPROVED" && !reason?.trim()) throw new AppError("A reason is required.");
   const sub = await prisma.kycSubmission.findUnique({ where: { id: submissionId } });
   if (!sub) throw new AppError("Submission not found", 404);
+  if (!superAdmin && decision === "APPROVED" && sub.status === "SUBMITTED") {
+    if (sub.recommendedAt) throw new AppError("You already approved this. It's waiting for a super admin.");
+    await prisma.kycSubmission.update({ where: { id: sub.id }, data: { recommendedBy: actor.id, recommendedAt: new Date() } });
+    await audit(actor, "KYC_RECOMMENDED", { targetType: "kyc_submission", targetId: sub.id });
+    void notifySuperAdmins("Identity check waiting for you", `An admin approved an identity check. Give the final approval: ${env.appUrl}/admin/kyc/${sub.id}`, `/admin/kyc/${sub.id}`);
+    return;
+  }
   const postReview = sub.status === "APPROVED" && sub.autoApproved && !sub.postReviewedAt;
   if (sub.status !== "SUBMITTED" && !postReview) throw new AppError("This submission was already reviewed.");
   if (postReview) {

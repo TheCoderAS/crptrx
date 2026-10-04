@@ -19,7 +19,7 @@ describe("admin menu counts (one query)", () => {
     const u = await makeUser();
     await prisma.payoutMethod.create({ data: { userId: u.user.id, type: "UPI", holderName: "A B", upiId: "a@b", status: "PENDING" } });
     await prisma.supportMessage.create({ data: { userId: u.user.id, message: "help" } });
-    const c = await adminCounts();
+    const c = await adminCounts({ id: "super", role: "SUPER_ADMIN" });
     expect(c.work).toBe(await prisma.order.count({ where: { status: { in: ["PAYMENT_CONFIRMED", "UNDER_REVIEW", "ON_HOLD", "APPROVED"] } } }));
     expect(c.payout).toBe(await prisma.payoutMethod.count({ where: { status: "PENDING", deletedAt: null } }));
     expect(c.kyc).toBe(await prisma.kycSubmission.count({ where: { OR: [{ status: "SUBMITTED" }, { autoApproved: true, postReviewedAt: null, status: "APPROVED" }] } }));
@@ -35,10 +35,10 @@ describe("admin menu counts (one query)", () => {
 describe("live-update checks", () => {
   it("admin: the answer changes when an order moves, and only then", async () => {
     const { order } = await makeOrder("TRON", "100");
-    const a = (await adminPulse()).sig;
-    expect((await adminPulse()).sig).toBe(a);
+    const a = (await adminPulse({ id: "super", role: "SUPER_ADMIN" })).sig;
+    expect((await adminPulse({ id: "super", role: "SUPER_ADMIN" })).sig).toBe(a);
     await prisma.$transaction((tx) => transition(tx, order.id, "PAYMENT_CONFIRMED", SYS));
-    expect((await adminPulse()).sig).not.toBe(a);
+    expect((await adminPulse({ id: "super", role: "SUPER_ADMIN" })).sig).not.toBe(a);
   });
 
   it("customer: changes for their own orders, not someone else's", async () => {

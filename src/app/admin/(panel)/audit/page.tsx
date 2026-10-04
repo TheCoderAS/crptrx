@@ -23,7 +23,8 @@ const SORTS = [
 ] as const;
 
 export default async function Audit({ searchParams }: { searchParams: Promise<{ q?: string; action?: string; type?: string; cat?: string; page?: string; sort?: string }> }) {
-  await adminOrLogin();
+  // Unmatched payments and the audit log span every customer: super admin only.
+  await adminOrLogin("SUPER_ADMIN");
   const sp = await searchParams;
   const q = (sp.q ?? sp.action)?.trim(); // ?action= kept for old links
   const sort = pickSort(sp.sort, SORTS.map((s) => s.value), "new");

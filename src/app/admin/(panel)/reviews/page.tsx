@@ -5,6 +5,7 @@ import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { decrypt } from "@/server/crypto";
 import { namesMatch } from "@/server/payouts";
+import { isSuper, ownedScope, type Viewer } from "@/server/scope";
 import type { Prisma } from "@prisma/client";
 import { fmtIST, fmtISTShort } from "@/lib/time";
 import { pickSort } from "@/lib/sort";
@@ -14,7 +15,7 @@ import { EmptyState, PageHeader, StatusPill } from "@/components/ui";
 
 // One place for everything that needs a person to look at it before a customer can sell.
 const AUTO_TO_CHECK = { autoApproved: true, postReviewedAt: null, status: "APPROVED" } as const;
-type Tab = "kyc" | "payout" | "auto" | "history";
+type Tab = "kyc" | "final" | "payout" | "auto" | "history";
 const SORTS = [
   { value: "old", label: "Oldest first" },
   { value: "new", label: "Newest first" },
@@ -23,16 +24,19 @@ const SORTS = [
 type Sort = (typeof SORTS)[number]["value"];
 
 export default async function Reviews({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; sort?: string }> }) {
-  await adminOrLogin();
+  const me = await adminOrLogin();
+  const sup = isSuper(me);
   // Shared with the admin menu's counts (one query per page render).
-  const { kycSubmitted: kycCount, payout: payoutCount, kycAuto: autoCount } = await adminCounts();
+  const { kycSubmitted: kycCount, payout: payoutCount, kycAuto: autoCount, kycFinal } = await adminCounts(me);
   const sp = await searchParams;
   const requested = sp.tab as Tab | undefined;
   // Default: every identity check. The other tabs are the queues, with their counts.
-  const tab: Tab = requested && ["kyc", "payout", "auto", "history"].includes(requested) ? requested : "history";
+  const tab: Tab = requested && ["kyc", "payout", "auto", "history", ...(sup ? ["final"] : [])].includes(requested) ? requested : "history";
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "history", label: "All identity" },
     { id: "kyc", label: "Identity to review", count: kycCount },
+    // Admins' approvals of their own customers wait for a super admin (fraud control).
+    ...(sup ? [{ id: "final" as const, label: "Final approval", count: kycFinal }] : []),
     { id: "payout", label: "Bank & UPI", count: payoutCount },
     { id: "auto", label: "Auto-approved", count: autoCount },
   ];
@@ -57,17 +61,23 @@ export default async function Reviews({ searchParams }: { searchParams: Promise<
         ))}
       </nav>
       <ListToolbar placeholder={tab === "payout" ? "Email, name, account no., IFSC or UPI ID" : "Name, email or PAN"} sorts={[...SORTS]} defaultSort={defaultSort} />
-      {tab === "payout" ? <PayoutQueue q={q} sort={sort} /> : <KycQueue mode={tab} q={q} sort={sort} />}
+      {tab === "payout" ? <PayoutQueue v={me} q={q} sort={sort} /> : <KycQueue v={me} mode={tab} q={q} sort={sort} />}
     </div>
   );
 }
 
-async function KycQueue({ mode, q, sort }: { mode: "kyc" | "auto" | "history"; q?: string; sort: Sort }) {
+async function KycQueue({ v, mode, q, sort }: { v: Viewer; mode: "kyc" | "final" | "auto" | "history"; q?: string; sort: Sort }) {
+  // An admin's queue drops what they've already approved; the super admin's "kyc" queue keeps everything.
+  const modeWhere: Prisma.KycSubmissionWhereInput =
+    mode === "kyc" ? { status: "SUBMITTED", ...(isSuper(v) ? {} : { recommendedAt: null }) }
+    : mode === "final" ? { status: "SUBMITTED", recommendedAt: { not: null } }
+    : mode === "auto" ? AUTO_TO_CHECK
+    : {};
   const search: Prisma.KycSubmissionWhereInput = q
     ? { OR: [{ fullName: { contains: q, mode: "insensitive" } }, { user: { email: { contains: q, mode: "insensitive" } } }, { panMasked: { contains: q.toUpperCase() } }] }
     : {};
   const subs = await prisma.kycSubmission.findMany({
-    where: { ...(mode === "kyc" ? { status: "SUBMITTED" as const } : mode === "auto" ? AUTO_TO_CHECK : {}), ...search },
+    where: { ...modeWhere, ...search, ...ownedScope(v) },
     orderBy: sort === "name" ? [{ fullName: "asc" }, { submittedAt: "asc" }] : { submittedAt: sort === "new" ? "desc" : "asc" },
     include: { user: true },
     take: 200,
@@ -84,6 +94,7 @@ async function KycQueue({ mode, q, sort }: { mode: "kyc" | "auto" | "history"; q
                 <span className="inline-flex shrink-0 items-center gap-1.5">
                   <StatusPill status={s.status} />
                   {s.autoApproved && <span className="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">{s.postReviewedAt ? "Auto · checked" : "Auto"}</span>}
+                  {s.recommendedAt && s.status === "SUBMITTED" && <span className="rounded bg-violet-100 px-1.5 text-[11px] font-semibold text-violet-800">Admin approved</span>}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
@@ -108,6 +119,7 @@ async function KycQueue({ mode, q, sort }: { mode: "kyc" | "auto" | "history"; q
                   <span className="inline-flex items-center gap-1.5">
                     <StatusPill status={s.status} />
                     {s.autoApproved && <span className="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">{s.postReviewedAt ? "Auto · checked" : "Auto"}</span>}
+                    {s.recommendedAt && s.status === "SUBMITTED" && <span className="rounded bg-violet-100 px-1.5 text-[11px] font-semibold text-violet-800">Admin approved</span>}
                   </span>
                 </td>
               </tr>
@@ -119,7 +131,7 @@ async function KycQueue({ mode, q, sort }: { mode: "kyc" | "auto" | "history"; q
   );
 }
 
-async function PayoutQueue({ q, sort }: { q?: string; sort: Sort }) {
+async function PayoutQueue({ v, q, sort }: { v: Viewer; q?: string; sort: Sort }) {
   // Account numbers are encrypted, so they're matched on the last 4 digits.
   const search: Prisma.PayoutMethodWhereInput = q
     ? {
@@ -133,7 +145,7 @@ async function PayoutQueue({ q, sort }: { q?: string; sort: Sort }) {
       }
     : {};
   const pms = await prisma.payoutMethod.findMany({
-    where: { status: "PENDING", deletedAt: null, ...search },
+    where: { status: "PENDING", deletedAt: null, ...search, ...ownedScope(v) },
     orderBy: sort === "name" ? [{ holderName: "asc" }, { createdAt: "asc" }] : { createdAt: sort === "new" ? "desc" : "asc" },
     include: { user: true },
   });

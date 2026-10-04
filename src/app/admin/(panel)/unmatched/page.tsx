@@ -25,7 +25,8 @@ type Sort = (typeof SORTS)[number]["value"];
 const ORDER_BY: Record<Sort, Prisma.IncomingTransferOrderByWithRelationInput> = { new: { blockTime: "desc" }, old: { blockTime: "asc" }, high: { amount: "desc" }, low: { amount: "asc" } };
 
 export default async function Unmatched({ searchParams }: { searchParams: Promise<{ show?: string; q?: string; sort?: string }> }) {
-  await adminOrLogin();
+  // Unmatched payments and the audit log span every customer: super admin only.
+  await adminOrLogin("SUPER_ADMIN");
   const { show, q: rawQ, sort: sortParam } = await searchParams;
   const q = rawQ?.trim();
   const sort = pickSort(sortParam, SORTS.map((s) => s.value), "new");

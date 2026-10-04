@@ -5,15 +5,21 @@ import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fullPan } from "@/server/kyc";
+import { isSuper, pageUser } from "@/server/scope";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { BackLink, Banner, PageHeader, Row, StatusPill } from "@/components/ui";
 
 export default async function KycDetail({ params }: { params: Promise<{ id: string }> }) {
-  await adminOrLogin();
+  const me = await adminOrLogin();
+  const sup = isSuper(me);
   const { id } = await params;
   const s = await prisma.kycSubmission.findUnique({ where: { id }, include: { user: true, reviewer: true } });
   if (!s) notFound();
+  await pageUser(me, s.userId);
+  const recommender = s.recommendedBy ? await prisma.admin.findUnique({ where: { id: s.recommendedBy }, select: { name: true } }) : null;
+  // An admin who approved their own customer's check waits for a super admin; they can still ask for changes or decline.
+  const waitingSuper = s.status === "SUBMITTED" && !!s.recommendedAt;
   const history = await prisma.kycSubmission.findMany({ where: { userId: s.userId, id: { not: s.id } }, orderBy: { submittedAt: "desc" } });
   const postReviewer = s.postReviewedBy ? await prisma.admin.findUnique({ where: { id: s.postReviewedBy } }) : null;
   const needsCheck = s.status === "APPROVED" && s.autoApproved && !s.postReviewedAt;
@@ -33,6 +39,7 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
           <Row k="User account" v={<Link className="underline" href={`/admin/users/${s.userId}`}>{s.user.status}</Link>} />
           {s.autoApproved && <Row k="Approved" v={`Automatically, ${fmtIST(s.reviewedAt)}`} />}
           {postReviewer && <Row k="Checked by" v={`${postReviewer.name}, ${fmtIST(s.postReviewedAt)}`} />}
+          {recommender && <Row k="Approved by admin" v={`${recommender.name}, ${fmtIST(s.recommendedAt)}`} />}
           {s.reviewer && <Row k="Reviewed by" v={`${s.reviewer.name}, ${fmtIST(s.reviewedAt)}`} />}
           {s.reason && <Row k="Reason" v={s.reason} />}
         </div>
@@ -44,13 +51,18 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
         </div>
       </div>
       {needsCheck && <Banner tone="warn" title="Approved automatically">Nobody has looked at these documents yet. Check them, then confirm, or ask for changes / decline (the user can&apos;t place new orders until fixed).</Banner>}
+      {waitingSuper && (
+        <Banner tone={sup ? "warn" : "info"} title={sup ? "Waiting for your final approval" : "Waiting for a super admin"}>
+          {sup ? `${recommender?.name ?? "An admin"} approved this. Check the documents, then approve to let the customer sell.` : "You approved this. A super admin gives the final approval before the customer can sell."}
+        </Banner>
+      )}
       {(s.status === "SUBMITTED" || needsCheck) && (
         <div className="card">
           <h2 className="h2">{needsCheck ? "Check" : "Decision"}</h2>
           <div className="mt-4 grid gap-4 lg:grid-cols-[auto_1fr] lg:items-start">
             <ApiForm action={`/api/admin/kyc/${s.id}`}>
               <input type="hidden" name="decision" value="APPROVED" />
-              <button className="btn w-full bg-emerald-600 px-6 text-white hover:brightness-110 lg:w-auto">{needsCheck ? "Looks good" : "Approve"}</button>
+              <button disabled={waitingSuper && !sup} className="btn w-full bg-emerald-600 px-6 text-white hover:brightness-110 disabled:opacity-50 lg:w-auto">{needsCheck ? "Looks good" : waitingSuper && sup ? "Final approval" : "Approve"}</button>
             </ApiForm>
             <div className="space-y-3">
               <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-end">

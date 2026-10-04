@@ -3,6 +3,7 @@ import { UserRound } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
+import { userScope } from "@/server/scope";
 import { fmtISTShort } from "@/lib/time";
 import { pickSort } from "@/lib/sort";
 import { ListToolbar } from "@/components/ListToolbar";
@@ -30,6 +31,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   // Super admin: ?admin=<id> shows one admin's customers, ?admin=house those without an admin.
   const byAdmin = sup && adminParam ? (adminParam === "house" ? null : adminParam) : undefined;
   if (byAdmin !== undefined) where.adminId = byAdmin;
+  Object.assign(where, userScope(me)); // an admin sees only their own customers
   const pageNo = Math.max(1, Number(page) || 1);
   const [users, total] = await Promise.all([
     prisma.user.findMany({ where, orderBy: [ORDER_BY[sort], { createdAt: "desc" }], skip: (pageNo - 1) * PER_PAGE, take: PER_PAGE, include: { _count: { select: { orders: true } }, admin: { select: { name: true } } } }),
