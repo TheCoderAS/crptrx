@@ -33,6 +33,9 @@ import * as supportFile from "@/app/api/admin/support/[id]/file/route";
 import * as userRoute from "@/app/api/admin/users/[id]/route";
 import * as receiptRoute from "@/app/api/orders/[id]/receipt/route";
 import * as transferRoute from "@/app/api/admin/transfers/[id]/route";
+import * as rewardRoute from "@/app/api/admin/users/[id]/reward/route";
+import * as settleRoute from "@/app/api/admin/earnings/settle/route";
+import * as voidRoute from "@/app/api/admin/earnings/[id]/void/route";
 
 const SYS = { type: "SYSTEM" as const, id: null };
 
@@ -87,6 +90,7 @@ const calls = (o: { orderId: string; kycId: string; pmId: string; supportId: str
   ["support attachment", () => supportFile.GET(new Request("http://localhost/api/x?format=json"), ctx(o.supportId))],
   ["disable customer", () => userRoute.POST(req("POST", { action: "disable", reason: "peek" }), ctx(o.userId))],
   ["receipt PDF", () => receiptRoute.GET(req("GET"), ctx(o.orderId))],
+  ["customer bonus", () => rewardRoute.POST(req("POST", { rewardPercent: "5" }), ctx(o.userId))],
 ] as const;
 
 describe("an admin can't reach another admin's customers (all answer 404)", () => {
@@ -100,6 +104,7 @@ describe("an admin can't reach another admin's customers (all answer 404)", () =
     expect((await prisma.kycSubmission.findUniqueOrThrow({ where: { id: ids.kycId } })).status).toBe("SUBMITTED");
     expect((await prisma.payoutMethod.findUniqueOrThrow({ where: { id: ids.pmId } })).status).toBe("PENDING");
     expect((await prisma.user.findUniqueOrThrow({ where: { id: ids.userId } })).status).toBe("ACTIVE");
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: ids.userId } })).rewardPercent.toString()).toBe("0");
     expect(await prisma.adminNote.count({ where: { orderId: ids.orderId } })).toBe(0);
   });
 
@@ -127,6 +132,12 @@ describe("an admin can't reach another admin's customers (all answer 404)", () =
     const r = await adminCounts(ravi);
     expect(r.kyc).toBe(1);
     expect(r.payout).toBe(1);
+  });
+
+  it("paying out and cancelling earnings are super admin only", async () => {
+    await signIn(ravi);
+    expect([403, 404]).toContain(((await settleRoute.POST(req("POST", { adminId: ravi.id }))) as Response).status);
+    expect([403, 404]).toContain(((await voidRoute.POST(req("POST", { reason: "trying it" }), ctx("any"))) as Response).status);
   });
 
   it("unmatched payments are super admin only", async () => {

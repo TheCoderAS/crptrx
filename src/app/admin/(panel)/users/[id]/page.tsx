@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { pageUser } from "@/server/scope";
-import { fmtInr, fmtUsdt } from "@/server/money";
+import { D, fmtInr, fmtUsdt } from "@/server/money";
 import { maskedPayout } from "@/server/payouts";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
@@ -31,8 +31,20 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
         {u.lockedUntil && u.lockedUntil > new Date() && <Row k="Password locked until" v={fmtIST(u.lockedUntil)} />}
         <Row k="KYC" v={<StatusPill status={u.kycStatus} />} />
         <Row k="Joined" v={fmtIST(u.createdAt)} />
+        <Row k="Bonus on orders" v={D(u.rewardPercent).gt(0) ? `${D(u.rewardPercent)}% of the order value` : "None"} />
         {sup && <Row k="Admin" v={u.admin ? `${u.admin.name}${u.referredAt ? ` · since ${fmtIST(u.referredAt)}` : ""}` : "None (yours)"} />}
       </div>
+      <ApiForm action={`/api/admin/users/${u.id}/reward`} className="card flex flex-wrap items-end gap-2">
+        <div className="min-w-48 flex-1">
+          <label className="label" htmlFor="reward">Bonus on this customer&apos;s orders</label>
+          <div className="relative">
+            <input id="reward" name="rewardPercent" defaultValue={D(u.rewardPercent).toString()} inputMode="decimal" className="input pr-10" />
+            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400">%</span>
+          </div>
+          <p className="hint">Added to their payout on new orders, paid from {u.adminId ? (sup ? "their admin's" : "your") : "your"} share of the margin and never more than that share. 0 = none.</p>
+        </div>
+        <button className="btn-secondary">Save bonus</button>
+      </ApiForm>
       {sup && (
         <ApiForm action={`/api/admin/users/${u.id}/admin`} className="card flex flex-wrap items-end gap-2" confirm="Move this customer? Orders paid so far stay with the current admin.">
           <div className="min-w-48 flex-1">

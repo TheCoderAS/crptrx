@@ -34,6 +34,7 @@ export default async function Panel({ children }: { children: React.ReactNode })
     { href: "/admin/support", label: "Support", icon: "LifeBuoy", count: support },
     ...(sup ? ([{ href: "/admin/audit", label: "Audit log", icon: "ScrollText" }] as AdminNavItem[]) : []),
     ...(sup ? [] : ([{ href: "/admin/referrals", label: "My invite", icon: "Gift" }] as AdminNavItem[])),
+    { href: "/admin/earnings", label: "Earnings", icon: "HandCoins" },
     ...(sup
       ? ([
           { href: "/admin/reports", label: "Reports", icon: "FileClock" },
