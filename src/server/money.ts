@@ -16,6 +16,9 @@ export interface PayoutInput {
   feePercent: DecimalLike;
   gstEnabled: boolean;
   gstPercent: DecimalLike; // e.g. 18
+  /** Optional flat limits on the fee in rupees. Empty or missing = no limit. */
+  feeMin?: DecimalLike | null;
+  feeMax?: DecimalLike | null;
 }
 
 export interface PayoutBreakdown {
@@ -26,12 +29,29 @@ export interface PayoutBreakdown {
   net: Decimal;
 }
 
+/** A fee limit as a number, or null when it isn't set (empty string, null, undefined). */
+export function feeLimit(v: DecimalLike | null | undefined): Decimal | null {
+  if (v === null || v === undefined) return null;
+  const s = v.toString().trim();
+  return s === "" ? null : D(s);
+}
+
+/** Fee = gross x fee%, raised to the minimum and capped at the maximum when those are set. */
+export function feeFor(gross: Decimal, i: Pick<PayoutInput, "feePercent" | "feeMin" | "feeMax">): Decimal {
+  let fee = rupees(gross.mul(D(i.feePercent)).div(100));
+  const min = feeLimit(i.feeMin);
+  const max = feeLimit(i.feeMax);
+  if (min && fee.lt(min)) fee = rupees(min);
+  if (max && fee.gt(max)) fee = rupees(max);
+  return fee;
+}
+
 /** Spec 7.1. Each step rounds to 2 decimals half-up; net is the exact difference. */
 export function calculatePayout(i: PayoutInput): PayoutBreakdown {
   const hundred = new Decimal(100);
   const gross = rupees(D(i.usdt).mul(D(i.rate)));
   const taxHeld = rupees(gross.mul(D(i.taxPercent)).div(hundred));
-  const fee = rupees(gross.mul(D(i.feePercent)).div(hundred));
+  const fee = feeFor(gross, i);
   const gstOnFee = i.gstEnabled ? rupees(fee.mul(D(i.gstPercent)).div(hundred)) : new Decimal(0);
   const net = gross.minus(taxHeld).minus(fee).minus(gstOnFee);
   return { gross, taxHeld, fee, gstOnFee, net };
@@ -43,10 +63,31 @@ export function calculatePayout(i: PayoutInput): PayoutBreakdown {
  */
 export function usdtForNetRupees(net: DecimalLike, i: Omit<PayoutInput, "usdt">): Decimal {
   const pct = (v: DecimalLike) => D(v).div(100);
-  const feeShare = pct(i.feePercent).mul(i.gstEnabled ? pct(i.gstPercent).plus(1) : 1);
-  const factor = new Decimal(1).minus(pct(i.taxPercent)).minus(feeShare);
+  const gstShare = i.gstEnabled ? pct(i.gstPercent).plus(1) : new Decimal(1);
+  const keep = new Decimal(1).minus(pct(i.taxPercent));
+  const factor = keep.minus(pct(i.feePercent).mul(gstShare));
   if (factor.lte(0)) throw new Error("Fee and tax settings leave nothing to pay out");
-  return D(net).div(D(i.rate).mul(factor)).toDecimalPlaces(2, Decimal.ROUND_DOWN);
+  // First as if the fee were a plain percentage; if that fee falls outside the
+  // minimum or maximum, the fee is that flat amount instead: gross = (net + fee + GST) / (1 - tax%).
+  const gross = D(net).div(factor);
+  const pctFee = gross.mul(pct(i.feePercent));
+  const min = feeLimit(i.feeMin);
+  const max = feeLimit(i.feeMax);
+  const flat = min && pctFee.lt(min) ? min : max && pctFee.gt(max) ? max : null;
+  const target = flat ? D(net).plus(flat.mul(gstShare)).div(keep) : gross;
+  return target.div(D(i.rate)).toDecimalPlaces(2, Decimal.ROUND_DOWN);
+}
+
+/** " (at least ₹10, at most ₹500)" for help text; empty when no limits are set. */
+export function feeRange(min: string, max: string): string {
+  const parts = [feeLimit(min) && `at least ${fmtInr(min)}`, feeLimit(max) && `at most ${fmtInr(max)}`].filter(Boolean);
+  return parts.length ? ` (${parts.join(", ")})` : "";
+}
+
+/** "Platform fee (1%)", or just "Platform fee" when a minimum or maximum decided the amount. */
+export function feeLabel(prefix: string, o: { gross: DecimalLike; fee: DecimalLike; feePercent: DecimalLike }): string {
+  const plain = rupees(D(o.gross).mul(D(o.feePercent)).div(100));
+  return plain.eq(D(o.fee)) ? `${prefix} (${D(o.feePercent).toString()}%)` : prefix;
 }
 
 /** On-chain whole units -> USDT, using that network's decimals. */

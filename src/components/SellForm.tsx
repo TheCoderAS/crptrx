@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ArrowRight, Check, Landmark, Lock } from "lucide-react";
 import { ApiForm } from "./ApiForm";
 import { NETWORK_CODES, NETWORK_INFO, type NetworkCode } from "@/lib/networks";
-import { calculatePayout, fmtInr, usdtForNetRupees } from "@/server/money";
+import { calculatePayout, feeLabel, fmtInr, usdtForNetRupees } from "@/server/money";
 import { NetworkMark } from "./ui";
 
 interface Props {
@@ -13,6 +13,8 @@ interface Props {
   feePercent: string;
   gstEnabled: boolean;
   gstPercent: string;
+  feeMin?: string;
+  feeMax?: string;
   min: string;
   max: string;
   available: Record<NetworkCode, boolean>;
@@ -35,7 +37,7 @@ export function SellForm(p: Props) {
   const [amountType, setAmountType] = useState<"USDT" | "INR">("USDT");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState(p.methods.find((m) => m.isDefault)?.id ?? p.methods[0]?.id);
-  const cfg = { rate: p.rate, taxPercent: p.taxPercent, feePercent: p.feePercent, gstEnabled: p.gstEnabled, gstPercent: p.gstPercent };
+  const cfg = { rate: p.rate, taxPercent: p.taxPercent, feePercent: p.feePercent, gstEnabled: p.gstEnabled, gstPercent: p.gstPercent, feeMin: p.feeMin, feeMax: p.feeMax };
   const estimate = useMemo(() => {
     if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) return null;
     try {
@@ -137,10 +139,10 @@ export function SellForm(p: Props) {
           {Number(p.taxPercent) > 0 && (
             <div className="flex justify-between"><dt className="text-slate-500">Tax held back ({p.taxPercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.taxHeld)}` : "—"}</dd></div>
           )}
-          {Number(p.feePercent) > 0 && (
-            <div className="flex justify-between"><dt className="text-slate-500">Platform fee ({p.feePercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.fee)}` : "—"}</dd></div>
+          {(estimate ? estimate.fee.gt(0) : Number(p.feePercent) > 0 || !!p.feeMin) && (
+            <div className="flex justify-between"><dt className="text-slate-500">{estimate ? feeLabel("Platform fee", { ...estimate, feePercent: p.feePercent }) : `Platform fee (${p.feePercent}%)`}</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.fee)}` : "—"}</dd></div>
           )}
-          {p.gstEnabled && Number(p.gstPercent) > 0 && Number(p.feePercent) > 0 && (
+          {p.gstEnabled && Number(p.gstPercent) > 0 && (estimate ? estimate.fee.gt(0) : Number(p.feePercent) > 0 || !!p.feeMin) && (
             <div className="flex justify-between"><dt className="text-slate-500">GST on fee ({p.gstPercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.gstOnFee)}` : "—"}</dd></div>
           )}
         </dl>

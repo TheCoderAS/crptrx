@@ -6,6 +6,7 @@ import { JsonLd } from "@/components/JsonLd";
 import { ContactLinks } from "@/components/ContactLinks";
 import { contactChannels } from "@/server/contact";
 import { NetworkBadge } from "@/components/ui";
+import { feeRange } from "@/server/money";
 
 export const metadata: Metadata = {
   title: "Help & FAQ: networks, timing, fees and tax",
@@ -28,7 +29,7 @@ export default async function Help() {
     { icon: PauseCircle, tile: "tile-rose", q: "I sent USDT on Ethereum or another network by mistake", a: "BNB Smart Chain addresses look exactly like Ethereum, Polygon and Arbitrum addresses, but those networks are different and we can't see payments on them. Contact support right away with your transaction ID. Recovery is manual and not guaranteed." },
     { icon: Wallet, tile: "tile-violet", q: "How do you know the payment is mine?", a: "We match it by the exact amount and the wallet it came from. Paying with the wallet button on your order, or adding your wallet under Account, gets it matched fastest. From an exchange, make sure the amount that arrives is exact, since some exchanges deduct their fee." },
     { icon: Clock3, tile: "tile-emerald", q: "How long does it take?", a: `The blockchain confirms your payment in minutes. Our team then does a safety check (${s.business_hours_text}), usually within ${s.review_hours} business hours, and pays you by bank transfer or UPI.` },
-    { icon: Percent, tile: "tile-amber", q: "What are the fees and tax?", a: `${s.tax_percent}% of the gross amount is held back as TDS, as the law requires, and reported against your PAN. The platform fee is ${s.fee_percent}%${s.gst_enabled ? ` plus ${s.gst_percent}% GST on the fee` : ""}. Your quote shows every amount before you send.` },
+    { icon: Percent, tile: "tile-amber", q: "What are the fees and tax?", a: `${s.tax_percent}% of the gross amount is held back as TDS, as the law requires, and reported against your PAN. The platform fee is ${s.fee_percent}%${feeRange(s.fee_min_inr, s.fee_max_inr)}${s.gst_enabled ? ` plus ${s.gst_percent}% GST on the fee` : ""}. Your quote shows every amount before you send.` },
     { icon: TimerReset, tile: "tile-slate", q: "What if my quote expires?", a: "If we don't receive your payment within 15 minutes, the quote expires and nothing is charged. If you already sent it, we'll still find it and contact you to re-confirm the rate." },
     { icon: PauseCircle, tile: "tile-amber", q: "What does 'On hold' mean?", a: "We need to check something before paying, for example the amount didn't match or the payment was late. The order page shows the reason. Your money is not lost." },
     { icon: UserCheck, tile: "tile-blue", q: "Can I be paid to someone else's account?", a: "No. Payouts go only to bank accounts or UPI IDs in your own name, matching your identity check." },

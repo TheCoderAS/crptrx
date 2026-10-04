@@ -99,7 +99,7 @@ export default async function Home() {
           </div>
           <div className="relative mx-auto w-full max-w-md">
             <FloatingChips />
-            <RateCalculator rate={s.rate} taxPercent={s.tax_percent} feePercent={s.fee_percent} gstEnabled={s.gst_enabled} gstPercent={s.gst_percent} stale={stale} live={s.rate_mode === "AUTO"} />
+            <RateCalculator rate={s.rate} taxPercent={s.tax_percent} feePercent={s.fee_percent} gstEnabled={s.gst_enabled} gstPercent={s.gst_percent} feeMin={s.fee_min_inr} feeMax={s.fee_max_inr} stale={stale} live={s.rate_mode === "AUTO"} />
           </div>
         </div>
       </section>

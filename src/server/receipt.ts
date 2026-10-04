@@ -4,7 +4,7 @@ import { explorerTxUrl, NETWORK_INFO, type Mode, type NetworkCode } from "@/lib/
 import { fmtIST } from "@/lib/time";
 import { prisma } from "./db";
 import { AppError } from "./errors";
-import { D, fmtUsdt } from "./money";
+import { D, feeLabel, fmtUsdt } from "./money";
 import { maskedPayout, type PayoutSnapshot } from "./payouts";
 import { getLogo } from "./brand";
 import { companyName } from "./contact";
@@ -175,7 +175,7 @@ export async function buildReceipt(orderId: string, userId?: string): Promise<Ui
   const rowsBreak: [string, string][] = [
     [`${fmtUsdt(o.receivedAmount ?? o.usdtAmount)} USDT × ${inr(o.rate)}`, inr(o.gross)],
     ...(D(o.taxHeld).gt(0) ? ([[`Tax held back (${D(o.taxPercent).toString()}%)`, `– ${inr(o.taxHeld)}`]] as [string, string][]) : []),
-    ...(D(o.fee).gt(0) ? ([[`Platform fee (${D(o.feePercent).toString()}%)`, `– ${inr(o.fee)}`]] as [string, string][]) : []),
+    ...(D(o.fee).gt(0) ? ([[feeLabel("Platform fee", o), `– ${inr(o.fee)}`]] as [string, string][]) : []),
     ...(D(o.gstOnFee).gt(0) ? ([[`GST on fee (${D(o.gstPercent).toString()}%)`, `– ${inr(o.gstOnFee)}`]] as [string, string][]) : []),
   ];
   for (const [k, v] of rowsBreak) {
