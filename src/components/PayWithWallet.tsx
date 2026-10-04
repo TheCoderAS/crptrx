@@ -24,6 +24,7 @@ const BSC_CHAIN = {
 
 // The wallet is set to our deposit address: the payment would go from us to us.
 const OWN_WALLET = "Your wallet is set to our deposit address, so this would send money to itself. Switch to the account you're paying from, then try again.";
+const WC_STUCK = "Couldn't reach the wallet service. Check your internet and try again, or send the payment yourself using the details below.";
 
 /**
  * One-click payment. Uses the wallet in the browser (MetaMask, TronLink) when
@@ -107,8 +108,23 @@ export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mod
     const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
     const chain = BSC_CHAIN[p.mode];
     const provider = await EthereumProvider.init({ projectId: p.wcProjectId!, chains: [chain.id], rpcMap: { [chain.id]: chain.rpcUrls[0] }, showQrModal: true, metadata: metadata() });
+    // The wallet picker can only offer "Open" once WalletConnect's servers hand out a link. If they
+    // never do (no connection, or this website isn't allowed in the WalletConnect project), stop
+    // after 20 s with a clear message instead of a spinner that never ends.
+    let gotLink = false;
+    provider.on("display_uri", () => {
+      gotLink = true;
+    });
+    const stuck = new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        if (gotLink) return;
+        (provider as unknown as { modal?: { closeModal?: () => void } }).modal?.closeModal?.();
+        console.warn(`[wallet] WalletConnect gave no link within 20 s (website ${window.location.origin})`);
+        reject(new Error(WC_STUCK));
+      }, 20_000),
+    );
     try {
-      await provider.connect();
+      await Promise.race([provider.connect(), stuck]);
       // The wallet joined on the chain we asked for, so no network switch is needed.
       return await payBsc(provider as unknown as Eip1193, false);
     } finally {
