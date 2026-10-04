@@ -41,7 +41,7 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
     ? (
         await prisma.$queryRaw<{ orders: number; fee: string | null; margin: string | null; admin_share: string | null; rewards: string | null; admin_rewards: string | null }[]>`
           SELECT count(*)::int AS orders,
-                 sum(fee + "gstOnFee")::text AS fee,
+                 sum(fee)::text AS fee,
                  sum(greatest(coalesce(margin, 0), 0))::text AS margin,
                  sum(coalesce("adminShare", 0))::text AS admin_share,
                  sum(reward)::text AS rewards,
@@ -80,13 +80,13 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
         <div>
           <p className="eyebrow mb-3">This month (paid orders, IST)</p>
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            <Stat label="Platform fee + GST (yours)" value={fmtInr(m.fee)} icon={<Coins className="size-5" />} tile="tile-blue" />
+            <Stat label="Platform fee (yours)" value={fmtInr(m.fee)} icon={<Coins className="size-5" />} tile="tile-blue" />
             <Stat label="Margin" value={fmtInr(m.margin)} icon={<Coins className="size-5" />} tile="tile-violet" />
             <Stat label="Admins' share" value={fmtInr(m.adminShare)} icon={<HandCoins className="size-5" />} tile="tile-amber" />
             <Stat label="Margin you keep" value={fmtInr(m.margin.minus(m.adminShare).minus(m.houseRewards))} icon={<Wallet className="size-5" />} tile="tile-emerald" />
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            Bonuses paid to customers: {fmtInr(m.rewards)} ({fmtInr(m.rewards.minus(m.houseRewards))} from admins&apos; shares, {fmtInr(m.houseRewards)} from yours). Orders without a market price have no margin.
+            Bonuses paid to customers: {fmtInr(m.rewards)} ({fmtInr(m.rewards.minus(m.houseRewards))} from admins&apos; shares, {fmtInr(m.houseRewards)} from yours). Orders without a market price have no margin. GST on the fee is owed to the government, so it isn&apos;t counted here.
           </p>
         </div>
       )}
