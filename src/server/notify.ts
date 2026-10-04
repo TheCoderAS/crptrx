@@ -131,13 +131,14 @@ export async function notifyMatchEvents(events: MatchEvent[]) {
     try {
       await notifyOrder(e.orderId, e.kind === "CONFIRMED" ? "PAYMENT_DETECTED" : "ON_HOLD");
       // Support: a paid-in order is waiting for review (or was held and needs a look).
+      const o = await prisma.order.findUnique({ where: { id: e.orderId }, select: { userId: true } });
       void pushToAdmins({
         title: e.kind === "CONFIRMED" ? "Payment received: review" : "Payment held: check",
         body: `Order ${e.orderId}`,
         link: `/admin/orders/${e.orderId}`,
         tag: `admin-order-${e.orderId}`,
         data: { type: "order_waiting", orderId: e.orderId },
-      });
+      }, { forUser: o?.userId });
     } catch (err) {
       console.error("notify failed", err);
     }

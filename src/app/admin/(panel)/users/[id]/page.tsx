@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
+import { pageUser } from "@/server/scope";
 import { fmtInr, fmtUsdt } from "@/server/money";
 import { maskedPayout } from "@/server/payouts";
 import { fmtIST } from "@/lib/time";
@@ -16,6 +17,7 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const u = await prisma.user.findUnique({ where: { id }, include: { admin: { select: { id: true, name: true } }, kycSubmissions: { orderBy: { submittedAt: "desc" } }, payoutMethods: true, wallets: { orderBy: { createdAt: "asc" } }, orders: { orderBy: { createdAt: "desc" }, take: 50 } } });
   if (!u) notFound();
+  await pageUser(me, u.id);
   const admins = sup ? await prisma.admin.findMany({ where: { role: "ADMIN", status: "ACTIVE" }, select: { id: true, name: true, inviteCode: true }, orderBy: { name: "asc" } }) : [];
   return (
     <div className="space-y-4">

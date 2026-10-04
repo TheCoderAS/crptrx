@@ -1,5 +1,6 @@
 import { api, body } from "@/server/http";
 import { adminCtx } from "@/server/auth/guard";
+import { assertUser } from "@/server/scope";
 import { audit } from "@/server/audit";
 import { prisma } from "@/server/db";
 import { AppError } from "@/server/errors";
@@ -9,6 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export const POST = api(async (req: Request, ctx: Ctx) => {
   const a = await adminCtx();
   const { id } = await ctx.params;
+  await assertUser(a.admin, id);
   const b = await body<{ action: string; reason?: string }>(req);
   if (b.action !== "disable" && b.action !== "enable") throw new AppError("Unknown action");
   if (!b.reason?.trim()) throw new AppError("A reason is required.");

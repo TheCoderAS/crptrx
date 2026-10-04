@@ -3,6 +3,7 @@ import { LifeBuoy, Paperclip } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
+import { ownedScope } from "@/server/scope";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
 import { DocPreview } from "@/components/DocPreview";
@@ -19,12 +20,13 @@ const VIEWS = [
 ] as const;
 
 export default async function Support({ searchParams }: { searchParams: Promise<{ view?: string; q?: string }> }) {
-  await adminOrLogin();
+  const me = await adminOrLogin();
+  const mine = ownedScope(me);
   const { view: rawView, q: rawQ } = await searchParams;
   const q = rawQ?.trim();
   const view = rawView === "other" ? "other" : VIEWS.find((v) => v.id === rawView)?.id ?? "us";
-  const threadSearch: Prisma.SupportThreadWhereInput = q ? { OR: [{ orderId: { contains: q, mode: "insensitive" } }, { user: { email: { contains: q, mode: "insensitive" } } }] } : {};
-  const otherWhere: Prisma.SupportMessageWhereInput = { orderId: null, ...(q ? { OR: [{ message: { contains: q, mode: "insensitive" } }, { user: { email: { contains: q, mode: "insensitive" } } }] } : {}) };
+  const threadSearch: Prisma.SupportThreadWhereInput = { ...mine, ...(q ? { OR: [{ orderId: { contains: q, mode: "insensitive" } }, { user: { email: { contains: q, mode: "insensitive" } } }] } : {}) };
+  const otherWhere: Prisma.SupportMessageWhereInput = { orderId: null, ...mine, ...(q ? { OR: [{ message: { contains: q, mode: "insensitive" } }, { user: { email: { contains: q, mode: "insensitive" } } }] } : {}) };
 
   const [counts, otherCount] = await Promise.all([
     Promise.all(VIEWS.map((v) => prisma.supportThread.count({ where: { ...v.where, ...threadSearch } }))),

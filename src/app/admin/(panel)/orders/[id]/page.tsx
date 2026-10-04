@@ -12,6 +12,7 @@ import { D, feeLabel, fmtInr, fmtUsdt } from "@/server/money";
 import { fullAccountNumber, type PayoutSnapshot } from "@/server/payouts";
 import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
 import { getSettings } from "@/server/settings";
+import { isSuper, pageUser } from "@/server/scope";
 import { explorerAddressUrl, explorerTxUrl, NETWORK_INFO, type Mode, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
@@ -23,13 +24,15 @@ import { AdminOrderChat } from "@/components/chat/AdminOrderChat";
 import { BackLink, NetworkBadge, Row, StatusPill, Timeline } from "@/components/ui";
 
 export default async function AdminOrder({ params }: { params: Promise<{ id: string }> }) {
-  await adminOrLogin();
+  const me = await adminOrLogin();
+  const sup = isSuper(me);
   const { id } = await params;
   const o = await prisma.order.findUnique({
     where: { id },
     include: { user: true, events: { orderBy: { createdAt: "asc" } }, notes: { include: { admin: true }, orderBy: { createdAt: "asc" } }, transfers: true, supportThread: true },
   });
   if (!o) notFound();
+  await pageUser(me, o.userId);
   const [s, kyc, admins, senderKnown] = await Promise.all([
     getSettings(),
     prisma.kycSubmission.findFirst({ where: { userId: o.userId }, orderBy: { submittedAt: "desc" } }),
@@ -236,7 +239,14 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
               </>
             )}
 
-            {o.status === "APPROVED" && (
+            {o.status === "APPROVED" && !sup && (
+              <NextStep icon={<Clock className="size-5" />} tile="tile-violet" title="Waiting for a super admin to pay">
+                Approved. A super admin sends {fmtInr(o.net)} and records it; the customer is told then.
+                <span className="mt-2 block">{holdButton("Problem? Put on hold", "text-sm font-medium text-amber-800 hover:underline")}</span>
+              </NextStep>
+            )}
+
+            {o.status === "APPROVED" && sup && (
               <>
                 <NextStep icon={<CheckCircle2 className="size-5" />} tile="tile-emerald" title={`Pay ${fmtInr(o.net)}, then record it`}>
                   Send it from the company bank account to the details below, then record it here.

@@ -132,6 +132,9 @@ model KycSubmission {
   autoApproved    Boolean   @default(false) // approved instantly by the kyc_auto_approve setting
   postReviewedAt  DateTime? // when an admin looked at an auto-approved submission
   postReviewedBy  String?
+  // An admin approved their own customer; a super admin gives the final approval.
+  recommendedBy   String?
+  recommendedAt   DateTime?
   status          KycStatus
   reviewerId      String?
   reason          String?

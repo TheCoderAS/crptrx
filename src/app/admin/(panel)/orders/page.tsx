@@ -4,6 +4,7 @@ import type { OrderStatus, Prisma } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { fmtInr, fmtUsdt } from "@/server/money";
+import { isSuper, ownedScope } from "@/server/scope";
 import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
 import { fmtISTShort } from "@/lib/time";
 import { pickSort } from "@/lib/sort";
@@ -26,17 +27,19 @@ type Sort = (typeof SORTS)[number]["value"];
 const ORDER_BY: Record<Sort, Prisma.OrderOrderByWithRelationInput> = { new: { createdAt: "desc" }, old: { createdAt: "asc" }, high: { usdtAmount: "desc" }, low: { usdtAmount: "asc" } };
 
 export default async function AdminOrders({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; page?: string; sort?: string }> }) {
-  await adminOrLogin();
+  const me = await adminOrLogin();
   const { status, q, page, sort: sortParam } = await searchParams;
+  // Approved orders wait for a super admin to pay, so they aren't in an admin's "needs action" list.
+  const work = isSuper(me) ? WORK : WORK.filter((s) => s !== "APPROVED");
   const all = Object.keys(ALLOWED_NEXT) as OrderStatus[];
   const searching = !!q?.trim();
   // Default: every order. A search also looks through every order.
-  const chosen = searching ? all : all.includes(status as OrderStatus) ? [status as OrderStatus] : status === "WORK" ? WORK : status === "ACTIVE" ? ACTIVE : all;
+  const chosen = searching ? all : all.includes(status as OrderStatus) ? [status as OrderStatus] : status === "WORK" ? work : status === "ACTIVE" ? ACTIVE : all;
   const active = status === "ACTIVE" && !searching;
   const queue = status === "WORK" && !searching; // the "needs action" queue is oldest first; every other list newest first
   const defaultSort: Sort = queue ? "old" : "new";
   const sort = pickSort(sortParam, SORTS.map((s) => s.value), defaultSort);
-  const where = { status: { in: chosen }, ...(q ? { OR: [{ id: { contains: q.trim(), mode: "insensitive" as const } }, { txid: q.trim().toLowerCase() }, { submittedTxid: q.trim().toLowerCase() }, { utr: q.trim().toUpperCase() }, { user: { email: { contains: q.trim(), mode: "insensitive" as const } } }] } : {}) };
+  const where = { status: { in: chosen }, ...ownedScope(me), ...(q ? { OR: [{ id: { contains: q.trim(), mode: "insensitive" as const } }, { txid: q.trim().toLowerCase() }, { submittedTxid: q.trim().toLowerCase() }, { utr: q.trim().toUpperCase() }, { user: { email: { contains: q.trim(), mode: "insensitive" as const } } }] } : {}) };
   const pageNo = Math.max(1, Number(page) || 1);
   const [orders, total] = await Promise.all([
     prisma.order.findMany({ where, orderBy: [ORDER_BY[sort], { createdAt: "asc" }], include: { user: true }, skip: (pageNo - 1) * PER_PAGE, take: PER_PAGE }),

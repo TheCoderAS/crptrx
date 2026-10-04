@@ -1,4 +1,5 @@
 import { adminCounts, type AdminCounts } from "./adminCounts";
+import type { Viewer } from "./scope";
 import { prisma } from "./db";
 
 // "Has anything changed?" checks for the browser (src/components/LivePulse.tsx).
@@ -8,9 +9,9 @@ type Row = Record<string, string | number | Date | null>;
 const signature = (r: Row) => Object.values(r).map((v) => (v instanceof Date ? v.getTime() : String(v))).join("|");
 
 /** Admin: the waiting counts plus the newest change to orders, reviews and payments. */
-export async function adminPulse(): Promise<{ sig: string; counts: AdminCounts }> {
+export async function adminPulse(v: Viewer): Promise<{ sig: string; counts: AdminCounts }> {
   const [counts, [r]] = await Promise.all([
-    adminCounts(),
+    adminCounts(v),
     prisma.$queryRaw<Row[]>`
       SELECT
         (SELECT max("updatedAt") FROM orders) AS orders,

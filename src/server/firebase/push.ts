@@ -77,10 +77,16 @@ export async function pushToUser(userId: string, note: PushNote): Promise<{ sent
 }
 
 /** Send to every active admin's devices (or only super admins'). Never throws. */
-export async function pushToAdmins(note: PushNote, opts: { superOnly?: boolean } = {}): Promise<{ sent: number; removed: number }> {
+/**
+ * `forUser`: about this customer, so only super admins and the customer's own admin get it.
+ * `superOnly`: super admins only.
+ */
+export async function pushToAdmins(note: PushNote, opts: { superOnly?: boolean; forUser?: string } = {}): Promise<{ sent: number; removed: number }> {
   if (!firebaseApp()) return { sent: 0, removed: 0 };
   try {
-    const devices = await prisma.adminPushDevice.findMany({ where: { admin: { status: "ACTIVE", ...(opts.superOnly ? { role: "SUPER_ADMIN" } : {}) } }, select: { token: true } });
+    const owner = opts.forUser ? (await prisma.user.findUnique({ where: { id: opts.forUser }, select: { adminId: true } }))?.adminId : null;
+    const who = opts.superOnly ? { role: "SUPER_ADMIN" as const } : opts.forUser ? { OR: [{ role: "SUPER_ADMIN" as const }, ...(owner ? [{ id: owner }] : [])] } : {};
+    const devices = await prisma.adminPushDevice.findMany({ where: { admin: { status: "ACTIVE", ...who } }, select: { token: true } });
     return await send(devices.map((d) => d.token), note, (dead) => prisma.adminPushDevice.deleteMany({ where: { token: { in: dead } } }));
   } catch (e) {
     logFirebaseError("admin push", e);

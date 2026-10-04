@@ -43,14 +43,21 @@ describe("push alongside email", () => {
     expect(text).not.toContain("9012"); // account number ending
   });
 
-  it("a confirmed payment tells admins it's waiting for review", async () => {
-    const { order } = await makeOrder("TRON", "100");
+  it("a confirmed payment tells the customer's admin and super admins, not other admins", async () => {
+    const { order, user } = await makeOrder("TRON", "100");
     const a = await admin("ADMIN", "support");
+    const other = await admin("ADMIN", "other");
+    const sup = await admin("SUPER_ADMIN", "boss");
+    await prisma.user.update({ where: { id: user.id }, data: { adminId: a.id } });
     await registerAdminPushDevice(a.id, "admin-laptop-token-bbbbbbbbbbbbb", "WEB");
+    await registerAdminPushDevice(other.id, "other-laptop-token-eeeeeeeeeeeee", "WEB");
+    await registerAdminPushDevice(sup.id, "boss-laptop-token-fffffffffffffff", "WEB");
     await notifyMatchEvents([{ kind: "CONFIRMED", orderId: order.id }]);
     await settle();
     const toAdmins = fb.sends.find((m) => m.tokens.includes("admin-laptop-token-bbbbbbbbbbbbb"));
     expect(toAdmins?.data).toMatchObject({ type: "order_waiting", orderId: order.id, link: `/admin/orders/${order.id}` });
+    expect(toAdmins?.tokens).toContain("boss-laptop-token-fffffffffffffff");
+    expect(fb.sends.some((m) => m.tokens.includes("other-laptop-token-eeeeeeeeeeeee"))).toBe(false);
   });
 
   it("super-admin alerts reach only super admins; all-admin alerts reach everyone", async () => {
