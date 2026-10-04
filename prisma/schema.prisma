@@ -95,8 +95,13 @@ model User {
   lockedUntil      DateTime?
   status           UserStatus @default(ACTIVE)
   kycStatus        KycStatus  @default(NOT_STARTED)
+  // The admin who brought this customer (invite code at sign-up). Null = house (super admin only).
+  adminId          String?
+  referredAt       DateTime?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
+
+  admin Admin? @relation("AdminCustomers", fields: [adminId], references: [id])
 
   kycSubmissions  KycSubmission[]
   payoutMethods   PayoutMethod[]
@@ -107,6 +112,7 @@ model User {
   wallets         UserWallet[]
   emailTokens     EmailToken[]
 
+  @@index([adminId])
   @@map("users")
 }
 
@@ -435,9 +441,14 @@ model Admin {
   failedLogins        Int         @default(0)
   lockedUntil         DateTime?
   lastTotpStep        Int? // replay protection
+  // Referrals (ADMIN role only): customers who sign up with this code belong to this admin,
+  // who earns profitPercent of the rate margin on their paid orders.
+  inviteCode          String?     @unique
+  profitPercent       Decimal     @default(0) @db.Decimal(7, 4)
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
+  customers     User[]            @relation("AdminCustomers")
   kycReviews    KycSubmission[]
   payoutReviews PayoutMethod[]
   notes         AdminNote[]

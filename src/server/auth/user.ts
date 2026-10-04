@@ -6,16 +6,19 @@ import { env } from "../env";
 import { AppError } from "../errors";
 import { sendSms } from "../notify";
 import { rateLimit } from "../ratelimit";
+import { resolveInvite } from "../referral";
 import type { FirebaseIdentity } from "./firebase";
 
 /** Find or create the user for a verified Google identity. */
-export async function upsertUserFromIdentity(id: FirebaseIdentity, ip: string | null) {
+export async function upsertUserFromIdentity(id: FirebaseIdentity, ip: string | null, invite?: { code?: unknown; soft?: boolean }) {
   if (!id.emailVerified) throw new AppError("Please use a Google account with a verified email address.", 403);
   let user = await prisma.user.findFirst({ where: { OR: [{ firebaseUid: id.uid }, { email: id.email }] } });
   if (user && user.firebaseUid && user.firebaseUid !== id.uid) throw new AppError("This email is linked to a different sign-in. Contact support.", 409);
   if (!user) {
-    user = await prisma.user.create({ data: { email: id.email, emailVerified: true, firebaseUid: id.uid, displayName: id.name } });
-    await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: id.provider ?? "google" }, ip });
+    // The invite code counts only for a new account: an existing customer's admin never changes this way.
+    const adminId = await resolveInvite(invite?.code, invite?.soft);
+    user = await prisma.user.create({ data: { email: id.email, emailVerified: true, firebaseUid: id.uid, displayName: id.name, adminId, referredAt: adminId ? new Date() : null } });
+    await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: id.provider ?? "google", adminId }, ip });
   } else if (!user.firebaseUid) {
     // Linking Google to an email account. If that email was never confirmed,
     // whoever set the password didn't prove they own the inbox: drop it.

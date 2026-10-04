@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/ui";
 import { nativeAppVersion } from "@/server/appClient";
 import { AppPromo } from "@/components/AppPromo";
+import { InviteCapture } from "@/components/InviteCapture";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
   const width = user ? "max-w-4xl" : "max-w-5xl";
   return (
     <div className="flex min-h-screen flex-col">
+      {!user && <InviteCapture />}
       {user && <LivePulse url="/api/me/pulse" everyMs={30_000} />}
       {nav && <PushSync />}
       <Suspense fallback={null}><NavProgress /></Suspense>
