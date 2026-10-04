@@ -16,6 +16,7 @@ import { GuestNav } from "@/components/GuestNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/ui";
 import { nativeAppVersion } from "@/server/appClient";
+import { AppPromo } from "@/components/AppPromo";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       </footer>
       )}
       {nav && <MobileTabs ordersDot={ordersDot} />}
+      {!inApp && <AppPromo />}
     </div>
   );
 }
