@@ -170,6 +170,19 @@ jobs:
           fi
           echo "::notice title=Published::$(gh release view "$TAG" --json url --jq .url)"
 
+          # The websites read this small file (a plain download, so no GitHub API rate limit)
+          # to find the newest app: src/server/appRelease.ts.
+          ch=$([ "${{ inputs.flavor }}" = "live" ] && echo live || echo test)
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > "$RUNNER_TEMP/rel.json"
+          jq --arg ch "$ch" --arg name "${{ steps.meta.outputs.apk }}" --arg v "${{ inputs.version_name }}" --argjson code "${{ inputs.version_code }}" \
+            '(.assets[] | select(.name == $name)) as $a | {channel: $ch, versionName: $v, versionCode: $code, url: $a.browser_download_url, size: $a.size, publishedAt: .published_at, pageUrl: .html_url}' \
+            "$RUNNER_TEMP/rel.json" > "latest-$ch.json"
+          cat "latest-$ch.json"
+          gh release view app-latest >/dev/null 2>&1 || gh release create app-latest --prerelease --target "$GITHUB_SHA" --title "App download links (automatic)" \
+            --notes "Used by the websites to find the newest Android app files. Updated by every app build; please don't delete."
+          gh release upload app-latest "latest-$ch.json" --clobber
+          echo "::notice title=Download link updated::latest-$ch.json → ${{ inputs.version_name }}"
+
       - name: Keep only the 5 newest test apps
         if: inputs.tag != '' && inputs.flavor == 'staging'
         env:

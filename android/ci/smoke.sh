@@ -5,7 +5,12 @@ set -uo pipefail
 APK="$1"; PKG="$2"; HOST="$3"; OUT="$4"
 mkdir -p "$OUT"
 note() { echo "::notice title=$1::$2"; }
-fail() { echo "::error title=App smoke test::$1"; }
+# On any failure, show why: the crash report and what Android said about the app.
+explain() {
+  adb logcat -d -b crash 2>/dev/null | grep -vE "^-+ beginning" | head -40 | while IFS= read -r l; do echo "::error title=crash log::$l"; done
+  adb logcat -d 2>/dev/null | grep -E "AndroidRuntime|FATAL|ActivityManager.*(${PKG}|Killing|died)|lowmemorykiller|VisionPay" | tail -40 | while IFS= read -r l; do echo "::notice title=system log::$l"; done
+}
+fail() { echo "::error title=App smoke test::$1"; explain; }
 
 adb wait-for-device
 adb install -r -g "$APK" || { fail "Couldn't install the app on the emulator"; exit 1; }
@@ -39,6 +44,8 @@ if [ -z "$ok" ]; then
   exit 1
 fi
 note "Loaded" "$(grep page-finished "$OUT/app-log.txt" | tail -1 | sed 's/.*page-finished //')"
+if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app stopped after loading the page"; exit 1; fi
+if ! adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG"; then fail "The app isn't on screen after loading the page"; exit 1; fi
 texts=$(grep -o 'text="[^"]\+"' "$OUT/1-start.xml" 2>/dev/null | sed 's/^text="//;s/"$//' | head -25 | paste -sd '|' -)
 note "On screen" "${texts:-<no text found in the screen dump>}"
 # Signed out, the app opens the login page: it must show our page, not an error.
