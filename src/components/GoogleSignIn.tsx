@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { inNativeApp, nativeCall } from "@/lib/nativeApp";
 
 type Config = { apiKey: string; authDomain: string; projectId: string; appId?: string };
 
@@ -14,6 +15,24 @@ export function GoogleSignIn({ config, label = "Continue with Google" }: { confi
   async function signIn() {
     setBusy(true);
     setErr(null);
+    // Inside the Android app Google's web sign-in page is blocked, so the app shows
+    // the phone's own account picker and hands us a Google ID token.
+    if (inNativeApp()) {
+      try {
+        const r = await nativeCall<{ idToken?: string; error?: string }>("googleSignIn");
+        if (!r.idToken) throw new Error(r.error === "cancelled" ? "Sign-in was cancelled." : (r.error ?? "Sign-in failed."));
+        const res = await fetch("/api/auth/google-native", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: r.idToken }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "Sign-in failed.");
+        router.push(data.redirect ?? "/dashboard");
+        router.refresh();
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const { initializeApp, getApps } = await import("firebase/app");
       const { getAuth, GoogleAuthProvider, signInWithPopup, signOut } = await import("firebase/auth");

@@ -10,3 +10,4 @@ coverage
 tests
 Dockerfile
 docker-compose*.yml
+android

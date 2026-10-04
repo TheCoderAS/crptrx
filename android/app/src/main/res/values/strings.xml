@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="offline_title">You\'re offline</string>
+    <string name="offline_body">Check your internet connection and try again.</string>
+    <string name="server_waking">Taking longer than usual. Still connecting…</string>
+    <string name="retry">Try again</string>
+    <string name="no_app_for_link">No app on this phone can open that link.</string>
+    <string name="downloading">Downloading %1$s…</string>
+    <string name="download_failed">Couldn\'t download the file.</string>
+    <string name="choose_file">Choose a file</string>
+    <string name="update_title">Update available</string>
+    <string name="update_body">Version %1$s is ready. Update now to get the latest fixes.</string>
+    <string name="update_now">Update</string>
+    <string name="later">Later</string>
+    <string name="channel_chat">Support replies</string>
+    <string name="channel_chat_desc">Replies from support about your orders</string>
+</resources>

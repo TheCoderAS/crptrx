@@ -22,6 +22,15 @@ export interface PushNote {
 }
 
 /** Push is set up for browsers: the server key plus the web settings. */
+/** The server can send to the Android app (only the service account is needed). */
+export function appPushReady(): boolean {
+  try {
+    return !!firebaseApp();
+  } catch {
+    return false;
+  }
+}
+
 export function webPushReady(): boolean {
   const cfg = env.firebase.webConfig;
   return !!(cfg?.appId && env.firebase.serviceAccount && env.firebase.messagingSenderId && env.firebase.vapidKey);
