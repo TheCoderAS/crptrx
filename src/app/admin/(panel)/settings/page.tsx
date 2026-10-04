@@ -101,6 +101,9 @@ export default async function SettingsPage() {
                     <SettingRow label="Manual rate" htmlFor="rate" hint="Applies to new quotes only. Ignored in Auto mode.">
                       <UnitInput name="rate" value={s.rate} prefix="₹" disabled={auto} />
                     </SettingRow>
+                    <SettingRow label="Market price" htmlFor="rate_market_manual" hint="What you buy USDT at, so each order records your margin. Optional. Ignored in Auto mode.">
+                      <UnitInput name="rate_market_manual" value={s.rate_market_manual} prefix="₹" disabled={auto} />
+                    </SettingRow>
                     <SettingRow label="Manual rate expires after" htmlFor="rate_max_age_hours" hint="Quotes stop if the manual rate isn't saved again within this time.">
                       <UnitInput name="rate_max_age_hours" value={s.rate_max_age_hours} unit="hours" type="number" />
                     </SettingRow>
@@ -136,6 +139,12 @@ export default async function SettingsPage() {
               <SettingsForm>
                 <Group title="Fees and tax" icon={<Percent />} tile="tile-emerald">
                   <SettingRow label="Platform fee" htmlFor="fee_percent"><UnitInput name="fee_percent" value={s.fee_percent} unit="%" /></SettingRow>
+                  <SettingRow label="Minimum fee" htmlFor="fee_min_inr" hint="Flat amount. Leave empty for no minimum.">
+                    <UnitInput name="fee_min_inr" value={s.fee_min_inr} prefix="₹" />
+                  </SettingRow>
+                  <SettingRow label="Maximum fee" htmlFor="fee_max_inr" hint="Flat amount. Leave empty for no maximum.">
+                    <UnitInput name="fee_max_inr" value={s.fee_max_inr} prefix="₹" />
+                  </SettingRow>
                   <SettingRow label="Tax held back (TDS)" htmlFor="tax_percent" hint="Change only after your CA confirms."><UnitInput name="tax_percent" value={s.tax_percent} unit="%" /></SettingRow>
                   <SettingRow label="Charge GST on the fee" htmlFor="gst_enabled"><Switch name="gst_enabled" checked={s.gst_enabled} label="Charge GST on the fee" /></SettingRow>
                   <SettingRow label="GST rate" htmlFor="gst_percent"><UnitInput name="gst_percent" value={s.gst_percent} unit="%" /></SettingRow>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculatePayout, D, fmtInr, fromUnits, toUnits, usdtForNetRupees } from "@/server/money";
+import { calculatePayout, D, feeLabel, fmtInr, fromUnits, toUnits, usdtForNetRupees } from "@/server/money";
 import { NETWORK_INFO } from "@/lib/networks";
 
 describe("payout formula (spec 7.1)", () => {
@@ -42,6 +42,52 @@ describe("payout formula (spec 7.1)", () => {
   });
 });
 
+describe("fee minimum and maximum", () => {
+  const cfg = { rate: "90", taxPercent: "1", feePercent: "1", gstEnabled: true, gstPercent: "18" };
+
+  it("empty limits change nothing", () => {
+    const a = calculatePayout({ usdt: "100", ...cfg });
+    const b = calculatePayout({ usdt: "100", ...cfg, feeMin: "", feeMax: "" });
+    expect(b.fee.toFixed(2)).toBe(a.fee.toFixed(2));
+    expect(b.net.toFixed(2)).toBe(a.net.toFixed(2));
+  });
+
+  it("raises a small fee to the minimum and caps a big one at the maximum", () => {
+    const small = calculatePayout({ usdt: "10", ...cfg, feeMin: "25", feeMax: "500" }); // 1% of ₹900 = ₹9
+    expect(small.fee.toFixed(2)).toBe("25.00");
+    expect(small.gstOnFee.toFixed(2)).toBe("4.50");
+    const big = calculatePayout({ usdt: "1000", ...cfg, feeMin: "25", feeMax: "500" }); // 1% of ₹90,000 = ₹900
+    expect(big.fee.toFixed(2)).toBe("500.00");
+    const mid = calculatePayout({ usdt: "100", ...cfg, feeMin: "25", feeMax: "500" }); // ₹90, in between
+    expect(mid.fee.toFixed(2)).toBe("90.00");
+  });
+
+  it("only a minimum, or only a maximum, works on its own", () => {
+    expect(calculatePayout({ usdt: "10", ...cfg, feeMin: "25" }).fee.toFixed(2)).toBe("25.00");
+    expect(calculatePayout({ usdt: "1000", ...cfg, feeMax: "100" }).fee.toFixed(2)).toBe("100.00");
+  });
+
+  it("a minimum bigger than the amount leaves nothing to pay", () => {
+    expect(calculatePayout({ usdt: "0.1", ...cfg, feeMin: "25" }).net.lte(0)).toBe(true);
+  });
+
+  it("converts a rupee target back correctly when the minimum or maximum applies", () => {
+    for (const [net, limits] of [["800", { feeMin: "25" }], ["200000", { feeMax: "100" }], ["9000", { feeMin: "25", feeMax: "500" }]] as const) {
+      const all = { ...cfg, ...limits };
+      const u = usdtForNetRupees(net, all);
+      const p = calculatePayout({ usdt: u, ...all });
+      expect(p.net.lte(D(net))).toBe(true);
+      // Within one cent of USDT of the target (₹0.90 at 90, plus rounding).
+      expect(p.net.gt(D(net).minus(2))).toBe(true);
+    }
+  });
+
+  it("labels the fee with its % only when the % decided it", () => {
+    expect(feeLabel("Platform fee", { gross: "9000", fee: "90", feePercent: "1" })).toBe("Platform fee (1%)");
+    expect(feeLabel("Platform fee", { gross: "900", fee: "25", feePercent: "1" })).toBe("Platform fee");
+  });
+});
+
 describe("on-chain unit conversion (spec 8.1)", () => {
   it("100.03 USDT = 100030000 on Tron (6 decimals)", () => {
     expect(toUnits("100.03", NETWORK_INFO.TRON.decimals)).toBe(100030000n);
@@ -68,5 +114,15 @@ describe("rupee display", () => {
   it("uses Indian grouping", () => {
     expect(fmtInr("1234567.8")).toBe("₹12,34,567.80");
     expect(fmtInr("999")).toBe("₹999.00");
+  });
+});
+
+describe("fee limit settings", () => {
+  it("refuses a minimum above the maximum, allows empty", async () => {
+    const { checkFeeLimits } = await import("@/server/settings");
+    expect(() => checkFeeLimits("600", "500")).toThrow(/minimum fee/);
+    expect(() => checkFeeLimits("25", "")).not.toThrow();
+    expect(() => checkFeeLimits("", "")).not.toThrow();
+    expect(() => checkFeeLimits("25", "25")).not.toThrow();
   });
 });

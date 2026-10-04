@@ -5,7 +5,7 @@ import { CheckCircle2, Download, Hourglass, PauseCircle, RefreshCw, ShieldAlert,
 import { userOrLogin } from "@/server/auth/pages";
 import { RECHECKABLE_HOLDS } from "@/server/matching";
 import { prisma } from "@/server/db";
-import { D, fmtInr, fmtUsdt } from "@/server/money";
+import { D, feeLabel, fmtInr, fmtUsdt } from "@/server/money";
 import { userStatusText } from "@/server/orders/messages";
 import { maskedPayout, payoutLast4, type PayoutSnapshot } from "@/server/payouts";
 import { getSettings, tokenContractFor } from "@/server/settings";
@@ -61,7 +61,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <Row k="Rate" v={`${fmtInr(o.rate)} per USDT`} />
         <Row k="Gross" v={fmtInr(o.gross)} />
         {D(o.taxHeld).gt(0) && <Row k={`Tax held back (${D(o.taxPercent).toString()}%)`} v={`− ${fmtInr(o.taxHeld)}`} />}
-        {D(o.fee).gt(0) && <Row k={`Platform fee (${D(o.feePercent).toString()}%)`} v={`− ${fmtInr(o.fee)}`} />}
+        {D(o.fee).gt(0) && <Row k={feeLabel("Platform fee", o)} v={`− ${fmtInr(o.fee)}`} />}
         {D(o.gstOnFee).gt(0) && <Row k={`GST on fee (${D(o.gstPercent).toString()}%)`} v={`− ${fmtInr(o.gstOnFee)}`} />}
         <Row strong k="You receive" v={<span className="text-emerald-700">{fmtInr(o.net)}</span>} />
         <Row k="Paid to" v={maskedPayout(snap)} />

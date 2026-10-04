@@ -8,7 +8,7 @@ import { currentDepositAddresses } from "@/server/deposit";
 import { getAdapter } from "@/server/networks";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
-import { D, fmtInr, fmtUsdt } from "@/server/money";
+import { D, feeLabel, fmtInr, fmtUsdt } from "@/server/money";
 import { fullAccountNumber, type PayoutSnapshot } from "@/server/payouts";
 import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
 import { getSettings } from "@/server/settings";
@@ -325,7 +325,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
               <Row k="Rate" v={fmtInr(o.rate)} />
               <Row k="Gross" v={fmtInr(o.gross)} />
               {D(o.taxHeld).gt(0) && <Row k={`Tax held (${D(o.taxPercent)}%)`} v={`– ${fmtInr(o.taxHeld)}`} />}
-              {D(o.fee).gt(0) && <Row k={`Fee (${D(o.feePercent)}%)`} v={`– ${fmtInr(o.fee)}`} />}
+              {D(o.fee).gt(0) && <Row k={feeLabel("Fee", o)} v={`– ${fmtInr(o.fee)}`} />}
               {D(o.gstOnFee).gt(0) && <Row k={`GST on fee (${D(o.gstPercent)}%)`} v={`– ${fmtInr(o.gstOnFee)}`} />}
               <Row k={<b>Net to pay</b>} v={<b>{fmtInr(o.net)}</b>} />
             </section>

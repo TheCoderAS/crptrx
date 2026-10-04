@@ -186,6 +186,10 @@ model Order {
   gstPercent        Decimal     @db.Decimal(7, 4)
   gstOnFee          Decimal     @db.Decimal(14, 2)
   net               Decimal     @db.Decimal(14, 2)
+  feeMin            Decimal?    @db.Decimal(14, 2) // fee limits in force when quoted; null = none
+  feeMax            Decimal?    @db.Decimal(14, 2)
+  marketRate        Decimal?    @db.Decimal(14, 4) // market price behind the rate; null = unknown
+  margin            Decimal?    @db.Decimal(14, 2) // usdt x (market - rate) in rupees; can be negative
   payoutMethodId    String
   payoutSnapshot    Json
   quoteExpiresAt    DateTime

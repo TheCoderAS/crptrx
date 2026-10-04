@@ -24,6 +24,11 @@ export const SETTING_DEFAULTS = {
   rate_min_sources: 2, // price sources that must agree
   rate_sources: ["coindcx", "wazirx", "coingecko"] as string[],
   fee_percent: "1", // OWNER
+  fee_min_inr: "", // flat lowest fee in rupees; empty = no minimum
+  fee_max_inr: "", // flat highest fee in rupees; empty = no maximum
+  // MANUAL mode: the market price you're buying against, so each order records its margin.
+  // Empty = margin isn't recorded. AUTO mode uses the live market price instead.
+  rate_market_manual: "",
   gst_enabled: true, // OWNER
   gst_percent: "18", // OWNER
   tax_percent: "1", // OWNER + CA
@@ -98,14 +103,20 @@ export type SettingKey = keyof Settings;
  * (React cache); outside rendering (API routes, the watcher, tests) and inside a
  * transaction it always reads fresh.
  */
-export async function getSettings(tx: Tx = prisma): Promise<Settings & { rateUpdatedAt: Date | null }> {
+export async function getSettings(tx: Tx = prisma): Promise<LoadedSettings> {
   return tx === prisma ? structuredClone(await settingsForRender()) : loadSettings(tx);
 }
 const settingsForRender = cache(() => loadSettings(prisma));
 
-async function loadSettings(tx: Tx): Promise<Settings & { rateUpdatedAt: Date | null }> {
+export type LoadedSettings = Settings & {
+  rateUpdatedAt: Date | null;
+  /** Market price behind the current rate (live feed in Auto, typed in Manual), or null if unknown. */
+  marketRate: string | null;
+};
+
+async function loadSettings(tx: Tx): Promise<LoadedSettings> {
   const [rows, feed] = await Promise.all([tx.setting.findMany(), tx.rateFeedState.findUnique({ where: { id: 1 } })]);
-  const out = structuredClone(SETTING_DEFAULTS) as Settings & { rateUpdatedAt: Date | null };
+  const out = structuredClone(SETTING_DEFAULTS) as LoadedSettings;
   out.rateUpdatedAt = null;
   for (const r of rows) {
     if (r.key in SETTING_DEFAULTS) (out as Record<string, unknown>)[r.key] = r.value;
@@ -113,6 +124,7 @@ async function loadSettings(tx: Tx): Promise<Settings & { rateUpdatedAt: Date | 
   }
   // In Auto mode the rate is "fresh" when the live feed last succeeded, even if the value didn't change.
   if (out.rate_mode === "AUTO") out.rateUpdatedAt = feed?.lastOkAt ?? null;
+  out.marketRate = out.rate_mode === "AUTO" ? (feed?.lastMarket?.toString() ?? null) : out.rate_market_manual || null;
   // The deployment decides Live or Test (APP_MODE), not a setting anyone can flip.
   const fixed = (await import("./env")).env.appMode;
   if (fixed) out.network_mode = fixed;
@@ -123,6 +135,9 @@ async function loadSettings(tx: Tx): Promise<Settings & { rateUpdatedAt: Date | 
 export const SETTING_LABELS: Partial<Record<string, string>> = {
   rate: "Rate",
   fee_percent: "Platform fee %",
+  fee_min_inr: "Minimum fee",
+  fee_max_inr: "Maximum fee",
+  rate_market_manual: "Market price",
   gst_percent: "GST %",
   tax_percent: "Tax held back %",
   rate_margin_percent: "Margin %",
@@ -158,6 +173,9 @@ export const EDITABLE_KEYS: SettingKey[] = [
   "rate_min_sources",
   "rate_sources",
   "fee_percent",
+  "fee_min_inr",
+  "fee_max_inr",
+  "rate_market_manual",
   "gst_enabled",
   "gst_percent",
   "tax_percent",
@@ -201,6 +219,16 @@ export const EDITABLE_KEYS: SettingKey[] = [
 ];
 
 function validate(key: SettingKey, value: unknown, current: Settings): unknown {
+  if (key === "fee_min_inr" || key === "fee_max_inr" || key === "rate_market_manual") {
+    const v = String(value ?? "").trim();
+    if (v === "") return ""; // not set
+    const name = SETTING_LABELS[key];
+    const places = key === "rate_market_manual" ? 4 : 2;
+    if (!/^\d+(\.\d+)?$/.test(v)) throw new AppError(`${name}: enter a plain number, e.g. 25, or leave it empty.`);
+    if ((v.split(".")[1]?.length ?? 0) > places) throw new AppError(`${name}: use at most ${places} decimal places.`);
+    if (key === "rate_market_manual" && D(v).lte(0)) throw new AppError("Market price must be above 0, or leave it empty.");
+    return v;
+  }
   const decimalKeys: SettingKey[] = [
     "rate",
     "fee_percent",
@@ -374,6 +402,11 @@ export const isRealValue = (v: string | null | undefined) => !!v && !/^\s*\[.*\]
 /** The official token contract for a network in the current mode (spec 8.1). */
 export function tokenContractFor(s: Settings, n: NetworkCode, mode: Mode = s.network_mode): string {
   return mode === "LIVE" ? NETWORK_INFO[n].mainnetUsdt : s.test_token_contract[n];
+}
+
+/** Refuses a minimum fee above the maximum. Pass the values about to be saved. */
+export function checkFeeLimits(min: string, max: string) {
+  if (min.trim() && max.trim() && D(min.trim()).gt(D(max.trim()))) throw new AppError("The minimum fee can't be more than the maximum fee.");
 }
 
 export function rateIsStale(s: Settings & { rateUpdatedAt: Date | null }, now = new Date()): boolean {

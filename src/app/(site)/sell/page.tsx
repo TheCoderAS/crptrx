@@ -44,6 +44,8 @@ export default async function Sell() {
           feePercent={s.fee_percent}
           gstEnabled={s.gst_enabled}
           gstPercent={s.gst_percent}
+          feeMin={s.fee_min_inr}
+          feeMax={s.fee_max_inr}
           min={s.limit_min_order_usdt}
           max={s.limit_max_order_usdt}
           available={available}

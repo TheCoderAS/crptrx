@@ -5,7 +5,7 @@ import type { Actor } from "../audit";
 import { prisma, type Tx } from "../db";
 import { getActiveDepositAddress } from "../deposit";
 import { AppError } from "../errors";
-import { calculatePayout, D, Decimal, usdtForNetRupees } from "../money";
+import { calculatePayout, D, Decimal, feeLimit, rupees, usdtForNetRupees, type PayoutInput } from "../money";
 import { payoutSnapshot } from "../payouts";
 import { notReadyMessage, onboardingState } from "../onboarding";
 import { getSettings, rateIsStale, tokenContractFor, type Settings } from "../settings";
@@ -67,13 +67,24 @@ export async function assertCanCreateOrders(tx: Tx, userId: string) {
   return user;
 }
 
+/** Today's pricing settings in the shape the payout math takes. */
+export const pricing = (s: Settings): Omit<PayoutInput, "usdt"> => ({
+  rate: s.rate,
+  taxPercent: s.tax_percent,
+  feePercent: s.fee_percent,
+  gstEnabled: s.gst_enabled,
+  gstPercent: s.gst_percent,
+  feeMin: s.fee_min_inr,
+  feeMax: s.fee_max_inr,
+});
+
 /** Validates settings and returns the base USDT amount (2 decimals) for a request. */
 export function baseAmountFor(req: Pick<QuoteRequest, "amountType" | "amount">, s: Settings): Decimal {
   const raw = req.amount.trim();
   if (!/^\d+(\.\d{1,2})?$/.test(raw)) throw new AppError("Enter an amount with up to 2 decimals.");
   const base =
     req.amountType === "INR"
-      ? usdtForNetRupees(raw, { rate: s.rate, taxPercent: s.tax_percent, feePercent: s.fee_percent, gstEnabled: s.gst_enabled, gstPercent: s.gst_percent })
+      ? usdtForNetRupees(raw, pricing(s))
       : D(raw);
   if (base.lte(0)) throw new AppError("Enter an amount above zero.");
   return base;
@@ -108,7 +119,7 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
       const problem = await limitProblem(tx, s, req.userId, amount);
       if (problem) throw new AppError(problem, 422, "LIMIT");
 
-      const p = calculatePayout({ usdt: amount, rate: s.rate, taxPercent: s.tax_percent, feePercent: s.fee_percent, gstEnabled: s.gst_enabled, gstPercent: s.gst_percent });
+      const p = calculatePayout({ usdt: amount, ...pricing(s) });
       if (p.net.lte(0)) throw new AppError("This amount is too small to pay out.");
       const { id, seq } = await nextOrderId(tx, now);
       await tx.order.create({
@@ -131,6 +142,10 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
           gstPercent: s.gst_enabled ? s.gst_percent : "0",
           gstOnFee: p.gstOnFee.toString(),
           net: p.net.toString(),
+          feeMin: feeLimit(s.fee_min_inr)?.toString() ?? null,
+          feeMax: feeLimit(s.fee_max_inr)?.toString() ?? null,
+          marketRate: s.marketRate,
+          margin: s.marketRate ? rupees(amount.mul(D(s.marketRate).minus(D(s.rate)))).toString() : null,
           payoutMethodId: pm.id,
           payoutSnapshot: payoutSnapshot(pm),
           quoteExpiresAt: new Date(now.getTime() + QUOTE_TTL_MS),
