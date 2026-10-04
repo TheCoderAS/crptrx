@@ -7,13 +7,16 @@ import { fmtInr, fmtUsdt } from "@/server/money";
 import { maskedPayout } from "@/server/payouts";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
+import { Select } from "@/components/Select";
 import { BackLink, NetworkBadge, PageHeader, Row, StatusPill } from "@/components/ui";
 
 export default async function UserDetail({ params }: { params: Promise<{ id: string }> }) {
-  await adminOrLogin();
+  const me = await adminOrLogin();
+  const sup = me.role === "SUPER_ADMIN";
   const { id } = await params;
-  const u = await prisma.user.findUnique({ where: { id }, include: { kycSubmissions: { orderBy: { submittedAt: "desc" } }, payoutMethods: true, wallets: { orderBy: { createdAt: "asc" } }, orders: { orderBy: { createdAt: "desc" }, take: 50 } } });
+  const u = await prisma.user.findUnique({ where: { id }, include: { admin: { select: { id: true, name: true } }, kycSubmissions: { orderBy: { submittedAt: "desc" } }, payoutMethods: true, wallets: { orderBy: { createdAt: "asc" } }, orders: { orderBy: { createdAt: "desc" }, take: 50 } } });
   if (!u) notFound();
+  const admins = sup ? await prisma.admin.findMany({ where: { role: "ADMIN", status: "ACTIVE" }, select: { id: true, name: true, inviteCode: true }, orderBy: { name: "asc" } }) : [];
   return (
     <div className="space-y-4">
       <BackLink href="/admin/users">Customers</BackLink>
@@ -26,7 +29,18 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
         {u.lockedUntil && u.lockedUntil > new Date() && <Row k="Password locked until" v={fmtIST(u.lockedUntil)} />}
         <Row k="KYC" v={<StatusPill status={u.kycStatus} />} />
         <Row k="Joined" v={fmtIST(u.createdAt)} />
+        {sup && <Row k="Admin" v={u.admin ? `${u.admin.name}${u.referredAt ? ` · since ${fmtIST(u.referredAt)}` : ""}` : "None (yours)"} />}
       </div>
+      {sup && (
+        <ApiForm action={`/api/admin/users/${u.id}/admin`} className="card flex flex-wrap items-end gap-2" confirm="Move this customer? Orders paid so far stay with the current admin.">
+          <div className="min-w-48 flex-1">
+            <label className="label" htmlFor="move-admin">Move to</label>
+            <Select id="move-admin" name="adminId" defaultValue={u.adminId ?? "house"} options={[{ value: "house", label: "No admin (yours)" }, ...admins.map((x) => ({ value: x.id, label: x.name, hint: x.inviteCode ?? undefined }))]} />
+          </div>
+          <input aria-label="Reason (logged)" name="reason" required minLength={5} className="input flex-1" placeholder="Reason (logged)" />
+          <button className="btn-secondary">Move customer</button>
+        </ApiForm>
+      )}
       <ApiForm action={`/api/admin/users/${u.id}`} className="card flex flex-wrap gap-2" confirm={u.status === "ACTIVE" ? "Disable this account? They won't be able to log in or order." : "Re-enable this account?"}>
         <input type="hidden" name="action" value={u.status === "ACTIVE" ? "disable" : "enable"} />
         <input aria-label="Reason (logged)" name="reason" required className="input flex-1" placeholder="Reason (logged)" />

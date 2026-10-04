@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/server/auth/session";
 import { signInMethods } from "@/server/auth/pages";
-import { GoogleSignIn } from "@/components/GoogleSignIn";
+import { LoginGoogle } from "@/components/LoginGoogle";
 import { ApiForm } from "@/components/ApiForm";
 import { AuthShell, DevLogin, OrDivider } from "@/components/AuthShell";
 import { PasswordInput } from "@/components/PasswordInput";
@@ -31,7 +31,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
       {reset && <Banner tone="ok">Password changed. Log in with your new password.</Banner>}
       {verified && <Banner tone="ok">Email confirmed. Log in to continue.</Banner>}
       {none && <Banner tone="warn">Sign-in is temporarily unavailable. Please try again later.</Banner>}
-      {m.google && <GoogleSignIn config={m.google} />}
+      {m.google && <LoginGoogle config={m.google} />}
       {m.google && m.email && <OrDivider />}
       {m.email && (
         <ApiForm action="/api/auth/login" className="space-y-4">

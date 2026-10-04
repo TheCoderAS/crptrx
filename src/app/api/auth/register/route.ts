@@ -8,8 +8,8 @@ const SAME_ANSWER = { redirect: "/verify-email?sent=1", message: "Check your inb
 
 export const POST = api(async (req: Request) => {
   const ip = await clientIp();
-  const b = await body<{ email: string; password: string }>(req);
-  const user = await registerWithPassword(b.email, b.password, ip);
+  const b = await body<{ email: string; password: string; inviteCode?: string }>(req);
+  const user = await registerWithPassword(b.email, b.password, ip, b.inviteCode);
   const s = await getSettings();
   // With email confirmation on, a new and an already-registered email get the
   // exact same answer (no login yet), so nobody can test which emails exist.

@@ -1,4 +1,4 @@
-import { KeyRound, Plus, ShieldAlert, ShieldCheck, Users } from "lucide-react";
+import { Gift, KeyRound, Plus, ShieldAlert, ShieldCheck, Users } from "lucide-react";
 import { Select } from "@/components/Select";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
@@ -11,7 +11,11 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2)
 
 export default async function Admins() {
   const me = await adminOrLogin("SUPER_ADMIN");
-  const admins = await prisma.admin.findMany({ orderBy: { createdAt: "asc" } });
+  const [admins, counts] = await Promise.all([
+    prisma.admin.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.user.groupBy({ by: ["adminId"], _count: { _all: true } }),
+  ]);
+  const customers = new Map(counts.map((c) => [c.adminId, c._count._all]));
   return (
     <div className="space-y-4">
       <PageHeader
@@ -39,6 +43,20 @@ export default async function Admins() {
               <Select id="admin-role" name="role" options={[{ value: "ADMIN", label: "Admin", hint: "Orders, reviews, customers, support" }, { value: "SUPER_ADMIN", label: "Super admin", hint: "Also settings, reports and admins" }]} />
               <p className="hint">Super admins can also change settings and manage admins.</p>
             </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label" htmlFor="admin-code">Invite code</label>
+                <input id="admin-code" name="inviteCode" className="input font-mono uppercase" maxLength={16} placeholder="Leave empty to make one" />
+              </div>
+              <div>
+                <label className="label" htmlFor="admin-profit">Profit share</label>
+                <div className="relative">
+                  <input id="admin-profit" name="profitPercent" inputMode="decimal" defaultValue="0" className="input pr-10" />
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400">%</span>
+                </div>
+              </div>
+            </div>
+            <p className="hint -mt-2">Admins only. Their share of the rate margin on their customers&apos; paid orders. The platform fee stays with you.</p>
           </ModalForm>
         }
       />
@@ -70,16 +88,37 @@ export default async function Admins() {
                 </div>
                 <div><dt className="text-xs text-slate-500">Added</dt><dd className="font-medium text-slate-900">{dateFmt.format(a.createdAt)}</dd></div>
               </dl>
+              {a.role === "ADMIN" && (
+                <dl className="grid grid-cols-3 gap-3 border-t border-slate-100 px-4 py-3 text-sm">
+                  <div><dt className="text-xs text-slate-500">Invite code</dt><dd className="font-mono font-semibold tracking-wider text-slate-900">{a.inviteCode ?? "—"}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Profit share</dt><dd className="font-medium text-slate-900">{a.profitPercent.toString()}%</dd></div>
+                  <div><dt className="text-xs text-slate-500">Customers</dt><dd className="font-medium text-slate-900"><a href={`/admin/users?admin=${a.id}`} className="hover:underline">{customers.get(a.id) ?? 0}</a></dd></div>
+                </dl>
+              )}
               <div className="mt-auto flex min-h-11 items-center justify-end gap-1 border-t border-slate-100 bg-slate-50/60 px-3 py-1.5">
                 {self ? (
                   <p className="mr-auto px-1 text-xs text-slate-500">This is your account.</p>
                 ) : (
                   <>
+                    {a.role === "ADMIN" && (
+                      <ModalForm
+                        button={<><Gift className="size-3.5" aria-hidden /> Code &amp; share</>}
+                        buttonClassName="btn-ghost min-h-8 px-2.5 py-1 text-xs"
+                        title={`Invite code and share · ${a.name}`}
+                        description="A new code stops the old link from working. A new share applies to orders paid from now on."
+                        action={`/api/admin/admins/${a.id}`}
+                        submitLabel="Save"
+                      >
+                        <input type="hidden" name="action" value="referral" />
+                        <div><label className="label" htmlFor={`code-${a.id}`}>Invite code</label><input id={`code-${a.id}`} name="inviteCode" defaultValue={a.inviteCode ?? ""} required maxLength={16} className="input font-mono uppercase" /></div>
+                        <div><label className="label" htmlFor={`pct-${a.id}`}>Profit share (%)</label><input id={`pct-${a.id}`} name="profitPercent" defaultValue={a.profitPercent.toString()} inputMode="decimal" className="input" /></div>
+                      </ModalForm>
+                    )}
                     <ApiForm action={`/api/admin/admins/${a.id}`} confirm="Reset this admin's 2FA? They'll set it up again at next sign-in.">
                       <input type="hidden" name="action" value="reset_2fa" />
                       <button className="btn-ghost min-h-8 px-2.5 py-1 text-xs"><KeyRound className="size-3.5" aria-hidden /> Reset 2FA</button>
                     </ApiForm>
-                    <ApiForm action={`/api/admin/admins/${a.id}`} confirm={off ? undefined : `Disable ${a.name}? They're signed out right away.`}>
+                    <ApiForm action={`/api/admin/admins/${a.id}`} confirm={off ? undefined : `Disable ${a.name}? They're signed out right away${a.role === "ADMIN" ? ", and their customers move to you (their earnings so far stay)" : ""}.`}>
                       <input type="hidden" name="action" value={off ? "enable" : "disable"} />
                       <button className={`btn-ghost min-h-8 px-2.5 py-1 text-xs ${off ? "text-emerald-700" : "text-rose-600 hover:bg-rose-50 hover:text-rose-700"}`}>{off ? "Enable" : "Disable"}</button>
                     </ApiForm>
