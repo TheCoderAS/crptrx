@@ -103,3 +103,29 @@ describe("finding the newest app file", () => {
     expect(await latestAppRelease("test")).toBeNull();
   });
 });
+
+describe("Android App Links (/.well-known/assetlinks.json)", () => {
+  const load = async () => (await import("@/app/.well-known/assetlinks.json/route")).GET();
+  afterEach(() => {
+    delete process.env.APP_MODE;
+    delete process.env.ANDROID_CERT_SHA256;
+  });
+
+  it("each site vouches only for its own app, with our signing key", async () => {
+    process.env.APP_MODE = "LIVE";
+    const live = await (await load()).json();
+    expect(live.map((x: { target: { package_name: string } }) => x.target.package_name)).toEqual(["com.visionpay.live.app"]);
+    expect(live[0].relation).toEqual(["delegate_permission/common.handle_all_urls"]);
+    expect(live[0].target.sha256_cert_fingerprints[0]).toMatch(/^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
+    process.env.APP_MODE = "TEST";
+    const test = await (await load()).json();
+    expect(test.map((x: { target: { package_name: string } }) => x.target.package_name)).toEqual(["com.visionpay.live.app.test"]);
+  });
+
+  it("a new signing key can be set without a code change", async () => {
+    process.env.APP_MODE = "TEST";
+    process.env.ANDROID_CERT_SHA256 = "aa:bb, CC:DD";
+    const r = await (await load()).json();
+    expect(r[0].target.sha256_cert_fingerprints).toEqual(["AA:BB", "CC:DD"]);
+  });
+});

@@ -63,4 +63,27 @@ adb shell am start -W -n "$PKG/com.visionpay.app.MainActivity" >/dev/null; sleep
 adb exec-out screencap -p > "$OUT/2-reopened.png" 2>/dev/null || true
 if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app crashed when reopened"; exit 1; fi
 if [ -s "$OUT/crash-log.txt" ] && grep -q "$PKG" "$OUT/crash-log.txt"; then fail "Crash logged for the app"; head -30 "$OUT/crash-log.txt"; exit 1; fi
-note "Smoke test" "Installed, opened $HOST, back button and reopen all fine"
+
+# Deep link: a link to the website (e.g. an invite) must open that exact page inside the app.
+adb logcat -c
+adb shell am start -W -a android.intent.action.VIEW -d "https://$HOST/signup?ref=SMOKE1234" "$PKG" >/dev/null
+link=""
+for _ in $(seq 1 45); do
+  link=$(adb logcat -d -s VisionPay:I | grep "page-finished url=https://$HOST/signup?ref=SMOKE1234" | tail -1)
+  [ -n "$link" ] && break
+  sleep 2
+done
+adb exec-out screencap -p > "$OUT/3-deep-link.png" 2>/dev/null || true
+if [ -z "$link" ]; then fail "A link to https://$HOST/signup?ref=… didn't open that page in the app"; exit 1; fi
+note "Deep link" "https://$HOST/signup?ref=… opened inside the app"
+# App Links: Android checks https://$HOST/.well-known/assetlinks.json. Informational only: the site
+# serves it once this code is deployed, so a pull request build can run before that.
+adb shell pm verify-app-links --re-verify "$PKG" >/dev/null 2>&1 || true
+for _ in $(seq 1 10); do
+  state=$(adb shell pm get-app-links "$PKG" 2>/dev/null | grep -E "^\s+$HOST:" | sed 's/^ *//')
+  echo "$state" | grep -q verified && break
+  sleep 3
+done
+if echo "$state" | grep -q ": verified"; then note "App Links" "$state (links open straight in the app)"
+else echo "::warning title=App Links not verified yet::${state:-no state for $HOST}. Links will open in the browser until https://$HOST/.well-known/assetlinks.json lists this app and key."; fi
+note "Smoke test" "Installed, opened $HOST, back button, reopen and deep link all fine"
