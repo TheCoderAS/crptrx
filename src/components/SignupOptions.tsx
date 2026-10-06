@@ -53,15 +53,15 @@ export function SignupOptions({ google, email, minPassword, verificationRequired
           id="inviteCode"
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16))}
-          className="input font-mono tracking-wider uppercase"
+          className="input font-mono tracking-wider uppercase placeholder:font-sans placeholder:tracking-normal placeholder:normal-case"
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}
-          placeholder="If someone gave you one"
+          placeholder="e.g. AB12CD34"
           aria-invalid={check === "bad"}
           aria-describedby="invite-status"
         />
-        <div id="invite-status" aria-live="polite" className="mt-1.5 min-h-5 text-sm">
+        <div id="invite-status" aria-live="polite" className={`text-sm ${check === "ok" || check === "bad" ? "mt-1.5" : ""}`}>
           {check === "ok" && <p className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="size-4" aria-hidden /> Code applied</p>}
           {check === "bad" && (
             <p className="text-rose-700">

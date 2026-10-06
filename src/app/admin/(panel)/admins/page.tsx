@@ -46,7 +46,7 @@ export default async function Admins() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="label" htmlFor="admin-code">Invite code</label>
-                <input id="admin-code" name="inviteCode" className="input font-mono uppercase" maxLength={16} placeholder="Leave empty to make one" />
+                <input id="admin-code" name="inviteCode" className="input font-mono uppercase placeholder:font-sans placeholder:normal-case" maxLength={16} placeholder="Auto" />
               </div>
               <div>
                 <label className="label" htmlFor="admin-profit">Profit share</label>
@@ -56,7 +56,7 @@ export default async function Admins() {
                 </div>
               </div>
             </div>
-            <p className="hint -mt-2">Admins only. Their share of the rate margin on their customers&apos; paid orders. The platform fee stays with you.</p>
+            <p className="hint -mt-2">Admins only. Share = % of the rate margin; the fee stays with you.</p>
           </ModalForm>
         }
       />
@@ -105,7 +105,7 @@ export default async function Admins() {
                         button={<><Gift className="size-3.5" aria-hidden /> Code &amp; share</>}
                         buttonClassName="btn-ghost min-h-8 px-2.5 py-1 text-xs"
                         title={`Invite code and share · ${a.name}`}
-                        description="A new code stops the old link from working. A new share applies to orders paid from now on."
+                        description="A new code ends the old link. A new share applies to new orders."
                         action={`/api/admin/admins/${a.id}`}
                         submitLabel="Save"
                       >

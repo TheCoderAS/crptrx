@@ -22,7 +22,7 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
   return (
     <div className="space-y-4">
       <BackLink href="/admin/users">Customers</BackLink>
-      <PageHeader title={u.email} icon={<UserRound className="size-6" />} />
+      <PageHeader title={<span className="break-all">{u.email}</span>} icon={<UserRound className="size-6" />} />
       <div className="card">
         <Row k="Status" v={<StatusPill status={u.status} />} />
         <Row k="Mobile" v={u.mobile ?? "—"} />
@@ -41,23 +41,23 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
             <input id="reward" name="rewardPercent" defaultValue={D(u.rewardPercent).toString()} inputMode="decimal" className="input pr-10" />
             <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400">%</span>
           </div>
-          <p className="hint">Added to their payout on new orders, paid from {u.adminId ? (sup ? "their admin's" : "your") : "your"} share of the margin and never more than that share. 0 = none.</p>
+          <p className="hint">Paid from {u.adminId ? (sup ? "their admin's" : "your") : "your"} margin share. 0 = none.</p>
         </div>
         <button className="btn-secondary">Save bonus</button>
       </ApiForm>
       {sup && (
-        <ApiForm action={`/api/admin/users/${u.id}/admin`} className="card flex flex-wrap items-end gap-2" confirm="Move this customer? Orders paid so far stay with the current admin.">
-          <div className="min-w-48 flex-1">
+        <ApiForm action={`/api/admin/users/${u.id}/admin`} className="card grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end" confirm="Move this customer? Orders paid so far stay with the current admin.">
+          <div>
             <label className="label" htmlFor="move-admin">Move to</label>
             <Select id="move-admin" name="adminId" defaultValue={u.adminId ?? "house"} options={[{ value: "house", label: "No admin (yours)" }, ...admins.map((x) => ({ value: x.id, label: x.name, hint: x.inviteCode ?? undefined }))]} />
           </div>
-          <input aria-label="Reason (logged)" name="reason" required minLength={5} className="input flex-1" placeholder="Reason (logged)" />
+          <input aria-label="Reason (logged)" name="reason" required minLength={5} className="input" placeholder="Reason" />
           <button className="btn-secondary">Move customer</button>
         </ApiForm>
       )}
       <ApiForm action={`/api/admin/users/${u.id}`} className="card flex flex-wrap gap-2" confirm={u.status === "ACTIVE" ? "Disable this account? They won't be able to log in or order." : "Re-enable this account?"}>
         <input type="hidden" name="action" value={u.status === "ACTIVE" ? "disable" : "enable"} />
-        <input aria-label="Reason (logged)" name="reason" required className="input flex-1" placeholder="Reason (logged)" />
+        <input aria-label="Reason (logged)" name="reason" required className="input min-w-0 flex-1" placeholder="Reason" />
         <button className={u.status === "ACTIVE" ? "btn-danger" : "btn-secondary"}>{u.status === "ACTIVE" ? "Disable account" : "Enable account"}</button>
       </ApiForm>
       <div className="card">

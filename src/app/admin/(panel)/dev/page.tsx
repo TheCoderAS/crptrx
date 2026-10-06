@@ -25,7 +25,7 @@ export default async function DevTools() {
         <div className="grid gap-3 sm:grid-cols-3">
           <Select name="network" aria-label="Network" options={[{ value: "TRON", label: "Tron (TRC-20)" }, { value: "BSC", label: "BNB Smart Chain (BEP-20)" }]} />
           <input aria-label="e.g. 100.37" name="amount" required className="input" placeholder="e.g. 100.37" />
-          <input aria-label="To address (default: active)" name="to" className="input" placeholder="To address (default: active)" />
+          <input aria-label="To address (default: active)" name="to" className="input" placeholder="Optional" />
         </div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="wrongToken" /> Send as a fake look-alike token</label>
         <button className="btn-primary">Simulate</button>
