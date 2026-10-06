@@ -57,7 +57,7 @@ export default async function Referrals() {
       {link && (
         <div className="card space-y-3">
           <h2 className="h2 flex items-center gap-2"><Link2 className="size-5 text-brand-600" aria-hidden /> Invite link</h2>
-          <p className="text-sm text-slate-600">Opening it fills in your code on the sign-up page. The phone remembers it for 30 days.</p>
+          <p className="text-sm text-slate-600">Opening it fills in your code at sign-up for the rest of that visit.</p>
           <ShareLink url={link} text={`Sell USDT for rupees on ${s.brand_name}. Sign up with my invite:`} />
         </div>
       )}

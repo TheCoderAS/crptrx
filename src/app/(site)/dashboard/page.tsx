@@ -109,16 +109,16 @@ export default async function Dashboard() {
       )}
 
       {ready && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {[
             { icon: Banknote, tile: "tile-emerald", label: "Received", value: fmtInr(paidAgg._sum.net ?? 0) },
             { icon: CheckCircle2, tile: "tile-blue", label: "Completed", value: String(paidAgg._count) },
             { icon: Clock3, tile: "tile-amber", label: "In progress", value: String(active) },
-          ].map(({ icon: Icon, tile, label, value }) => (
-            <div key={label} className="card p-4 sm:p-5">
+          ].map(({ icon: Icon, tile, label, value }, i) => (
+            <div key={label} className={`card p-4 sm:p-5 ${i === 0 ? "col-span-2 sm:col-span-1" : ""}`}>
               <span className={`icon-tile ${tile} size-9 rounded-xl`}><Icon className="size-4" aria-hidden /></span>
               <p className="mt-3 text-xs text-slate-500">{label}</p>
-              <p className="money truncate text-lg text-slate-900 sm:text-xl">{value}</p>
+              <p className="money text-lg break-all text-slate-900 sm:text-xl">{value}</p>
             </div>
           ))}
         </div>

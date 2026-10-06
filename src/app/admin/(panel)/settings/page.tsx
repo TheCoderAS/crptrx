@@ -101,7 +101,7 @@ export default async function SettingsPage() {
                     <SettingRow label="Manual rate" htmlFor="rate" hint="Applies to new quotes only. Ignored in Auto mode.">
                       <UnitInput name="rate" value={s.rate} prefix="₹" disabled={auto} />
                     </SettingRow>
-                    <SettingRow label="Market price" htmlFor="rate_market_manual" hint="What you buy USDT at, so each order records your margin. Optional. Ignored in Auto mode.">
+                    <SettingRow label="Market price" htmlFor="rate_market_manual" hint="Optional. Used to work out your margin. Ignored in Auto.">
                       <UnitInput name="rate_market_manual" value={s.rate_market_manual} prefix="₹" disabled={auto} />
                     </SettingRow>
                     <SettingRow label="Manual rate expires after" htmlFor="rate_max_age_hours" hint="Quotes stop if the manual rate isn't saved again within this time.">

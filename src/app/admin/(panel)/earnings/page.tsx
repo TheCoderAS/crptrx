@@ -7,6 +7,7 @@ import { earningTotals } from "@/server/earnings";
 import { D, Decimal, fmtInr } from "@/server/money";
 import { isSuper } from "@/server/scope";
 import { fmtISTShort, istMonthStart } from "@/lib/time";
+import { InfoTip } from "@/components/InfoTip";
 import { ModalForm } from "@/components/Modal";
 import { EmptyState, PageHeader, Stat, StatusPill } from "@/components/ui";
 
@@ -57,6 +58,28 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
     houseRewards: D(month.rewards ?? 0).minus(D(month.admin_rewards ?? 0)),
   };
 
+  const settle = (a: (typeof admins)[number], owed: Decimal) => (
+    <ModalForm
+      button="Mark paid…"
+      buttonClassName="btn-secondary min-h-8 px-3 py-1 text-xs"
+      title={`Pay ${a.name} ${fmtInr(owed)}`}
+      description="Send the money first, then record it. Every pending earning is marked paid."
+      action="/api/admin/earnings/settle"
+      submitLabel={`Record ${fmtInr(owed)} paid`}
+    >
+      <input type="hidden" name="adminId" value={a.id} />
+      <input type="hidden" name="expectedAmount" value={owed.toFixed(2)} />
+      <div><label className="label" htmlFor={`ref-${a.id}`}>Bank reference / UTR <span className="font-normal text-slate-500">(optional)</span></label><input id={`ref-${a.id}`} name="reference" className="input font-mono" /></div>
+      <div><label className="label" htmlFor={`note-${a.id}`}>Note <span className="font-normal text-slate-500">(optional)</span></label><input id={`note-${a.id}`} name="note" className="input" /></div>
+    </ModalForm>
+  );
+  const voidButton = (r: (typeof rows)[number]) => (
+    <ModalForm button="Cancel…" buttonClassName="btn-ghost min-h-8 px-2 py-1 text-xs text-rose-700" title={`Cancel the earning on ${r.orderId}?`} description="The admin won't be paid for this order. For fraud or a mistake." action={`/api/admin/earnings/${r.id}/void`} submitLabel="Cancel earning">
+      <div><label className="label" htmlFor={`why-${r.id}`}>Why (logged, shown to the admin)</label><input id={`why-${r.id}`} name="reason" required minLength={5} className="input" /></div>
+    </ModalForm>
+  );
+  const pill = (st: EarningStatus) => <StatusPill status={st === "SETTLED" ? "PAID" : st === "VOID" ? "DISABLED" : "PENDING"} label={st === "PENDING" ? "Owed" : st === "SETTLED" ? "Paid" : "Cancelled"} />;
+
   const href = (o: { admin?: string; status?: string }) => `/admin/earnings?${new URLSearchParams({ ...(o.admin ? { admin: o.admin } : {}), ...(o.status ? { status: o.status } : {}) })}`;
 
   return (
@@ -78,16 +101,18 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
 
       {sup && m && (
         <div>
-          <p className="eyebrow mb-3">This month (paid orders, IST)</p>
+          <p className="eyebrow mb-3 flex items-center gap-1">
+            This month (paid orders)
+            <InfoTip>
+              Bonuses paid: {fmtInr(m.rewards)} ({fmtInr(m.rewards.minus(m.houseRewards))} from admins&apos; shares, {fmtInr(m.houseRewards)} from yours). Orders without a market price have no margin. GST on the fee is owed to the government, so it isn&apos;t counted.
+            </InfoTip>
+          </p>
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Stat label="Platform fee (yours)" value={fmtInr(m.fee)} icon={<Coins className="size-5" />} tile="tile-blue" />
             <Stat label="Margin" value={fmtInr(m.margin)} icon={<Coins className="size-5" />} tile="tile-violet" />
             <Stat label="Admins' share" value={fmtInr(m.adminShare)} icon={<HandCoins className="size-5" />} tile="tile-amber" />
             <Stat label="Margin you keep" value={fmtInr(m.margin.minus(m.adminShare).minus(m.houseRewards))} icon={<Wallet className="size-5" />} tile="tile-emerald" />
           </div>
-          <p className="mt-2 text-xs text-slate-500">
-            Bonuses paid to customers: {fmtInr(m.rewards)} ({fmtInr(m.rewards.minus(m.houseRewards))} from admins&apos; shares, {fmtInr(m.houseRewards)} from yours). Orders without a market price have no margin. GST on the fee is owed to the government, so it isn&apos;t counted here.
-          </p>
         </div>
       )}
 
@@ -97,7 +122,26 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
           {admins.length === 0 ? (
             <p className="muted px-4 pb-4">No admins yet. Add one under Admins.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <ul className="divide-y divide-slate-100 md:hidden">
+              {admins.map((a) => {
+                const t = totals.get(a.id);
+                const owed = t?.pending ?? zero;
+                return (
+                  <li key={a.id} className="space-y-1.5 px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Link href={href({ admin: a.id })} className="min-w-0 truncate font-medium text-brand-700">{a.name}{a.status !== "ACTIVE" && <span className="ml-1 text-xs text-slate-500">(disabled)</span>}</Link>
+                      <span className="font-semibold tabular-nums">{fmtInr(owed)} <span className="text-xs font-normal text-slate-500">owed</span></span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                      <span><span className="font-mono">{a.inviteCode ?? "—"}</span> · {a.profitPercent.toString()}% · {a._count.customers} customers · paid {fmtInr(t?.settled ?? zero)}</span>
+                      {owed.gt(0) && settle(a, owed)}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
               <table className="table">
                 <thead><tr><th>Admin</th><th>Code</th><th className="text-right">Share</th><th className="text-right">Customers</th><th className="text-right">Owed</th><th className="text-right">Paid</th><th /></tr></thead>
                 <tbody>
@@ -113,21 +157,7 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
                         <td className="text-right font-semibold tabular-nums">{fmtInr(owed)}{t?.pendingCount ? <span className="block text-xs font-normal text-slate-500">{t.pendingCount} orders</span> : null}</td>
                         <td className="text-right tabular-nums">{fmtInr(t?.settled ?? zero)}</td>
                         <td className="text-right">
-                          {owed.gt(0) && (
-                            <ModalForm
-                              button="Mark paid…"
-                              buttonClassName="btn-secondary min-h-8 px-3 py-1 text-xs"
-                              title={`Pay ${a.name} ${fmtInr(owed)}`}
-                              description="Send the money first, then record it here. Every pending earning is marked paid."
-                              action="/api/admin/earnings/settle"
-                              submitLabel={`Record ${fmtInr(owed)} paid`}
-                            >
-                              <input type="hidden" name="adminId" value={a.id} />
-                              <input type="hidden" name="expectedAmount" value={owed.toFixed(2)} />
-                              <div><label className="label" htmlFor={`ref-${a.id}`}>Bank reference / UTR <span className="font-normal text-slate-500">(optional)</span></label><input id={`ref-${a.id}`} name="reference" className="input font-mono" /></div>
-                              <div><label className="label" htmlFor={`note-${a.id}`}>Note <span className="font-normal text-slate-500">(optional)</span></label><input id={`note-${a.id}`} name="note" className="input" /></div>
-                            </ModalForm>
-                          )}
+                          {owed.gt(0) && settle(a, owed)}
                         </td>
                       </tr>
                     );
@@ -135,6 +165,7 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </section>
       )}
@@ -154,7 +185,23 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
         {rows.length === 0 ? (
           <EmptyState icon={<HandCoins className="size-6" />} title="Nothing yet">Earnings appear here when your customers&apos; orders are paid.</EmptyState>
         ) : (
-          <div className="mt-2 overflow-x-auto">
+          <>
+          <ul className="mt-2 divide-y divide-slate-100 md:hidden">
+            {rows.map((r) => (
+              <li key={r.id} className="space-y-1.5 px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Link href={`/admin/orders/${r.orderId}`} className="font-medium text-brand-700">{r.orderId}</Link>
+                  <span className="font-semibold tabular-nums">{fmtInr(r.amount)}</span>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                  <span>{sup ? `${r.admin.name} · ` : ""}share {fmtInr(r.share)}{D(r.reward).gt(0) ? ` − bonus ${fmtInr(r.reward)}` : ""} · {fmtISTShort(r.createdAt)}</span>
+                  <span className="flex items-center gap-1">{pill(r.status)}{sup && r.status === "PENDING" && voidButton(r)}</span>
+                </div>
+                {r.voidReason && <p className="text-xs text-slate-500">{r.voidReason}</p>}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 hidden overflow-x-auto md:block">
             <table className="table">
               <thead><tr><th>Order</th>{sup && <th>Admin</th>}<th className="text-right">Margin</th><th className="text-right">Share</th><th className="text-right">Bonus</th><th className="text-right">Earned</th><th>Status</th><th>Date</th>{sup && <th />}</tr></thead>
               <tbody>
@@ -166,15 +213,11 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
                     <td className="text-right tabular-nums">{fmtInr(r.share)} <span className="text-xs text-slate-500">({D(r.sharePercent).toString()}%)</span></td>
                     <td className="text-right tabular-nums">{D(r.reward).gt(0) ? `– ${fmtInr(r.reward)}` : "—"}</td>
                     <td className="text-right font-semibold tabular-nums">{fmtInr(r.amount)}</td>
-                    <td><StatusPill status={r.status === "SETTLED" ? "PAID" : r.status === "VOID" ? "DISABLED" : "PENDING"} label={r.status === "PENDING" ? "Owed" : r.status === "SETTLED" ? "Paid" : "Cancelled"} />{r.voidReason && <span className="block max-w-48 truncate text-xs text-slate-500" title={r.voidReason}>{r.voidReason}</span>}</td>
+                    <td>{pill(r.status)}{r.voidReason && <span className="block max-w-48 truncate text-xs text-slate-500" title={r.voidReason}>{r.voidReason}</span>}</td>
                     <td className="whitespace-nowrap text-xs text-slate-500">{fmtISTShort(r.createdAt)}</td>
                     {sup && (
                       <td className="text-right">
-                        {r.status === "PENDING" && (
-                          <ModalForm button="Cancel…" buttonClassName="btn-ghost min-h-8 px-2 py-1 text-xs text-rose-700" title={`Cancel the earning on ${r.orderId}?`} description="The admin won't be paid for this order. Use it for fraud or a mistake." action={`/api/admin/earnings/${r.id}/void`} submitLabel="Cancel earning">
-                            <div><label className="label" htmlFor={`why-${r.id}`}>Why (logged, shown to the admin)</label><input id={`why-${r.id}`} name="reason" required minLength={5} className="input" /></div>
-                          </ModalForm>
-                        )}
+                        {r.status === "PENDING" && voidButton(r)}
                       </td>
                     )}
                   </tr>
@@ -182,13 +225,25 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
 
       {settlements.length > 0 && (
         <section className="card overflow-hidden p-0 sm:p-0">
           <h2 className="h2 px-4 pt-4">Payouts {sup ? "to admins" : "to you"}</h2>
-          <div className="mt-2 overflow-x-auto">
+          <ul className="mt-2 divide-y divide-slate-100 md:hidden">
+            {settlements.map((st) => (
+              <li key={st.id} className="space-y-1 px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-slate-700">{sup ? `${st.admin.name} · ` : ""}{st.count} {st.count === 1 ? "order" : "orders"}</span>
+                  <span className="font-semibold tabular-nums">{fmtInr(st.amount)}</span>
+                </div>
+                <p className="text-xs break-all text-slate-500">{fmtISTShort(st.createdAt)}{st.reference ? ` · ${st.reference}` : ""}{st.note ? ` · ${st.note}` : ""}</p>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 hidden overflow-x-auto md:block">
             <table className="table">
               <thead><tr><th>Date</th>{sup && <th>Admin</th>}<th className="text-right">Amount</th><th className="text-right">Orders</th><th>Reference</th><th>Note</th></tr></thead>
               <tbody>

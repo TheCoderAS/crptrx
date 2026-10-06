@@ -68,16 +68,16 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
               <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-end">
                 <input type="hidden" name="decision" value="NEEDS_CHANGES" />
                 <div className="flex-1">
-                  <label className="label" htmlFor="reason-changes">Ask for changes (the user can fix and resend)</label>
-                  <input id="reason-changes" name="reason" required className="input" placeholder="Shown to the user, e.g. Selfie is blurry" />
+                  <label className="label" htmlFor="reason-changes">Ask for changes (user sees the reason)</label>
+                  <input id="reason-changes" name="reason" required className="input" placeholder="e.g. Selfie is blurry" />
                 </div>
                 <button className="btn-secondary">Ask for changes</button>
               </ApiForm>
               <ApiForm action={`/api/admin/kyc/${s.id}`} confirm="Decline this identity check? The user will be blocked from placing orders." className="flex flex-col gap-2 rounded-xl bg-rose-50/60 p-3 sm:flex-row sm:items-end">
                 <input type="hidden" name="decision" value="DECLINED" />
                 <div className="flex-1">
-                  <label className="label" htmlFor="reason-decline">Decline (blocks the user)</label>
-                  <input id="reason-decline" name="reason" required className="input" placeholder="Shown to the user, e.g. Documents belong to someone else" />
+                  <label className="label" htmlFor="reason-decline">Decline (blocks the user; they see the reason)</label>
+                  <input id="reason-decline" name="reason" required className="input" placeholder="e.g. Not their documents" />
                 </div>
                 <button className="btn-danger">Decline</button>
               </ApiForm>
