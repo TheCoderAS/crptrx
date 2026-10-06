@@ -73,6 +73,11 @@ The app in `android/` shows the website full screen and adds native Google sign-
 - Every merge into `main` → the `vX.Y.Z` release gets `VisionPay-vX.Y.Z.apk` ("VisionPay", `com.visionpay.live.app`, opens the live website). Same version as the release.
 - Each website's `/app` page links the newest file for it, and the app offers updates by itself.
 
+**Links open in the app (Android App Links)**
+- Each website serves `/.well-known/assetlinks.json` naming its own app (live site → `com.visionpay.live.app`, staging → `com.visionpay.live.app.test`) and the signing key's SHA-256 fingerprint. With the app installed, links to the site (invite links, order links) open straight in the app; without it, in the browser.
+- The fingerprint defaults to our release key. If the signing key ever changes, set `ANDROID_CERT_SHA256` on both Render services (the new fingerprint is printed on every app build as "Signing key fingerprints").
+- Phones check the file when the app is installed or updated. Check one with `adb shell pm get-app-links com.visionpay.live.app` ("verified"). The emulator test in CI reports the same.
+
 **One-time setup**
 1. Signing key (on your own computer; keep the `.jks` file and passwords backed up in two places, a lost key means no more updates):
    `keytool -genkeypair -v -keystore visionpay-release.jks -alias visionpay -keyalg RSA -keysize 4096 -validity 10000`
