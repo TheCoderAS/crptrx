@@ -1,24 +1,28 @@
 "use client";
 
-// An invite link (/signup?ref=CODE) is remembered on this device for 30 days, so the
-// code is still filled in if the person signs up later.
+// An invite link (any page with ?ref=CODE) is remembered for this browser session only
+// (sessionStorage: until the tab or app is closed), so the code is filled in whenever the
+// person signs up during that visit. Nothing is kept on the device afterwards.
 const KEY = "invite-code";
-const KEEP_MS = 30 * 24 * 3600_000;
 
 export function rememberedInvite(): string {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? "null") as { code: string; at: number } | null;
-    if (v && Date.now() - v.at < KEEP_MS) return v.code;
+    // Older versions kept the code for 30 days; drop it.
+    localStorage.removeItem(KEY);
   } catch {
     /* no storage */
   }
-  return "";
+  try {
+    return sessionStorage.getItem(KEY) ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export function rememberInvite(code: string) {
   try {
-    if (code) localStorage.setItem(KEY, JSON.stringify({ code, at: Date.now() }));
-    else localStorage.removeItem(KEY);
+    if (code) sessionStorage.setItem(KEY, code);
+    else sessionStorage.removeItem(KEY);
   } catch {
     /* private mode */
   }
