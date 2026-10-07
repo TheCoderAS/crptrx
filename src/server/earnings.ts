@@ -10,9 +10,10 @@ import { assertUser, type Viewer } from "./scope";
  * - The platform fee is always the super admin's.
  * - The rate margin (usdt x (market - rate)) is split: an admin gets their profit share of it
  *   for their own customers; everything else is the house's.
- * - A customer's reward (a % of the order value) is added to their payout and paid from the
- *   share of whoever owns the customer, never more than that share. So an admin never pays
- *   out of pocket, and the house never pays an admin's reward.
+ * - A customer's bonus reward is a % of the owner's share of that order's margin (their
+ *   admin's share, or the house's for customers without an admin), added to their payout.
+ *   The owner keeps the rest, so an admin never pays out of pocket, and the house never
+ *   pays an admin's reward. Customers see only the amount ("Bonus reward"), never the %.
  * All of it is fixed when the quote is made, so the customer sees the exact payout.
  */
 export interface Split {
@@ -24,7 +25,6 @@ export interface Split {
 }
 
 export function splitFor(input: {
-  gross: Decimal;
   margin: Decimal | null;
   customer: { adminId: string | null; rewardPercent: Decimal | string | number };
   admin: { id: string; profitPercent: Decimal | string | number; status: string; role: string } | null;
@@ -33,11 +33,10 @@ export function splitFor(input: {
   const admin = input.admin && input.admin.status === "ACTIVE" && input.admin.role === "ADMIN" && input.admin.id === input.customer.adminId ? input.admin : null;
   const sharePct = admin ? D(admin.profitPercent) : null;
   const adminShare = sharePct ? rupees(pool.mul(sharePct).div(100)) : null;
-  // The reward comes out of the owner's share: the admin's, or the house's (the rest of the pool).
+  // The reward is a % of the owner's share: the admin's, or the house's (the whole pool).
   const funds = adminShare ?? pool;
   const rewardPct = D(input.customer.rewardPercent);
-  const wanted = rewardPct.gt(0) ? rupees(input.gross.mul(rewardPct).div(100)) : new Decimal(0);
-  const reward = Decimal.min(wanted, funds);
+  const reward = rewardPct.gt(0) ? rupees(funds.mul(rewardPct).div(100)) : new Decimal(0);
   return {
     adminId: admin?.id ?? null,
     adminSharePercent: sharePct?.toString() ?? null,
@@ -45,6 +44,19 @@ export function splitFor(input: {
     rewardPercent: rewardPct.gt(0) ? rewardPct.toString() : null,
     reward: reward.toFixed(2),
   };
+}
+
+/**
+ * The bonus reward per USDT at today's rate, for the sell form's estimate (the quote
+ * fixes the exact amount). "0" when the customer has none or there's no margin.
+ */
+export async function rewardPerUsdt(user: { adminId: string | null; rewardPercent: Decimal | string | number }, s: { rate: string; marketRate: string | null }): Promise<string> {
+  const pct = D(user.rewardPercent);
+  if (pct.lte(0) || !s.marketRate) return "0";
+  const pool = Decimal.max(D(s.marketRate).minus(D(s.rate)), 0);
+  const admin = user.adminId ? await prisma.admin.findUnique({ where: { id: user.adminId }, select: { profitPercent: true, status: true, role: true } }) : null;
+  const funds = admin && admin.status === "ACTIVE" && admin.role === "ADMIN" ? pool.mul(D(admin.profitPercent)).div(100) : pool;
+  return funds.mul(pct).div(100).toString();
 }
 
 /** Called in the same transaction that marks an order paid: books the admin's earning. */
@@ -116,13 +128,14 @@ export async function voidEarning(id: string, reason: string, actor: Actor) {
   await audit(actor, "ADMIN_EARNING_VOIDED", { targetType: "admin_earning", targetId: id, details: { reason: reason.trim() } });
 }
 
-export const MAX_REWARD_PERCENT = 10;
+/** A bonus reward is a % of the owner's share, so 100% gives the customer the whole share. */
+export const MAX_REWARD_PERCENT = 100;
 
 /** Admin (own customers) or super admin (anyone) sets a customer's reward on future orders. */
 export async function setReward(viewer: Viewer, actor: Actor, userId: string, percentInput: unknown, ip?: string | null) {
   await assertUser(viewer, userId);
   const v = String(percentInput ?? "").trim() || "0";
-  if (!/^\d+(\.\d{1,4})?$/.test(v)) throw new AppError("Reward: a percentage like 0.25, or 0 for none.");
+  if (!/^\d+(\.\d{1,4})?$/.test(v)) throw new AppError("Reward: a percentage like 20, or 0 for none.");
   if (D(v).gt(MAX_REWARD_PERCENT)) throw new AppError(`Reward: at most ${MAX_REWARD_PERCENT}%.`);
   const old = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { rewardPercent: true } });
   if (D(old.rewardPercent).eq(D(v))) return;

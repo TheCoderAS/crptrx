@@ -31,17 +31,17 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
         {u.lockedUntil && u.lockedUntil > new Date() && <Row k="Password locked until" v={fmtIST(u.lockedUntil)} />}
         <Row k="KYC" v={<StatusPill status={u.kycStatus} />} />
         <Row k="Joined" v={fmtIST(u.createdAt)} />
-        <Row k="Bonus on orders" v={D(u.rewardPercent).gt(0) ? `${D(u.rewardPercent)}% of the order value` : "None"} />
+        <Row k="Bonus on orders" v={D(u.rewardPercent).gt(0) ? `${D(u.rewardPercent).toString()}% of ${u.adminId ? "the admin's" : "your"} margin share` : "None"} />
         {sup && <Row k="Admin" v={u.admin ? `${u.admin.name}${u.referredAt ? ` · since ${fmtIST(u.referredAt)}` : ""}` : "None (yours)"} />}
       </div>
       <ApiForm action={`/api/admin/users/${u.id}/reward`} className="card flex flex-wrap items-end gap-2">
         <div className="min-w-48 flex-1">
-          <label className="label" htmlFor="reward">Bonus on this customer&apos;s orders</label>
+          <label className="label" htmlFor="reward">Bonus reward (% of {u.adminId ? (sup ? "the admin's" : "your") : "your"} share)</label>
           <div className="relative">
             <input id="reward" name="rewardPercent" defaultValue={D(u.rewardPercent).toString()} inputMode="decimal" className="input pr-10" />
             <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400">%</span>
           </div>
-          <p className="hint">Paid from {u.adminId ? (sup ? "their admin's" : "your") : "your"} margin share. 0 = none.</p>
+          <p className="hint">The customer gets this part of the share on each order. 0 = none.</p>
         </div>
         <button className="btn-secondary">Save bonus</button>
       </ApiForm>

@@ -13,35 +13,39 @@ const SYS = { type: "SYSTEM" as const, id: null };
 const BOSS = { type: "ADMIN" as const, id: "boss" };
 
 describe("who earns what (fixed at quote)", () => {
-  const gross = new Decimal(9000);
   const admin = { id: "a1", profitPercent: "50", status: "ACTIVE", role: "ADMIN" };
 
   it("house customer, no bonus: nothing for any admin", () => {
-    expect(splitFor({ gross, margin: new Decimal(200), customer: { adminId: null, rewardPercent: 0 }, admin: null })).toEqual({ adminId: null, adminSharePercent: null, adminShare: null, rewardPercent: null, reward: "0.00" });
+    expect(splitFor({ margin: new Decimal(200), customer: { adminId: null, rewardPercent: 0 }, admin: null })).toEqual({ adminId: null, adminSharePercent: null, adminShare: null, rewardPercent: null, reward: "0.00" });
   });
 
   it("admin's customer: the admin gets their share of the margin", () => {
-    const s = splitFor({ gross, margin: new Decimal(200), customer: { adminId: "a1", rewardPercent: 0 }, admin });
+    const s = splitFor({ margin: new Decimal(200), customer: { adminId: "a1", rewardPercent: 0 }, admin });
     expect(s).toMatchObject({ adminId: "a1", adminSharePercent: "50", adminShare: "100.00", reward: "0.00" });
   });
 
-  it("the bonus comes out of the admin's share and never goes past it", () => {
-    expect(splitFor({ gross, margin: new Decimal(200), customer: { adminId: "a1", rewardPercent: "0.5" }, admin }).reward).toBe("45.00"); // 0.5% of 9000
-    expect(splitFor({ gross, margin: new Decimal(200), customer: { adminId: "a1", rewardPercent: "5" }, admin }).reward).toBe("100.00"); // capped at the ₹100 share
+  it("the bonus reward is a % of the admin's share; the admin keeps the rest", () => {
+    expect(splitFor({ margin: new Decimal(200), customer: { adminId: "a1", rewardPercent: "5" }, admin }).reward).toBe("5.00"); // 5% of ₹100
+    expect(splitFor({ margin: new Decimal(200), customer: { adminId: "a1", rewardPercent: "100" }, admin }).reward).toBe("100.00"); // the whole share
   });
 
-  it("house customer's bonus comes out of the house margin, capped at it", () => {
-    expect(splitFor({ gross, margin: new Decimal(200), customer: { adminId: null, rewardPercent: "1" }, admin: null }).reward).toBe("90.00");
-    expect(splitFor({ gross, margin: new Decimal(50), customer: { adminId: null, rewardPercent: "1" }, admin: null }).reward).toBe("50.00");
+  it("house customer's bonus reward is a % of the house's share (the whole margin)", () => {
+    expect(splitFor({ margin: new Decimal(200), customer: { adminId: null, rewardPercent: "10" }, admin: null }).reward).toBe("20.00");
+  });
+
+  it("the case from staging: 1 USDT, margin ₹3.49, 30% share, 5% bonus -> ₹0.05 bonus, admin keeps ₹1.00", () => {
+    const s = splitFor({ margin: new Decimal("3.49"), customer: { adminId: "a1", rewardPercent: "5" }, admin: { ...admin, profitPercent: "30" } });
+    expect(s.adminShare).toBe("1.05");
+    expect(s.reward).toBe("0.05");
   });
 
   it("no margin (negative, or no market price): no share and no bonus", () => {
-    expect(splitFor({ gross, margin: new Decimal(-30), customer: { adminId: "a1", rewardPercent: "1" }, admin })).toMatchObject({ adminShare: "0.00", reward: "0.00" });
-    expect(splitFor({ gross, margin: null, customer: { adminId: null, rewardPercent: "1" }, admin: null }).reward).toBe("0.00");
+    expect(splitFor({ margin: new Decimal(-30), customer: { adminId: "a1", rewardPercent: "50" }, admin })).toMatchObject({ adminShare: "0.00", reward: "0.00" });
+    expect(splitFor({ margin: null, customer: { adminId: null, rewardPercent: "50" }, admin: null }).reward).toBe("0.00");
   });
 
   it("a disabled admin earns nothing; the order is the house's", () => {
-    expect(splitFor({ gross, margin: new Decimal(200), customer: { adminId: "a1", rewardPercent: 0 }, admin: { ...admin, status: "DISABLED" } }).adminId).toBeNull();
+    expect(splitFor({ margin: new Decimal(200), customer: { adminId: "a1", rewardPercent: 0 }, admin: { ...admin, status: "DISABLED" } }).adminId).toBeNull();
   });
 });
 
@@ -72,9 +76,9 @@ describe("earnings ledger", () => {
   }
 
   it("the bonus is on the quote and in the payout; the admin's earning is booked when paid", async () => {
-    const u = await customerOf(ravi, "0.5");
+    const u = await customerOf(ravi, "45");
     const o = await quoteAndPay(u);
-    // 100 USDT x 90 = 9000 gross; margin 200; Ravi's share 100; bonus 0.5% = 45.
+    // 100 USDT x 90 = 9000 gross; margin 200; Ravi's share 100; bonus reward 45% of the share = 45.
     expect(o.margin?.toFixed(2)).toBe("200.00");
     expect(o.adminId).toBe(ravi.id);
     expect(o.adminShare?.toFixed(2)).toBe("100.00");
@@ -129,7 +133,7 @@ describe("earnings ledger", () => {
     await setReward(ravi, raviActor, u.user.id, "0.25");
     expect((await prisma.user.findUniqueOrThrow({ where: { id: u.user.id } })).rewardPercent.toString()).toBe("0.25");
     await expect(setReward(sita, { type: "ADMIN", id: sita.id }, u.user.id, "1")).rejects.toThrow(/Not found/);
-    await expect(setReward(ravi, raviActor, u.user.id, "11")).rejects.toThrow(/at most/);
+    await expect(setReward(ravi, raviActor, u.user.id, "101")).rejects.toThrow(/at most/);
     await expect(setReward(ravi, raviActor, u.user.id, "-1")).rejects.toThrow(/percentage/);
     // Super admin: any customer, including the house's.
     const house = await customerOf(null);

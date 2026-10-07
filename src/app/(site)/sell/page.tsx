@@ -1,3 +1,4 @@
+import { rewardPerUsdt } from "@/server/earnings";
 import { contactChannels } from "@/server/contact";
 import { ContactLinks } from "@/components/ContactLinks";
 import Link from "next/link";
@@ -46,7 +47,7 @@ export default async function Sell() {
           gstPercent={s.gst_percent}
           feeMin={s.fee_min_inr}
           feeMax={s.fee_max_inr}
-          rewardPercent={user.rewardPercent.toString()}
+          rewardPerUsdt={await rewardPerUsdt(user, s)}
           min={s.limit_min_order_usdt}
           max={s.limit_max_order_usdt}
           available={available}

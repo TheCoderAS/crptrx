@@ -177,7 +177,7 @@ export async function buildReceipt(orderId: string, userId?: string): Promise<Ui
     ...(D(o.taxHeld).gt(0) ? ([[`Tax held back (${D(o.taxPercent).toString()}%)`, `– ${inr(o.taxHeld)}`]] as [string, string][]) : []),
     ...(D(o.fee).gt(0) ? ([[feeLabel("Platform fee", o), `– ${inr(o.fee)}`]] as [string, string][]) : []),
     ...(D(o.gstOnFee).gt(0) ? ([[`GST on fee (${D(o.gstPercent).toString()}%)`, `– ${inr(o.gstOnFee)}`]] as [string, string][]) : []),
-    ...(D(o.reward).gt(0) ? ([["Bonus", `+ ${inr(o.reward)}`]] as [string, string][]) : []),
+    ...(D(o.reward).gt(0) ? ([["Bonus reward", `+ ${inr(o.reward)}`]] as [string, string][]) : []),
   ];
   for (const [k, v] of rowsBreak) {
     page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.6, color: LINE });
