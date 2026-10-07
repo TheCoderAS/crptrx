@@ -2,6 +2,7 @@ import type { OrderStatus, Prisma } from "@prisma/client";
 import type { Actor } from "../audit";
 import { prisma, type Tx } from "../db";
 import { AppError } from "../errors";
+import { onOrderStatus } from "../points";
 
 /** Spec section 6. The server rejects every move not listed here. */
 export const ALLOWED_NEXT: Record<OrderStatus, OrderStatus[]> = {
@@ -61,6 +62,8 @@ export async function transition(tx: Tx, orderId: string, to: OrderStatus, actor
       privateNote: opts.privateNote ?? null,
     },
   });
+  // Referral points held on this order: spent when paid, given back when it expires or closes.
+  await onOrderStatus(tx, orderId, from, to);
   return { from, to };
 }
 

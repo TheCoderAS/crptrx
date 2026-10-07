@@ -31,6 +31,14 @@ export const SETTING_DEFAULTS = {
   rate_market_manual: "",
   // Admins can ask for a payout of their earnings once they're owed at least this much (rupees).
   payout_request_min_inr: "500",
+  // User-to-user referrals (points.ts). 1 point = ₹1, spent only on the user's own sales.
+  referral_enabled: false,
+  referral_mode: "FIRST" as "FIRST" | "EVERY", // the friend's first rewarded sale only, or every sale
+  referral_points_per_usdt: "1", // points per USDT the friend sells (whole points, rounded down)
+  referral_max_points_per_sale: 500, // 0 = no cap
+  referral_min_sale_usdt: "10", // smaller sales earn nothing
+  referral_hold_days: 7, // points stay pending (cancellable) this long
+  referral_expiry_days: 365, // usable this long after they're ready; 0 = never expire
   gst_enabled: true, // OWNER
   gst_percent: "18", // OWNER
   tax_percent: "1", // OWNER + CA
@@ -141,6 +149,11 @@ export const SETTING_LABELS: Partial<Record<string, string>> = {
   fee_max_inr: "Maximum fee",
   rate_market_manual: "Market price",
   payout_request_min_inr: "Lowest payout request",
+  referral_points_per_usdt: "Points per USDT",
+  referral_max_points_per_sale: "Most points per sale",
+  referral_min_sale_usdt: "Smallest sale that earns",
+  referral_hold_days: "Pending for (days)",
+  referral_expiry_days: "Points expire after (days)",
   gst_percent: "GST %",
   tax_percent: "Tax held back %",
   rate_margin_percent: "Margin %",
@@ -180,6 +193,13 @@ export const EDITABLE_KEYS: SettingKey[] = [
   "fee_max_inr",
   "rate_market_manual",
   "payout_request_min_inr",
+  "referral_enabled",
+  "referral_mode",
+  "referral_points_per_usdt",
+  "referral_max_points_per_sale",
+  "referral_min_sale_usdt",
+  "referral_hold_days",
+  "referral_expiry_days",
   "gst_enabled",
   "gst_percent",
   "tax_percent",
@@ -232,6 +252,22 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
     if ((v.split(".")[1]?.length ?? 0) > places) throw new AppError(`${name}: use at most ${places} decimal places.`);
     if (key === "rate_market_manual" && D(v).lte(0)) throw new AppError("Market price must be above 0, or leave it empty.");
     return v;
+  }
+  if (key === "referral_points_per_usdt" || key === "referral_min_sale_usdt") {
+    const v = String(value ?? "").trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(v)) throw new AppError(`${SETTING_LABELS[key]}: enter a number like 1 or 0.5.`);
+    if (key === "referral_points_per_usdt" && D(v).gt(1000)) throw new AppError(`${SETTING_LABELS[key]}: 1000 at most.`);
+    return v;
+  }
+  if (key === "referral_max_points_per_sale" || key === "referral_hold_days" || key === "referral_expiry_days") {
+    const n = Number(String(value ?? "").trim() || "0");
+    const max = key === "referral_hold_days" ? 90 : key === "referral_expiry_days" ? 3650 : 1_000_000;
+    if (!Number.isInteger(n) || n < 0 || n > max) throw new AppError(`${SETTING_LABELS[key]}: a whole number from 0 to ${max}.`);
+    return n;
+  }
+  if (key === "referral_mode") {
+    if (value !== "FIRST" && value !== "EVERY") throw new AppError("Referral reward: first sale or every sale.");
+    return value;
   }
   if (key === "payout_request_min_inr") {
     const v = String(value ?? "").trim() || "0";
@@ -307,6 +343,7 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
     "kyc_required",
     "kyc_auto_approve",
     "payout_auto_approve_on_name_match",
+    "referral_enabled",
   ];
   if (boolKeys.includes(key)) return value === true || value === "true";
   if (key === "brand_primary_color" || key === "brand_accent_color") {

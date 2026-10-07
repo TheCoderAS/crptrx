@@ -284,14 +284,14 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
           </ul>
           <div className="mt-2 hidden overflow-x-auto md:block">
             <table className="table">
-              <thead><tr><th>Order</th>{sup && <th>Admin</th>}<th className="text-right">Margin</th><th className="text-right">Share</th><th className="text-right">Bonus</th><th className="text-right">Earned</th><th>Status</th><th>Date</th>{sup && <th />}</tr></thead>
+              <thead><tr><th>Order</th>{sup && <th>Admin</th>}{sup && <th className="text-right">Margin</th>}<th className="text-right">Share</th><th className="text-right">Bonus</th><th className="text-right">Earned</th><th>Status</th><th>Date</th>{sup && <th />}</tr></thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td><Link href={`/admin/orders/${r.orderId}`} className="font-medium text-brand-700 hover:underline">{r.orderId}</Link></td>
                     {sup && <td className="text-sm">{r.admin.name}</td>}
-                    <td className="text-right tabular-nums">{fmtInr(r.margin)}</td>
-                    <td className="text-right tabular-nums">{fmtInr(r.share)} <span className="text-xs text-slate-500">({D(r.sharePercent).toString()}%)</span></td>
+                    {sup && <td className="text-right tabular-nums">{fmtInr(r.margin)}</td>}
+                    <td className="text-right tabular-nums">{fmtInr(r.share)}{sup && <span className="text-xs text-slate-500"> ({D(r.sharePercent).toString()}%)</span>}</td>
                     <td className="text-right tabular-nums">{D(r.reward).gt(0) ? `– ${fmtInr(r.reward)}` : "—"}</td>
                     <td className="text-right font-semibold tabular-nums">{fmtInr(r.amount)}</td>
                     <td>{pill(r.status)}{r.voidReason && <span className="block max-w-48 truncate text-xs text-slate-500" title={r.voidReason}>{r.voidReason}</span>}</td>

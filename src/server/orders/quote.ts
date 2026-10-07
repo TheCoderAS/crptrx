@@ -7,6 +7,7 @@ import { getActiveDepositAddress } from "../deposit";
 import { AppError } from "../errors";
 import { calculatePayout, D, Decimal, feeLimit, rupees, usdtForNetRupees, type PayoutInput } from "../money";
 import { splitFor } from "../earnings";
+import { holdPoints } from "../points";
 import { payoutSnapshot } from "../payouts";
 import { notReadyMessage, onboardingState } from "../onboarding";
 import { getSettings, rateIsStale, tokenContractFor, type Settings } from "../settings";
@@ -22,6 +23,8 @@ export interface QuoteRequest {
   amountType: "USDT" | "INR";
   amount: string;
   payoutMethodId: string;
+  /** Add the seller's usable referral points to this payout. */
+  usePoints?: boolean;
 }
 
 /** Totals used by limit checks (spec 7.4). Counts orders not EXPIRED or CLOSED_MANUAL. */
@@ -126,8 +129,10 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
       const margin = s.marketRate ? rupees(amount.mul(D(s.marketRate).minus(D(s.rate)))) : null;
       const split = splitFor({ margin, customer, admin: owner });
       // The reward is on top of the payout; it's paid from the owner's margin share (earnings.ts).
-      const net = p.net.plus(D(split.reward));
       const { id, seq } = await nextOrderId(tx, now);
+      // Referral points the seller chose to use: set aside for this order (points.ts), 1 point = ₹1.
+      const pointsUsed = req.usePoints ? await holdPoints(tx, req.userId, id, Infinity, now) : 0;
+      const net = p.net.plus(D(split.reward)).plus(pointsUsed);
       await tx.order.create({
         data: {
           id,
@@ -153,6 +158,7 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
           marketRate: s.marketRate,
           margin: margin?.toString() ?? null,
           ...split,
+          pointsUsed,
           payoutMethodId: pm.id,
           payoutSnapshot: payoutSnapshot(pm),
           quoteExpiresAt: new Date(now.getTime() + QUOTE_TTL_MS),

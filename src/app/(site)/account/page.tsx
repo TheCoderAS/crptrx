@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { User } from "@prisma/client";
-import { CheckCircle2, ChevronRight, CircleAlert, KeyRound, Landmark, LifeBuoy, Mail, ScanFace, ShieldCheck, Smartphone, UserRound, Wallet } from "lucide-react";
+import { CheckCircle2, ChevronRight, CircleAlert, Gift, KeyRound, Landmark, LifeBuoy, Mail, ScanFace, ShieldCheck, Smartphone, UserRound, Wallet } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { getSettings } from "@/server/settings";
+import { pointsBalance } from "@/server/points";
 import { USER_MIN_PASSWORD } from "@/server/auth/password";
 import { ApiForm } from "@/components/ApiForm";
 import { ModalButton, ModalForm } from "@/components/Modal";
@@ -21,12 +22,14 @@ const dateFmt = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", mon
 
 export default async function Account() {
   const user = await userOrLogin();
-  const [s, payouts, wallets, inApp] = await Promise.all([
+  const [s, payouts, wallets, inApp, points] = await Promise.all([
     getSettings(),
     prisma.payoutMethod.count({ where: { userId: user.id, deletedAt: null } }),
     prisma.userWallet.count({ where: { userId: user.id, deletedAt: null } }),
     nativeAppVersion(),
+    pointsBalance(user.id),
   ]);
+  const showRewards = s.referral_enabled || points.usable + points.pending + points.held > 0;
   const mobileOk = !!(user.mobile && user.mobileVerifiedAt);
   const google = !!user.firebaseUid && !user.firebaseUid.startsWith("dev:");
   const methods = [google && "Google", user.passwordHash && "Email and password", user.firebaseUid?.startsWith("dev:") && "Test sign-in"].filter(Boolean) as string[];
@@ -77,6 +80,21 @@ export default async function Account() {
           />
         </div>
       </section>
+
+      {showRewards && (
+        <section>
+          <h2 className="mb-2 px-1 text-sm font-semibold text-slate-900">Rewards</h2>
+          <nav className="card divide-y divide-slate-100 p-0 sm:p-0" aria-label="Rewards">
+            <NavRow
+              href="/rewards"
+              icon={<Gift className="size-4" aria-hidden />}
+              tile="tile-violet"
+              label="Invite & earn"
+              detail={points.usable || points.pending ? `${points.usable} points ready${points.pending ? ` · ${points.pending} pending` : ""}` : "Invite friends, earn points"}
+            />
+          </nav>
+        </section>
+      )}
 
       {/* Payouts */}
       <section>

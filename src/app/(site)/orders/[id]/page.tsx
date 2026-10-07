@@ -64,6 +64,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         {D(o.fee).gt(0) && <Row k={feeLabel("Platform fee", o)} v={`− ${fmtInr(o.fee)}`} />}
         {D(o.gstOnFee).gt(0) && <Row k={`GST on fee (${D(o.gstPercent).toString()}%)`} v={`− ${fmtInr(o.gstOnFee)}`} />}
         {D(o.reward).gt(0) && <Row k="Bonus reward" v={<span className="text-emerald-700">+ {fmtInr(o.reward)}</span>} />}
+        {o.pointsUsed > 0 && <Row k="Your points" v={<span className="text-emerald-700">+ {fmtInr(o.pointsUsed)}</span>} />}
         <Row strong k="You receive" v={<span className="text-emerald-700">{fmtInr(o.net)}</span>} />
         <Row k="Paid to" v={maskedPayout(snap)} />
       </div>
