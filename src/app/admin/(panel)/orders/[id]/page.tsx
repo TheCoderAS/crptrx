@@ -337,7 +337,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
               {D(o.taxHeld).gt(0) && <Row k={`Tax held (${D(o.taxPercent)}%)`} v={`– ${fmtInr(o.taxHeld)}`} />}
               {D(o.fee).gt(0) && <Row k={feeLabel("Fee", o)} v={`– ${fmtInr(o.fee)}`} />}
               {D(o.gstOnFee).gt(0) && <Row k={`GST on fee (${D(o.gstPercent)}%)`} v={`– ${fmtInr(o.gstOnFee)}`} />}
-              {D(o.reward).gt(0) && <Row k={`Customer bonus (${D(o.rewardPercent ?? 0)}%)`} v={`+ ${fmtInr(o.reward)}`} />}
+              {D(o.reward).gt(0) && <Row k="Customer bonus reward" v={`+ ${fmtInr(o.reward)}`} />}
               <Row k={<b>Net to pay</b>} v={<b>{fmtInr(o.net)}</b>} />
               {(sup || o.adminId === me.id) && o.margin !== null && (
                 <div className="mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 ring-inset">
@@ -347,7 +347,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
                   {o.adminShare !== null && (
                     <>
                       <Row k={`${sup ? `${adminName(o.adminId)}'s` : "Your"} share (${D(o.adminSharePercent ?? 0)}%)`} v={fmtInr(o.adminShare)} />
-                      {D(o.reward).gt(0) && <Row k="Less customer bonus" v={`– ${fmtInr(o.reward)}`} />}
+                      {D(o.reward).gt(0) && <Row k={`Less bonus reward (${D(o.rewardPercent ?? 0).toString()}% of share)`} v={`– ${fmtInr(o.reward)}`} />}
                       <Row k={<b>{sup ? "Admin earns" : "You earn"}</b>} v={<b>{fmtInr(Decimal.max(D(o.adminShare).minus(D(o.reward)), 0))}</b>} />
                     </>
                   )}

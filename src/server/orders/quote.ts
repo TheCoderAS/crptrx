@@ -124,7 +124,7 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
       const p = calculatePayout({ usdt: amount, ...pricing(s) });
       if (p.net.lte(0)) throw new AppError("This amount is too small to pay out.");
       const margin = s.marketRate ? rupees(amount.mul(D(s.marketRate).minus(D(s.rate)))) : null;
-      const split = splitFor({ gross: p.gross, margin, customer, admin: owner });
+      const split = splitFor({ margin, customer, admin: owner });
       // The reward is on top of the payout; it's paid from the owner's margin share (earnings.ts).
       const net = p.net.plus(D(split.reward));
       const { id, seq } = await nextOrderId(tx, now);

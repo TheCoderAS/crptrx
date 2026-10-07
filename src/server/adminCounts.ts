@@ -12,8 +12,7 @@ export type AdminCounts = {
   reviews: number;
   unmatched: number;
   support: number;
-  /** Super admin: admins' approvals waiting for the final say (identity checks, payouts to send). */
-  kycFinal: number;
+  /** Super admin: approved orders waiting for the payout to be sent. */
   toPay: number;
 };
 
@@ -33,18 +32,15 @@ const countsFor = cache(async (id: string, role: Viewer["role"]): Promise<AdminC
   const work = sup ? Prisma.sql`('PAYMENT_CONFIRMED', 'UNDER_REVIEW', 'ON_HOLD', 'APPROVED')` : Prisma.sql`('PAYMENT_CONFIRMED', 'UNDER_REVIEW', 'ON_HOLD')`;
   // Rows whose customer ("userId") this viewer may see.
   const mine = sup ? Prisma.sql`TRUE` : Prisma.sql`"userId" IN (SELECT id FROM users WHERE "adminId" = ${v.id})`;
-  // An admin is done with an identity check once they've approved it; it then waits for a super admin.
-  const kycOpen = sup ? Prisma.sql`TRUE` : Prisma.sql`"recommendedAt" IS NULL`;
-  const [r] = await prisma.$queryRaw<{ work: number; kyc_submitted: number; kyc_auto: number; payout: number; unmatched: number; support: number; kyc_final: number; to_pay: number }[]>`
+  const [r] = await prisma.$queryRaw<{ work: number; kyc_submitted: number; kyc_auto: number; payout: number; unmatched: number; support: number; to_pay: number }[]>`
     SELECT
       (SELECT count(*) FROM orders WHERE status IN ${work} AND ${mine})::int AS work,
-      (SELECT count(*) FROM kyc_submissions WHERE status = 'SUBMITTED' AND ${kycOpen} AND ${mine})::int AS kyc_submitted,
+      (SELECT count(*) FROM kyc_submissions WHERE status = 'SUBMITTED' AND ${mine})::int AS kyc_submitted,
       (SELECT count(*) FROM kyc_submissions WHERE "autoApproved" AND "postReviewedAt" IS NULL AND status = 'APPROVED' AND ${mine})::int AS kyc_auto,
       (SELECT count(*) FROM payout_methods WHERE status = 'PENDING' AND "deletedAt" IS NULL AND ${mine})::int AS payout,
       ${sup ? Prisma.sql`(SELECT count(*) FROM incoming_transfers WHERE status = 'UNMATCHED')::int` : Prisma.sql`0`} AS unmatched,
       ((SELECT count(*) FROM support_threads WHERE status = 'OPEN' AND "lastFrom" = 'USER' AND ${mine})
         + (SELECT count(*) FROM support_messages WHERE "orderId" IS NULL AND handled = false AND ${mine}))::int AS support,
-      ${sup ? Prisma.sql`(SELECT count(*) FROM kyc_submissions WHERE status = 'SUBMITTED' AND "recommendedAt" IS NOT NULL)::int` : Prisma.sql`0`} AS kyc_final,
       ${sup ? Prisma.sql`(SELECT count(*) FROM orders WHERE status = 'APPROVED')::int` : Prisma.sql`0`} AS to_pay`;
   const kyc = r.kyc_submitted + r.kyc_auto;
   return {
@@ -56,7 +52,6 @@ const countsFor = cache(async (id: string, role: Viewer["role"]): Promise<AdminC
     reviews: kyc + r.payout,
     unmatched: r.unmatched,
     support: r.support,
-    kycFinal: r.kyc_final,
     toPay: r.to_pay,
   };
 });

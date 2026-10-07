@@ -19,7 +19,7 @@ import { encrypt } from "@/server/crypto";
 import { adminCounts } from "@/server/adminCounts";
 import { ownedScope, userScope } from "@/server/scope";
 import { transition } from "@/server/orders/stateMachine";
-import { baseSettings, makeOrder, makeUser, resetDb } from "./helpers";
+import { baseSettings, makeOrder, resetDb } from "./helpers";
 
 import * as orderRoute from "@/app/api/admin/orders/[id]/route";
 import * as chatRoute from "@/app/api/admin/orders/[id]/chat/route";
@@ -147,23 +147,14 @@ describe("an admin can't reach another admin's customers (all answer 404)", () =
   });
 });
 
-describe("fraud control: a super admin has the final say on an admin's customers", () => {
-  it("an admin's identity approval waits for a super admin", async () => {
+describe("fraud control: admins approve identity checks, only a super admin pays", () => {
+  it("an admin approves their own customer's identity check directly", async () => {
     await signIn(ravi);
     expect(((await kycRoute.POST(req("POST", { decision: "APPROVED" }), ctx(ids.kycId))) as Response).status).toBe(200);
-    let k = await prisma.kycSubmission.findUniqueOrThrow({ where: { id: ids.kycId } });
-    expect(k.status).toBe("SUBMITTED");
-    expect(k.recommendedBy).toBe(ravi.id);
-    expect((await adminCounts(ravi)).kyc).toBe(0); // done on their side
-    expect((await adminCounts(boss)).kycFinal).toBe(1);
-    // Approving twice doesn't skip the super admin.
-    expect(((await kycRoute.POST(req("POST", { decision: "APPROVED" }), ctx(ids.kycId))) as Response).status).toBe(400);
-
-    await signIn(boss);
-    expect(((await kycRoute.POST(req("POST", { decision: "APPROVED" }), ctx(ids.kycId))) as Response).status).toBe(200);
-    k = await prisma.kycSubmission.findUniqueOrThrow({ where: { id: ids.kycId } });
+    const k = await prisma.kycSubmission.findUniqueOrThrow({ where: { id: ids.kycId } });
     expect(k.status).toBe("APPROVED");
-    expect(k.reviewerId).toBe(boss.id);
+    expect(k.reviewerId).toBe(ravi.id);
+    expect((await adminCounts(ravi)).kyc).toBe(0);
   });
 
   it("only a super admin can mark an order paid", async () => {
@@ -179,18 +170,5 @@ describe("fraud control: a super admin has the final say on an admin's customers
     await signIn(boss);
     expect(((await orderRoute.POST(req("POST", pay), ctx(ids.orderId))) as Response).status).toBe(200);
     expect((await prisma.order.findUniqueOrThrow({ where: { id: ids.orderId } })).status).toBe("PAID");
-  });
-
-  it("identity checks of an admin's customers are never auto-approved", async () => {
-    const { submitKyc } = await import("@/server/kyc");
-    await prisma.setting.upsert({ where: { key: "kyc_auto_approve" }, create: { key: "kyc_auto_approve", value: true }, update: { value: true } });
-    await prisma.setting.upsert({ where: { key: "onboarding_mobile_required" }, create: { key: "onboarding_mobile_required", value: false }, update: { value: false } });
-    const { user } = await makeUser({ verified: false });
-    await prisma.user.update({ where: { id: user.id }, data: { adminId: ravi.id } });
-    const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]);
-    const f = { buf: PNG, type: "image/png" };
-    const sub = await submitKyc(user.id, { fullName: "Tagged Person", dob: "1990-01-01", pan: "ABCDE1234F", address: "1 Long Street, Pune", maskedConfirmed: true, files: { panDoc: f, aadhaarFront: f, aadhaarBack: f, selfie: f } }, { type: "USER", id: user.id });
-    expect(sub.status).toBe("SUBMITTED");
-    expect(sub.autoApproved).toBe(false);
   });
 });

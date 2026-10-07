@@ -175,7 +175,7 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
           <h2 className="h2">Orders{sup && adminFilter ? ` · ${admins.find((a) => a.id === adminFilter)?.name ?? ""}` : ""}</h2>
           <nav className="flex flex-wrap gap-1 text-sm" aria-label="Filter">
             {[undefined, ...STATUSES].map((st) => (
-              <Link key={st ?? "all"} href={href({ admin: sup ? adminFilter : undefined, status: st })} aria-current={status === st ? "page" : undefined} className={`rounded-lg px-2.5 py-1 ${status === st ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+              <Link key={st ?? "all"} href={href({ admin: sup ? adminFilter : undefined, status: st })} aria-current={status === st ? "page" : undefined} className={`rounded-lg px-2.5 py-1 ${status === st ? "bg-brand-600 font-medium text-white" : "text-slate-600 hover:bg-slate-100"}`}>
                 {st === undefined ? "All" : st === "PENDING" ? "Owed" : st === "SETTLED" ? "Paid" : "Cancelled"}
               </Link>
             ))}
