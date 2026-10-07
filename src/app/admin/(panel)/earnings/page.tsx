@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { Banknote, Coins, Gift, HandCoins, Wallet } from "lucide-react";
-import type { EarningStatus, Prisma } from "@prisma/client";
+import { Banknote, Coins, Gift, HandCoins, Send, Wallet } from "lucide-react";
+import type { EarningStatus, PayoutRequestStatus, Prisma } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { earningTotals } from "@/server/earnings";
 import { D, Decimal, fmtInr } from "@/server/money";
 import { isSuper } from "@/server/scope";
+import { getSettings } from "@/server/settings";
+import { ApiForm } from "@/components/ApiForm";
 import { fmtISTShort, istMonthStart } from "@/lib/time";
 import { InfoTip } from "@/components/InfoTip";
 import { ModalForm } from "@/components/Modal";
@@ -28,12 +30,18 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
   const status = STATUSES.includes(sp.status as EarningStatus) ? (sp.status as EarningStatus) : undefined;
   const where: Prisma.AdminEarningWhereInput = { ...(adminFilter ? { adminId: adminFilter } : {}), ...(status ? { status } : {}) };
 
-  const [totals, rows, settlements, admins] = await Promise.all([
+  const [totals, rows, settlements, admins, requests, s] = await Promise.all([
     earningTotals(sup ? {} : { adminId: me.id }),
     prisma.adminEarning.findMany({ where, orderBy: { createdAt: "desc" }, take: 200, include: { admin: { select: { name: true } } } }),
     prisma.adminSettlement.findMany({ where: adminFilter ? { adminId: adminFilter } : {}, orderBy: { createdAt: "desc" }, take: 50, include: { admin: { select: { name: true } } } }),
     sup ? prisma.admin.findMany({ where: { role: "ADMIN" }, orderBy: { name: "asc" }, select: { id: true, name: true, inviteCode: true, profitPercent: true, status: true, _count: { select: { customers: true } } } }) : Promise.resolve([]),
+    // Super admin: every waiting request. Admin: their own latest ones.
+    prisma.adminPayoutRequest.findMany({ where: sup ? { status: "OPEN" } : { adminId: me.id }, orderBy: { createdAt: sup ? "asc" : "desc" }, take: sup ? 100 : 10, include: { admin: { select: { name: true } } } }),
+    getSettings(),
   ]);
+  const minRequest = D(s.payout_request_min_inr || "0");
+  const openMine = sup ? null : requests.find((r) => r.status === "OPEN");
+  const openFor = new Map(sup ? requests.map((r) => [r.adminId, r]) : []);
   const mine = totals.get(me.id);
   const zero = new Decimal(0);
 
@@ -78,6 +86,7 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
       <div><label className="label" htmlFor={`why-${r.id}`}>Why (logged, shown to the admin)</label><input id={`why-${r.id}`} name="reason" required minLength={5} className="input" /></div>
     </ModalForm>
   );
+  const requestPill = (st: PayoutRequestStatus) => <StatusPill status={st === "PAID" ? "PAID" : st === "OPEN" ? "PENDING" : "DISABLED"} label={st === "OPEN" ? "Waiting" : st === "PAID" ? "Paid" : st === "DECLINED" ? "Declined" : "Cancelled"} />;
   const pill = (st: EarningStatus) => <StatusPill status={st === "SETTLED" ? "PAID" : st === "VOID" ? "DISABLED" : "PENDING"} label={st === "PENDING" ? "Owed" : st === "SETTLED" ? "Paid" : "Cancelled"} />;
 
   const href = (o: { admin?: string; status?: string }) => `/admin/earnings?${new URLSearchParams({ ...(o.admin ? { admin: o.admin } : {}), ...(o.status ? { status: o.status } : {}) })}`;
@@ -97,6 +106,78 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
           <Stat label="Paid to you" value={fmtInr(mine?.settled ?? zero)} icon={<Banknote className="size-5" />} tile="tile-emerald" />
           <Stat label="Bonuses you gave" value={fmtInr(mine?.rewards ?? zero)} icon={<Gift className="size-5" />} tile="tile-violet" className="col-span-2 sm:col-span-1" />
         </div>
+      )}
+
+      {!sup && (
+        <section className="card space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="h2">Payout</h2>
+              <p className="muted text-sm">
+                {openMine
+                  ? <>You asked for {fmtInr(openMine.amount)} on {fmtISTShort(openMine.createdAt)}. Waiting for the super admin.</>
+                  : (mine?.pending ?? zero).gte(minRequest) && (mine?.pending ?? zero).gt(0)
+                    ? <>Ask the super admin to pay you what you&apos;re owed.</>
+                    : <>You can ask once you&apos;re owed {minRequest.gt(0) ? <>at least {fmtInr(minRequest)}</> : "something"}.</>}
+              </p>
+            </div>
+            {openMine ? (
+              <ApiForm action={`/api/admin/earnings/requests/${openMine.id}`} confirm="Cancel your payout request?">
+                <input type="hidden" name="action" value="cancel" />
+                <button className="btn-ghost text-rose-700">Cancel request</button>
+              </ApiForm>
+            ) : (mine?.pending ?? zero).gte(minRequest) && (mine?.pending ?? zero).gt(0) ? (
+              <ModalForm
+                button={<><Send className="size-4" aria-hidden /> Request payout</>}
+                title={`Ask for ${fmtInr(mine?.pending ?? zero)}`}
+                description="The super admin pays you the way you agreed and marks it paid here. Anything you earn before then is included."
+                action="/api/admin/earnings/requests"
+                submitLabel="Send request"
+              >
+                <div><label className="label" htmlFor="req-note">Note <span className="font-normal text-slate-500">(optional)</span></label><input id="req-note" name="note" maxLength={300} className="input" /></div>
+              </ModalForm>
+            ) : (
+              <button type="button" className="btn-primary" disabled><Send className="size-4" aria-hidden /> Request payout</button>
+            )}
+          </div>
+          {requests.length > 0 && (
+            <ul className="divide-y divide-slate-100 border-t border-slate-100 text-sm">
+              {requests.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span className="text-slate-600">{fmtISTShort(r.createdAt)} · {fmtInr(r.amount)}{r.reason ? <span className="block text-xs text-slate-500">{r.reason}</span> : null}</span>
+                  {requestPill(r.status)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {sup && requests.length > 0 && (
+        <section className="card space-y-2">
+          <h2 className="h2">Payout requests</h2>
+          <ul className="divide-y divide-slate-100">
+            {requests.map((r) => {
+              const a = admins.find((x) => x.id === r.adminId);
+              const now = totals.get(r.adminId)?.pending ?? zero;
+              return (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                  <div className="min-w-0 text-sm">
+                    <p className="font-medium text-slate-900">{r.admin.name} asked for {fmtInr(r.amount)}</p>
+                    <p className="text-xs text-slate-500">{fmtISTShort(r.createdAt)} · owed now {fmtInr(now)}{r.note ? ` · ${r.note}` : ""}</p>
+                  </div>
+                  <span className="flex items-center gap-1">
+                    {a && now.gt(0) && settle(a, now)}
+                    <ModalForm button="Decline…" buttonClassName="btn-ghost min-h-8 px-2 py-1 text-xs text-rose-700" title={`Decline ${r.admin.name}'s request?`} description="Their earnings stay owed. They can ask again." action={`/api/admin/earnings/requests/${r.id}`} submitLabel="Decline request">
+                      <input type="hidden" name="action" value="decline" />
+                      <div><label className="label" htmlFor={`dec-${r.id}`}>Why (the admin sees this)</label><input id={`dec-${r.id}`} name="reason" required minLength={5} maxLength={300} className="input" /></div>
+                    </ModalForm>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
 
       {sup && m && (
@@ -131,7 +212,7 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
                   <li key={a.id} className="space-y-1.5 px-4 py-3">
                     <div className="flex items-center justify-between gap-2">
                       <Link href={href({ admin: a.id })} className="min-w-0 truncate font-medium text-brand-700">{a.name}{a.status !== "ACTIVE" && <span className="ml-1 text-xs text-slate-500">(disabled)</span>}</Link>
-                      <span className="font-semibold tabular-nums">{fmtInr(owed)} <span className="text-xs font-normal text-slate-500">owed</span></span>
+                      <span className="font-semibold tabular-nums">{fmtInr(owed)} <span className="text-xs font-normal text-slate-500">owed{openFor.has(a.id) ? " · requested" : ""}</span></span>
                     </div>
                     <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                       <span><span className="font-mono">{a.inviteCode ?? "—"}</span> · {a.profitPercent.toString()}% · {a._count.customers} customers · paid {fmtInr(t?.settled ?? zero)}</span>
@@ -154,7 +235,7 @@ export default async function Earnings({ searchParams }: { searchParams: Promise
                         <td className="font-mono text-xs">{a.inviteCode ?? "—"}</td>
                         <td className="text-right">{a.profitPercent.toString()}%</td>
                         <td className="text-right"><Link href={`/admin/users?admin=${a.id}`} className="hover:underline">{a._count.customers}</Link></td>
-                        <td className="text-right font-semibold tabular-nums">{fmtInr(owed)}{t?.pendingCount ? <span className="block text-xs font-normal text-slate-500">{t.pendingCount} orders</span> : null}</td>
+                        <td className="text-right font-semibold tabular-nums">{fmtInr(owed)}{t?.pendingCount ? <span className="block text-xs font-normal text-slate-500">{t.pendingCount} orders{openFor.has(a.id) ? " · requested" : ""}</span> : null}</td>
                         <td className="text-right tabular-nums">{fmtInr(t?.settled ?? zero)}</td>
                         <td className="text-right">
                           {owed.gt(0) && settle(a, owed)}

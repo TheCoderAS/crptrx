@@ -29,6 +29,8 @@ export const SETTING_DEFAULTS = {
   // MANUAL mode: the market price you're buying against, so each order records its margin.
   // Empty = margin isn't recorded. AUTO mode uses the live market price instead.
   rate_market_manual: "",
+  // Admins can ask for a payout of their earnings once they're owed at least this much (rupees).
+  payout_request_min_inr: "500",
   gst_enabled: true, // OWNER
   gst_percent: "18", // OWNER
   tax_percent: "1", // OWNER + CA
@@ -138,6 +140,7 @@ export const SETTING_LABELS: Partial<Record<string, string>> = {
   fee_min_inr: "Minimum fee",
   fee_max_inr: "Maximum fee",
   rate_market_manual: "Market price",
+  payout_request_min_inr: "Lowest payout request",
   gst_percent: "GST %",
   tax_percent: "Tax held back %",
   rate_margin_percent: "Margin %",
@@ -176,6 +179,7 @@ export const EDITABLE_KEYS: SettingKey[] = [
   "fee_min_inr",
   "fee_max_inr",
   "rate_market_manual",
+  "payout_request_min_inr",
   "gst_enabled",
   "gst_percent",
   "tax_percent",
@@ -227,6 +231,11 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
     if (!/^\d+(\.\d+)?$/.test(v)) throw new AppError(`${name}: enter a plain number, e.g. 25, or leave it empty.`);
     if ((v.split(".")[1]?.length ?? 0) > places) throw new AppError(`${name}: use at most ${places} decimal places.`);
     if (key === "rate_market_manual" && D(v).lte(0)) throw new AppError("Market price must be above 0, or leave it empty.");
+    return v;
+  }
+  if (key === "payout_request_min_inr") {
+    const v = String(value ?? "").trim() || "0";
+    if (!/^\d+(\.\d{1,2})?$/.test(v)) throw new AppError(`${SETTING_LABELS[key]}: enter rupees, e.g. 500, or 0 for any amount.`);
     return v;
   }
   const decimalKeys: SettingKey[] = [

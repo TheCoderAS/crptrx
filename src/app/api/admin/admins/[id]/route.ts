@@ -3,6 +3,7 @@ import { adminCtx, recheck2fa } from "@/server/auth/guard";
 import { audit } from "@/server/audit";
 import { prisma } from "@/server/db";
 import { AppError } from "@/server/errors";
+import { closeOnDisable } from "@/server/payoutRequests";
 import { checkReferralFields, releaseCustomers, saveReferral } from "@/server/referral";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -31,6 +32,7 @@ export const POST = api(async (req: Request, ctx: Ctx) => {
       if (b.action === "disable") {
         await tx.session.deleteMany({ where: { subjectType: "ADMIN", subjectId: id } });
         await releaseCustomers(id, a.actor, tx);
+        await closeOnDisable(tx, id, a.actor);
       }
     });
   } else if (b.action === "reset_2fa") {

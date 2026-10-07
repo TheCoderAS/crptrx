@@ -3,6 +3,7 @@ import { audit, type Actor } from "./audit";
 import { prisma, type Tx } from "./db";
 import { AppError } from "./errors";
 import { D, Decimal, rupees } from "./money";
+import { closeWithSettlement } from "./payoutRequests";
 import { assertUser, type Viewer } from "./scope";
 
 /**
@@ -115,6 +116,7 @@ export async function settleAdmin(adminId: string, input: { reference?: string; 
       data: { adminId, amount: amount.toFixed(2), count: rows.length, reference: input.reference?.trim() || null, note: input.note?.trim() || null, createdBy: actor.id ?? "system" },
     });
     await tx.adminEarning.updateMany({ where: { id: { in: rows.map((r) => r.id) }, status: "PENDING" }, data: { status: "SETTLED", settlementId: st.id } });
+    await closeWithSettlement(tx, adminId, st.id, actor);
     await audit(actor, "ADMIN_EARNINGS_SETTLED", { targetType: "admin", targetId: adminId, details: { settlementId: st.id, amount: amount.toFixed(2), count: rows.length, reference: st.reference } }, tx);
     return st;
   });

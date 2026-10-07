@@ -461,13 +461,14 @@ model Admin {
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
-  customers     User[]            @relation("AdminCustomers")
-  earnings      AdminEarning[]
-  settlements   AdminSettlement[]
-  kycReviews    KycSubmission[]
-  payoutReviews PayoutMethod[]
-  notes         AdminNote[]
-  pushDevices   AdminPushDevice[]
+  customers      User[]               @relation("AdminCustomers")
+  earnings       AdminEarning[]
+  settlements    AdminSettlement[]
+  payoutRequests AdminPayoutRequest[]
+  kycReviews     KycSubmission[]
+  payoutReviews  PayoutMethod[]
+  notes          AdminNote[]
+  pushDevices    AdminPushDevice[]
 
   @@map("admins")
 }
@@ -623,9 +624,40 @@ model AdminSettlement {
   createdBy String
   createdAt DateTime @default(now())
 
-  admin    Admin          @relation(fields: [adminId], references: [id])
+  admin    Admin               @relation(fields: [adminId], references: [id])
   earnings AdminEarning[]
+  request  AdminPayoutRequest?
 
   @@index([adminId, createdAt])
   @@map("admin_settlements")
+}
+
+enum PayoutRequestStatus {
+  OPEN
+  PAID
+  DECLINED
+  CANCELLED
+}
+
+/// An admin asking the super admin to pay out what they're owed. At most one OPEN per admin
+/// (partial unique index in the migration). Paying it is the normal settlement.
+model AdminPayoutRequest {
+  id           String              @id @default(cuid())
+  adminId      String
+  amount       Decimal             @db.Decimal(14, 2) // owed when asked; the payout may differ
+  note         String?
+  status       PayoutRequestStatus @default(OPEN)
+  settlementId String?             @unique
+  reason       String? // why it was declined or closed
+  decidedBy    String?
+  decidedAt    DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  admin      Admin            @relation(fields: [adminId], references: [id])
+  settlement AdminSettlement? @relation(fields: [settlementId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([adminId, createdAt])
+  @@map("admin_payout_requests")
 }
