@@ -2,10 +2,10 @@
 import { readFully } from "@/lib/shrinkImage";
 
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2, X } from "lucide-react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import { useConfirm } from "./Confirm";
 import { useStepUp } from "./StepUp";
+import { toastError, toastOk } from "./Toaster";
 
 /**
  * Lets a field inside the form (a picked file still being read or shrunk) hold the
@@ -42,8 +42,6 @@ export function ApiForm({
   outerClassName?: string;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(0);
   const startPreparing = useCallback(() => {
@@ -56,12 +54,6 @@ export function ApiForm({
   }, []);
   const stepUp = useStepUp();
   const confirmer = useConfirm();
-  // "Saved" messages fade on their own; errors stay until closed or the next try.
-  useEffect(() => {
-    if (!ok) return;
-    const t = setTimeout(() => setOk(null), 5000);
-    return () => clearTimeout(t);
-  }, [ok]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -79,13 +71,11 @@ export function ApiForm({
         const whole = await readFully(v);
         if (!whole) {
           setBusy(false);
-          return setError("Your phone couldn't hand over a file. Wait a moment and pick it again.");
+          return toastError("Your phone couldn't hand over a file. Wait a moment and pick it again.");
         }
         fields[i] = [fields[i][0], whole];
       }
     }
-    setError(null);
-    setOk(null);
     const build = (totp?: string): RequestInit => {
       const fd = new FormData();
       for (const [k, v] of fields) fd.append(k, v);
@@ -121,7 +111,7 @@ export function ApiForm({
         data = await res.json().catch(() => ({}));
       }
       if (!res.ok) {
-        setError(data.error ?? `Something went wrong (${res.status}).`);
+        toastError(data.error ?? `Something went wrong (${res.status}).`);
         return;
       }
       if (resetOnSuccess) form.reset();
@@ -129,9 +119,9 @@ export function ApiForm({
       // Refresh after navigating too, so shared layout (header, tab bar) reflects a login or logout.
       if (data.redirect) router.push(data.redirect);
       router.refresh();
-      if (successMessage || data.message) setOk(data.message ?? successMessage);
+      if (successMessage || data.message) toastOk(String(data.message ?? successMessage));
     } catch {
-      setError("Network problem. Check your connection and try again.");
+      toastError("Network problem. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -144,24 +134,6 @@ export function ApiForm({
             (a display:contents wrapper would silently break space-y-*). */}
         <fieldset disabled={busy || preparing > 0} className={className}>
           {children}
-          {error && (
-            <p role="alert" className="flex gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200 ring-inset">
-              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <span className="flex-1">{error}</span>
-              <button type="button" onClick={() => setError(null)} className="-my-1 -mr-1 grid size-7 shrink-0 place-items-center rounded-md opacity-60 hover:bg-black/10 hover:opacity-100" aria-label="Dismiss">
-                <X className="size-4" aria-hidden />
-              </button>
-            </p>
-          )}
-          {ok && (
-            <p role="status" className="flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 ring-1 ring-emerald-200 ring-inset">
-              <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <span className="flex-1">{ok}</span>
-              <button type="button" onClick={() => setOk(null)} className="-my-1 -mr-1 grid size-7 shrink-0 place-items-center rounded-md opacity-60 hover:bg-black/10 hover:opacity-100" aria-label="Dismiss">
-                <X className="size-4" aria-hidden />
-              </button>
-            </p>
-          )}
         </fieldset>
         {stepUp.prompt}
         {confirmer.prompt}

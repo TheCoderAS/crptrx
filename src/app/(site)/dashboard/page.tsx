@@ -72,7 +72,7 @@ export default async function Dashboard() {
 
       {o.blockedReason && (
         <div className="space-y-3">
-          <Banner tone="danger">{o.blockedReason}</Banner>
+          <Banner inline tone="danger">{o.blockedReason}</Banner>
           <ContactLinks channels={contactChannels(s)} />
         </div>
       )}

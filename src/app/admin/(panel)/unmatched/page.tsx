@@ -70,7 +70,7 @@ export default async function Unmatched({ searchParams }: { searchParams: Promis
           <p className="text-xs break-all">From <span className="font-mono">{t.fromAddress}</span> → to <span className="font-mono">{t.toAddress}</span></p>
           {t.status === "IGNORED_WRONG_TOKEN" && <p className="text-xs text-red-700">Token contract {t.tokenContract} is not the official USDT. Never matched.</p>}
           {(t.status === "UNMATCHED" || t.status === "MANUAL_HANDLING") && (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200 ring-inset">
+            <p className="text-sm text-slate-700">
               <b>Why it wasn&apos;t matched: </b>
               {fromUs(t) ? "Sent from our own deposit address, so it isn't a customer's payment. Don't link it to an order." : (t.unmatchedReason ?? "Not recorded (this payment arrived before reasons were kept).")}
             </p>

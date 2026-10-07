@@ -1,4 +1,5 @@
 "use client";
+import { toastError } from "@/components/Toaster";
 
 import { useEffect, useRef, useState } from "react";
 import { ShieldCheck } from "lucide-react";
@@ -9,7 +10,8 @@ import { ShieldCheck } from "lucide-react";
  */
 export function useStepUp() {
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Messages go to the top-right pop-ups (Toaster).
+  const setError = (m: string | null) => void (m && toastError(m));
   const resolver = useRef<((code: string | null) => void) | null>(null);
 
   const ask = (err?: string) =>
@@ -23,11 +25,11 @@ export function useStepUp() {
     resolver.current?.(code);
     resolver.current = null;
   };
-  const prompt = open ? <StepUpDialog error={error} onDone={finish} /> : null;
+  const prompt = open ? <StepUpDialog onDone={finish} /> : null;
   return { ask, prompt };
 }
 
-function StepUpDialog({ error, onDone }: { error: string | null; onDone: (code: string | null) => void }) {
+function StepUpDialog({ onDone }: { onDone: (code: string | null) => void }) {
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     input.current?.focus();
@@ -57,7 +59,6 @@ function StepUpDialog({ error, onDone }: { error: string | null; onDone: (code: 
             }
           }}
         />
-        {error && <p role="alert" className="mt-2 text-sm text-rose-700">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={() => onDone(null)}>Cancel</button>
           <button type="button" className="btn-primary" onClick={() => input.current?.value.trim() && onDone(input.current.value.trim())}>Confirm</button>

@@ -91,7 +91,7 @@ export default async function Kyc() {
           </Section>
 
           <Section title="Documents" description="Clear photos in good light. All four are required.">
-            <Banner tone="warn" title="Upload only the masked Aadhaar">
+            <Banner inline tone="warn" title="Upload only the masked Aadhaar">
               First 8 digits hidden (XXXX XXXX 1234). Get it free from the UIDAI website. Unmasked copies are declined.
             </Banner>
             <div className="mt-4 grid grid-cols-2 gap-3">

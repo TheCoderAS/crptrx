@@ -12,7 +12,7 @@ export default async function CancelChange({ searchParams }: { searchParams: Pro
   await adminOrLogin();
   const { token } = await searchParams;
   const c = token ? await prisma.depositAddressChange.findUnique({ where: { cancelTokenHash: sha256(token) } }) : null;
-  if (!c) return <Banner tone="danger">This cancel link is not valid.</Banner>;
+  if (!c) return <Banner inline tone="danger">This cancel link is not valid.</Banner>;
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <PageHeader title="Cancel deposit address change?" icon={<ShieldAlert className="size-6" />} tile="tile-rose" />
@@ -23,7 +23,7 @@ export default async function CancelChange({ searchParams }: { searchParams: Pro
         <p className="text-sm">Requested: <code className="break-all">{c.newAddress}</code></p>
         <p className="text-sm">Takes effect: {fmtIST(c.effectiveAt)}</p>
       </div>
-      {c.cancelledAt ? <Banner tone="ok">Already cancelled.</Banner> : c.appliedAt ? <Banner tone="danger">This change already took effect at {fmtIST(c.appliedAt)}. Set the correct address again from Settings (also delayed 1 hour) and pause the network if needed.</Banner> : (
+      {c.cancelledAt ? <Banner inline tone="ok">Already cancelled.</Banner> : c.appliedAt ? <Banner inline tone="danger">This change already took effect at {fmtIST(c.appliedAt)}. Set the correct address again from Settings (also delayed 1 hour) and pause the network if needed.</Banner> : (
         <ApiForm action="/api/admin/deposit-address/cancel">
           <input type="hidden" name="token" value={token} />
           <button className="btn-danger w-full">Cancel this change</button>

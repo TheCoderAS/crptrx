@@ -26,7 +26,7 @@ export default async function VerifyEmail({ searchParams }: { searchParams: Prom
   if (user?.emailVerified)
     return (
       <AuthShell brand={m.brand} logo={m.logo} title="Email confirmed">
-        <Banner tone="ok">Your email is confirmed.</Banner>
+        <Banner inline tone="ok">Your email is confirmed.</Banner>
         <Link href="/dashboard" className="btn-primary btn-lg w-full">Go to dashboard</Link>
       </AuthShell>
     );

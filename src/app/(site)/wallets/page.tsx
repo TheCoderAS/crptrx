@@ -27,9 +27,9 @@ export default async function Wallets() {
         tile="tile-amber"
       />
       {mode === "OFF" ? (
-        <Banner tone="info">You don&apos;t need to add wallets right now. <Link href="/dashboard" className="font-medium underline">Back to home</Link></Banner>
+        <Banner inline tone="info">You don&apos;t need to add wallets right now. <Link href="/dashboard" className="font-medium underline">Back to home</Link></Banner>
       ) : mode === "REQUIRED" ? (
-        <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-medium text-amber-900 ring-1 ring-amber-200 ring-inset">
+        <p className="flex items-center gap-2 text-sm font-medium text-slate-700">
           <span className="flex-1">Pay only from a wallet listed here</span>
           <InfoTip>Payments from other wallets are held until we check them. Exchange withdrawals come from the exchange&apos;s wallet, so send from your own wallet.</InfoTip>
         </p>
