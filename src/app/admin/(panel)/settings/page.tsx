@@ -6,6 +6,7 @@ import {
   Blocks,
   Coins,
   FileText,
+  Gift,
   Gauge,
   Landmark,
   LockKeyhole,
@@ -265,6 +266,38 @@ export default async function SettingsPage() {
                   </SettingRow>
                   <SettingRow label="Customer sending wallets" htmlFor="wallet_registration" hint="Required: new orders need a saved wallet, and payments from other wallets are held. Exchange withdrawals will be held.">
                     <Select id="wallet_registration" name="wallet_registration" defaultValue={s.wallet_registration} className="text-sm" options={[{ value: "OFF", label: "Off" }, { value: "OPTIONAL", label: "Optional" }, { value: "REQUIRED", label: "Required" }]} />
+                  </SettingRow>
+                </Group>
+              </SettingsForm>
+            ),
+          },
+          {
+            id: "referrals",
+            label: "Referral points",
+            icon: <Gift />,
+            content: (
+              <SettingsForm>
+                <Group title="Users inviting users" icon={<Gift />} tile="tile-violet" note="1 point = ₹1, used only on the referrer's own sale. The house pays; admins' earnings aren't touched.">
+                  <SettingRow label="Referral points" htmlFor="referral_enabled" hint="Off: no new points. Points already earned can still be used.">
+                    <Switch name="referral_enabled" checked={s.referral_enabled} label="Referral points" />
+                  </SettingRow>
+                  <SettingRow label="Reward on" htmlFor="referral_mode" hint="First sale: once per invited friend, on their first sale that earns.">
+                    <Segmented name="referral_mode" value={s.referral_mode} options={[{ value: "FIRST", label: "First sale" }, { value: "EVERY", label: "Every sale" }]} />
+                  </SettingRow>
+                  <SettingRow label="Points per USDT" htmlFor="referral_points_per_usdt" hint="Per USDT the friend sells, rounded down.">
+                    <UnitInput name="referral_points_per_usdt" value={s.referral_points_per_usdt} unit="points" />
+                  </SettingRow>
+                  <SettingRow label="Most points per sale" htmlFor="referral_max_points_per_sale" hint="0 = no limit.">
+                    <UnitInput name="referral_max_points_per_sale" value={s.referral_max_points_per_sale} unit="points" type="number" />
+                  </SettingRow>
+                  <SettingRow label="Smallest sale that earns" htmlFor="referral_min_sale_usdt">
+                    <UnitInput name="referral_min_sale_usdt" value={s.referral_min_sale_usdt} unit="USDT" />
+                  </SettingRow>
+                  <SettingRow label="Pending for" htmlFor="referral_hold_days" hint="New points wait this long before they can be used. You can cancel them meanwhile.">
+                    <UnitInput name="referral_hold_days" value={s.referral_hold_days} unit="days" type="number" />
+                  </SettingRow>
+                  <SettingRow label="Points expire after" htmlFor="referral_expiry_days" hint="Counted from when they can be used. 0 = never.">
+                    <UnitInput name="referral_expiry_days" value={s.referral_expiry_days} unit="days" type="number" />
                   </SettingRow>
                 </Group>
               </SettingsForm>

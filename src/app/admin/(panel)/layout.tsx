@@ -37,6 +37,7 @@ export default async function Panel({ children }: { children: React.ReactNode })
     { href: "/admin/earnings", label: "Earnings", icon: "HandCoins", ...(sup ? { count: payoutRequests } : {}) },
     ...(sup
       ? ([
+          { href: "/admin/points", label: "Referral points", icon: "Gift" },
           { href: "/admin/reports", label: "Reports", icon: "FileClock" },
           { href: "/admin/admins", label: "Admins", icon: "Users" },
           { href: "/admin/settings", label: "Settings", icon: "Settings" },

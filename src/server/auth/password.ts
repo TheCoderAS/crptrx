@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import type { User } from "@prisma/client";
-import { resolveInvite } from "../referral";
+import { inviteData, resolveInvite } from "../referral";
 import { audit } from "../audit";
 import { randomToken, sha256 } from "../crypto";
 import { prisma } from "../db";
@@ -70,7 +70,7 @@ export async function registerWithPassword(emailInput: unknown, passwordInput: u
   if (!EMAIL_RE.test(email) || email.length > 200) throw new AppError("Enter a valid email address.");
   const password = checkUserPassword(passwordInput);
   // A wrong code is refused before anything else, so the person can fix it or clear it.
-  const adminId = await resolveInvite(inviteCode);
+  const inv = await resolveInvite(inviteCode);
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     await bcrypt.hash(password, 12); // same timing as a real sign-up
@@ -83,8 +83,8 @@ export async function registerWithPassword(emailInput: unknown, passwordInput: u
     );
     return null;
   }
-  const user = await prisma.user.create({ data: { email, passwordHash: await bcrypt.hash(password, 12), emailVerified: false, adminId, referredAt: adminId ? new Date() : null } });
-  await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: "password", adminId }, ip });
+  const user = await prisma.user.create({ data: { email, passwordHash: await bcrypt.hash(password, 12), emailVerified: false, ...inviteData(inv) } });
+  await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: "password", ...inv }, ip });
   await sendVerificationEmail(user);
   return user;
 }

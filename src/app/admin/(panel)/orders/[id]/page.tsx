@@ -338,6 +338,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
               {D(o.fee).gt(0) && <Row k={feeLabel("Fee", o)} v={`– ${fmtInr(o.fee)}`} />}
               {D(o.gstOnFee).gt(0) && <Row k={`GST on fee (${D(o.gstPercent)}%)`} v={`– ${fmtInr(o.gstOnFee)}`} />}
               {D(o.reward).gt(0) && <Row k="Customer bonus reward" v={`+ ${fmtInr(o.reward)}`} />}
+              {o.pointsUsed > 0 && <Row k="Customer's referral points (paid by the house)" v={`+ ${fmtInr(o.pointsUsed)}`} />}
               <Row k={<b>Net to pay</b>} v={<b>{fmtInr(o.net)}</b>} />
               {(sup || o.adminId === me.id) && o.margin !== null && (
                 <div className="mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 ring-inset">

@@ -31,10 +31,10 @@ export async function exportReport(kind: "orders" | "tax" | "audit", range: { fr
   if (kind === "orders") {
     const orders = await prisma.order.findMany({ where: { createdAt: { gte: range.from, lte: range.to } }, orderBy: { createdAt: "asc" } });
     const kyc = await kycMap([...new Set(orders.map((o) => o.userId))]);
-    const rows: unknown[][] = [["order_id", "created_at", "paid_at", "user_name", "pan", "usdt", "network", "txid", "rate", "gross_inr", "tax_held_inr", "fee_inr", "gst_inr", "bonus_inr", "net_inr", "utr", "status"]];
+    const rows: unknown[][] = [["order_id", "created_at", "paid_at", "user_name", "pan", "usdt", "network", "txid", "rate", "gross_inr", "tax_held_inr", "fee_inr", "gst_inr", "bonus_inr", "points_inr", "net_inr", "utr", "status"]];
     for (const o of orders) {
       const k = kyc.get(o.userId);
-      rows.push([o.id, o.createdAt, o.paidAt, k?.fullName, k ? decrypt(k.panEncrypted) : "", D(o.usdtAmount).toFixed(), NETWORK_INFO[o.network as NetworkCode].name, o.txid, D(o.rate).toFixed(), D(o.gross).toFixed(2), D(o.taxHeld).toFixed(2), D(o.fee).toFixed(2), D(o.gstOnFee).toFixed(2), D(o.reward).toFixed(2), D(o.net).toFixed(2), o.utr, o.status]);
+      rows.push([o.id, o.createdAt, o.paidAt, k?.fullName, k ? decrypt(k.panEncrypted) : "", D(o.usdtAmount).toFixed(), NETWORK_INFO[o.network as NetworkCode].name, o.txid, D(o.rate).toFixed(), D(o.gross).toFixed(2), D(o.taxHeld).toFixed(2), D(o.fee).toFixed(2), D(o.gstOnFee).toFixed(2), D(o.reward).toFixed(2), D(o.pointsUsed).toFixed(2), D(o.net).toFixed(2), o.utr, o.status]);
     }
     return csv(rows);
   }

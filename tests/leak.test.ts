@@ -37,6 +37,7 @@ import * as rewardRoute from "@/app/api/admin/users/[id]/reward/route";
 import * as settleRoute from "@/app/api/admin/earnings/settle/route";
 import * as voidRoute from "@/app/api/admin/earnings/[id]/void/route";
 import * as requestRoute from "@/app/api/admin/earnings/requests/[id]/route";
+import * as pointsCancel from "@/app/api/admin/points/[id]/cancel/route";
 
 const SYS = { type: "SYSTEM" as const, id: null };
 
@@ -149,6 +150,11 @@ describe("an admin can't reach another admin's customers (all answer 404)", () =
     expect(((await requestRoute.POST(req("POST", { action: "decline", reason: "not me deciding" }), ctx(r.id))) as Response).status).toBe(404);
     expect((await prisma.adminPayoutRequest.findUniqueOrThrow({ where: { id: r.id } })).status).toBe("OPEN");
     expect(((await requestRoute.POST(req("POST", { action: "cancel" }), ctx(r.id))) as Response).status).toBe(200);
+  });
+
+  it("referral points are super admin only", async () => {
+    await signIn(ravi);
+    expect([403, 404]).toContain(((await pointsCancel.POST(req("POST", { reason: "trying it" }), ctx("any"))) as Response).status);
   });
 
   it("unmatched payments are super admin only", async () => {

@@ -19,15 +19,15 @@ describe("invite codes", () => {
   it("finds an active admin by code, any letter case and spaces", async () => {
     const a = await makeAdmin({ inviteCode: "RAVI2026" });
     expect((await adminForInviteCode(" ravi 2026 "))?.id).toBe(a.id);
-    expect(await resolveInvite("ravi2026")).toBe(a.id);
-    expect(await resolveInvite("")).toBeNull();
+    expect(await resolveInvite("ravi2026")).toEqual({ adminId: a.id, referredById: null });
+    expect(await resolveInvite("")).toEqual({ adminId: null, referredById: null });
   });
 
   it("refuses an unknown code, a disabled admin's code and a super admin's code", async () => {
     await makeAdmin({ inviteCode: "OLDCODE1", status: "DISABLED" });
     await makeAdmin({ inviteCode: "BOSSCODE", role: "SUPER_ADMIN" });
     for (const c of ["NOPE1234", "OLDCODE1", "BOSSCODE"]) await expect(resolveInvite(c)).rejects.toThrow(/Code not found/);
-    expect(await resolveInvite("NOPE1234", true)).toBeNull(); // remembered from an old link: ignored
+    expect(await resolveInvite("NOPE1234", true)).toEqual({ adminId: null, referredById: null }); // remembered from an old link: ignored
   });
 
   it("checks the code and share the super admin types", () => {

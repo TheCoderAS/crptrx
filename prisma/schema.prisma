@@ -101,10 +101,19 @@ model User {
   // Bonus on each order, as % of the order value, paid from the margin share of whoever owns
   // the customer (their admin, or the house). Capped at that share. 0 = none.
   rewardPercent    Decimal    @default(0) @db.Decimal(7, 4)
+  // User-to-user referrals: this user's own code (made once their identity is approved),
+  // and the user whose code they signed up with.
+  referralCode     String?    @unique
+  referredById     String?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  admin Admin? @relation("AdminCustomers", fields: [adminId], references: [id])
+  admin       Admin?            @relation("AdminCustomers", fields: [adminId], references: [id])
+  referredBy  User?             @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals   User[]            @relation("UserReferrals")
+  points      ReferralPoint[]   @relation("PointsEarned")
+  pointsFrom  ReferralPoint[]   @relation("PointsFrom")
+  redemptions PointRedemption[]
 
   kycSubmissions  KycSubmission[]
   payoutMethods   PayoutMethod[]
@@ -116,6 +125,7 @@ model User {
   emailTokens     EmailToken[]
 
   @@index([adminId])
+  @@index([referredById])
   @@map("users")
 }
 
@@ -209,6 +219,8 @@ model Order {
   adminShare        Decimal?    @db.Decimal(14, 2)
   rewardPercent     Decimal?    @db.Decimal(7, 4)
   reward            Decimal     @default(0) @db.Decimal(14, 2)
+  // Referral points the seller spent on this order (1 point = ₹1), already included in net.
+  pointsUsed        Int         @default(0)
   payoutMethodId    String
   payoutSnapshot    Json
   quoteExpiresAt    DateTime
@@ -660,4 +672,61 @@ model AdminPayoutRequest {
   @@index([status, createdAt])
   @@index([adminId, createdAt])
   @@map("admin_payout_requests")
+}
+
+enum PointStatus {
+  ACTIVE // counts (pending until availableAt, usable until expiresAt)
+  CANCELLED // a super admin cancelled it while pending
+  BLOCKED // not given: the friend's details match the referrer's
+}
+
+/// Points a user earned when someone they invited sold USDT. 1 point = ₹1, spent only on
+/// the user's own sales. One row per paid order of the friend.
+model ReferralPoint {
+  id          String      @id @default(cuid())
+  userId      String // who earns
+  fromUserId  String // the friend who sold
+  orderId     String      @unique
+  usdt        Decimal     @db.Decimal(38, 18)
+  points      Int
+  used        Int         @default(0) // held or spent on the user's own orders
+  status      PointStatus @default(ACTIVE)
+  reason      String? // why cancelled or blocked
+  cancelledBy String?
+  availableAt DateTime
+  expiresAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user     User @relation("PointsEarned", fields: [userId], references: [id])
+  fromUser User @relation("PointsFrom", fields: [fromUserId], references: [id])
+
+  @@index([userId, status])
+  @@index([fromUserId])
+  @@index([createdAt])
+  @@map("referral_points")
+}
+
+enum RedemptionStatus {
+  HELD // on an open order
+  SPENT // the order was paid
+  RELEASED // the order expired or was closed; points went back
+}
+
+/// Points used on one of the user's own orders. `allocations` = [{ id, points }] taken from
+/// ReferralPoint rows (oldest expiry first), so they can be given back exactly.
+model PointRedemption {
+  id          String           @id @default(cuid())
+  userId      String
+  orderId     String           @unique
+  points      Int
+  status      RedemptionStatus @default(HELD)
+  allocations Json
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@map("point_redemptions")
 }

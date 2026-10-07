@@ -1,4 +1,5 @@
 import { rewardPerUsdt } from "@/server/earnings";
+import { pointsBalance } from "@/server/points";
 import { contactChannels } from "@/server/contact";
 import { ContactLinks } from "@/components/ContactLinks";
 import Link from "next/link";
@@ -48,6 +49,7 @@ export default async function Sell() {
           feeMin={s.fee_min_inr}
           feeMax={s.fee_max_inr}
           rewardPerUsdt={await rewardPerUsdt(user, s)}
+          points={(await pointsBalance(user.id)).usable}
           min={s.limit_min_order_usdt}
           max={s.limit_max_order_usdt}
           available={available}
