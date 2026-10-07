@@ -26,7 +26,7 @@ export default async function Signup() {
         </>
       }
     >
-      {none && <Banner tone="warn">Sign-up is temporarily unavailable. Please try again later.</Banner>}
+      {none && <Banner inline tone="warn">Sign-up is temporarily unavailable. Please try again later.</Banner>}
       {(m.google || m.email) && <SignupOptions google={m.google ?? null} email={!!m.email} minPassword={USER_MIN_PASSWORD} verificationRequired={!!m.verificationRequired} />}
       {!m.email && !m.google && m.dev && <DevLogin collapsed={false} />}
     </AuthShell>

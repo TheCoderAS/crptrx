@@ -1,4 +1,5 @@
 "use client";
+import { toastError } from "@/components/Toaster";
 
 import { useState } from "react";
 import { CheckCircle2, RotateCcw } from "lucide-react";
@@ -7,7 +8,8 @@ import { ChatPopup } from "./ChatPopup";
 /** Support's chat with the customer, as a pop-up on the admin order page. */
 export function AdminOrderChat({ orderId, customer, startUnread = false }: { orderId: string; customer: string; startUnread?: boolean }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Messages go to the top-right pop-ups (Toaster).
+  const setError = (m: string | null) => void (m && toastError(m));
 
   async function setResolved(resolved: boolean) {
     setBusy(true);
@@ -23,7 +25,7 @@ export function AdminOrderChat({ orderId, customer, startUnread = false }: { ord
       side="ADMIN"
       startUnread={startUnread}
       title={customer}
-      subtitle={error ?? `Order ${orderId}`}
+      subtitle={`Order ${orderId}`}
       empty="No messages on this order yet."
       actions={({ status, count }) =>
         count === 0 ? null : (

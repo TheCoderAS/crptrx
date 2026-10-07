@@ -42,7 +42,7 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
           <h2 className="h2">Documents</h2>
           <p className="muted">Opens here, on a private link valid for 5 minutes. Every view is logged with your name.</p>
           <DocPreview docs={docs.map(([k, label]) => ({ label, href: `/api/admin/kyc/${s.id}/doc?doc=${k}` }))} />
-          <Banner tone="warn">Decline if the Aadhaar is NOT masked (all 12 digits visible). We must never keep a full Aadhaar number.</Banner>
+          <Banner inline tone="warn">Decline if the Aadhaar is NOT masked (all 12 digits visible). We must never keep a full Aadhaar number.</Banner>
         </div>
       </div>
       {needsCheck && <Banner tone="warn" title="Approved automatically">Nobody has looked at these documents yet. Check them, then confirm, or ask for changes / decline (the user can&apos;t place new orders until fixed).</Banner>}

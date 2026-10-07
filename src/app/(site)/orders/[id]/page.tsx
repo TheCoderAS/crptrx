@@ -242,8 +242,8 @@ function depositQr(address: string) {
 /** One short safety line instead of paragraphs; the details sit behind the (i). */
 function NetworkOnly({ nw, n, walletsRequired }: { nw: string; n: NetworkCode; walletsRequired?: boolean }) {
   return (
-    <p className="flex items-center gap-2 rounded-xl bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-800 ring-1 ring-rose-200 ring-inset">
-      <ShieldAlert className="size-4 shrink-0" aria-hidden />
+    <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
+      <ShieldAlert className="size-4 shrink-0 text-rose-600" aria-hidden />
       <span className="flex-1">Send only USDT on {nw}</span>
       <InfoTip>
         Any other network or coin may be lost for good.{n === "BSC" ? " This is not an Ethereum (ERC-20) address, even though it looks similar." : ""}

@@ -1,7 +1,7 @@
 import { InfoTip } from "./InfoTip";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Dismissible } from "./Dismissible";
+import { Notify } from "./Toaster";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Info, ShieldAlert } from "lucide-react";
 import { NETWORK_INFO, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
@@ -157,24 +157,28 @@ export function Section({ title, description, info, action, children, className 
 }
 
 /** A notice with an × to hide it (remembered per browser until its text changes). */
-export function Banner({ tone = "info", title, children, id }: { tone?: "info" | "warn" | "danger" | "ok"; title?: ReactNode; children: ReactNode; id?: string }) {
+/**
+ * A message for the person. By default it pops up at the top right (Toaster) when the page
+ * opens and closes by itself. `inline` keeps it on the page as a plain one-line note: for
+ * text that IS the page's content or an instruction next to a form, which mustn't vanish.
+ */
+export function Banner({ tone = "info", title, children, id, inline }: { tone?: "info" | "warn" | "danger" | "ok"; title?: ReactNode; children: ReactNode; id?: string; inline?: boolean }) {
+  if (!inline) return <Notify tone={tone} title={title} id={id}>{children}</Notify>;
   const c = {
-    info: ["bg-brand-50 text-brand-900 ring-brand-200", Info, "text-brand-600"],
-    warn: ["bg-amber-50 text-amber-900 ring-amber-200", AlertTriangle, "text-amber-600"],
-    danger: ["bg-rose-50 text-rose-900 ring-rose-200", ShieldAlert, "text-rose-600"],
-    ok: ["bg-emerald-50 text-emerald-900 ring-emerald-200", CheckCircle2, "text-emerald-600"],
-  }[tone] as [string, typeof Info, string];
-  const Icon = c[1];
+    info: [Info, "text-brand-600"],
+    warn: [AlertTriangle, "text-amber-600"],
+    danger: [ShieldAlert, "text-rose-600"],
+    ok: [CheckCircle2, "text-emerald-600"],
+  }[tone] as [typeof Info, string];
+  const Icon = c[0];
   return (
-    <Dismissible id={id}>
-      <div className={`flex gap-3 rounded-xl p-3.5 text-sm ring-1 ring-inset ${c[0]}`} role={tone === "danger" ? "alert" : undefined}>
-        <Icon className={`mt-0.5 size-4 shrink-0 ${c[2]}`} aria-hidden />
-        <div className="min-w-0 leading-relaxed">
-          {title && <p className="font-semibold">{title}</p>}
-          {children}
-        </div>
+    <div className="flex gap-2.5 text-sm text-slate-700" role={tone === "danger" ? "alert" : undefined}>
+      <Icon className={`mt-0.5 size-4 shrink-0 ${c[1]}`} aria-hidden />
+      <div className="min-w-0 leading-relaxed">
+        {title && <p className="font-semibold text-slate-900">{title}</p>}
+        {children}
       </div>
-    </Dismissible>
+    </div>
   );
 }
 

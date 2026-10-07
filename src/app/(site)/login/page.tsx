@@ -30,7 +30,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
     >
       {reset && <Banner tone="ok">Password changed. Log in with your new password.</Banner>}
       {verified && <Banner tone="ok">Email confirmed. Log in to continue.</Banner>}
-      {none && <Banner tone="warn">Sign-in is temporarily unavailable. Please try again later.</Banner>}
+      {none && <Banner inline tone="warn">Sign-in is temporarily unavailable. Please try again later.</Banner>}
       {m.google && <LoginGoogle config={m.google} />}
       {m.google && m.email && <OrDivider />}
       {m.email && (

@@ -4,6 +4,7 @@ import { THEME_SCRIPT } from "@/components/ThemeToggle";
 import { themeCss } from "@/server/brand";
 import { getSettings, SETTING_DEFAULTS } from "@/server/settings";
 import { siteUrl } from "@/lib/seo";
+import { Toaster } from "@/components/Toaster";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -45,7 +46,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Admin-chosen colours (Settings → Brand) */}
         <style dangerouslySetInnerHTML={{ __html: themeCss(s) }} />
       </head>
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen">
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }

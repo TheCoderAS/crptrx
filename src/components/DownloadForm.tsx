@@ -1,10 +1,12 @@
 "use client";
+import { toastError } from "@/components/Toaster";
 import { useState, type ReactNode } from "react";
 import { useStepUp } from "./StepUp";
 
 /** Posts a form and saves the response as a file (CSV exports; asks for a 2FA code if one is needed). */
 export function DownloadForm({ action, children, className }: { action: string; children: ReactNode; className?: string }) {
-  const [err, setErr] = useState<string | null>(null);
+  // Messages go to the top-right pop-ups (Toaster).
+  const setErr = (m: string | null) => void (m && toastError(m));
   const [busy, setBusy] = useState(false);
   const stepUp = useStepUp();
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -42,7 +44,6 @@ export function DownloadForm({ action, children, className }: { action: string; 
       {/* Layout classes go on the fieldset: a display:contents wrapper breaks space-y-* spacing. */}
       <fieldset disabled={busy} className={className}>
         {children}
-        {err && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200 ring-inset">{err}</p>}
       </fieldset>
       {stepUp.prompt}
     </form>

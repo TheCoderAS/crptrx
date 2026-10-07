@@ -19,7 +19,7 @@ export default async function Forgot() {
           <button className="btn btn-lg bg-brand-gradient w-full text-white hover:opacity-95">Send reset link</button>
         </ApiForm>
       ) : (
-        <Banner tone="warn">Password sign-in is turned off right now. {m.google ? "Please log in with Google." : "Please try again later."}</Banner>
+        <Banner inline tone="warn">Password sign-in is turned off right now. {m.google ? "Please log in with Google." : "Please try again later."}</Banner>
       )}
       {m.google && m.email && <p className="text-xs text-slate-500">Signed up with Google? You don&apos;t need a password. Just use Continue with Google.</p>}
     </AuthShell>

@@ -195,7 +195,7 @@ export default async function SettingsPage() {
             alert: pending.length > 0,
             content: (
               <>
-                <Banner tone="warn">
+                <Banner inline tone="warn">
                   A wrong address sends payments to someone else. Every admin is emailed about each change.{" "}
                   {s.address_change_delay_minutes > 0
                     ? `Replacing an address takes effect after ${s.address_change_delay_minutes} minutes, so the others can cancel it; setting the first one applies at once.`
