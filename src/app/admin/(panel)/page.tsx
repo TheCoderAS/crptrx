@@ -14,7 +14,7 @@ export default async function Dashboard() {
   const sup = isSuper(me);
   const mine = ownedScope(me);
   const today = istDayStart();
-  const [{ kyc, payout: pms, unmatched, support, kycFinal, toPay }, byStatus, received, paid, watchers] = await Promise.all([
+  const [{ kyc, payout: pms, unmatched, support, toPay }, byStatus, received, paid, watchers] = await Promise.all([
     adminCounts(me),
     prisma.order.groupBy({ by: ["status"], _count: true, where: mine }),
     prisma.order.aggregate({ _sum: { receivedAmount: true }, where: { confirmedAt: { gte: today }, ...mine } }),
@@ -25,11 +25,10 @@ export default async function Dashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle={sup ? "What needs attention today." : "Your customers: what needs attention today."} icon={<Gauge className="size-6" />} />
-      {sup && (kycFinal > 0 || toPay > 0) && (
+      {sup && toPay > 0 && (
         <div>
           <p className="eyebrow mb-3">Waiting for you</p>
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
-            <Stat label="Identity checks to approve" value={kycFinal} href="/admin/reviews?tab=final" icon={<BadgeCheck className="size-5" />} tile="tile-violet" />
             <Stat label="Approved orders to pay" value={toPay} href="/admin/orders?status=APPROVED" icon={<Banknote className="size-5" />} tile="tile-emerald" />
           </div>
         </div>
