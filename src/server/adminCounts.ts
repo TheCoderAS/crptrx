@@ -14,6 +14,8 @@ export type AdminCounts = {
   support: number;
   /** Super admin: approved orders waiting for the payout to be sent. */
   toPay: number;
+  /** Super admin: admins waiting for their earnings to be paid. */
+  payoutRequests: number;
 };
 
 /**
@@ -32,7 +34,7 @@ const countsFor = cache(async (id: string, role: Viewer["role"]): Promise<AdminC
   const work = sup ? Prisma.sql`('PAYMENT_CONFIRMED', 'UNDER_REVIEW', 'ON_HOLD', 'APPROVED')` : Prisma.sql`('PAYMENT_CONFIRMED', 'UNDER_REVIEW', 'ON_HOLD')`;
   // Rows whose customer ("userId") this viewer may see.
   const mine = sup ? Prisma.sql`TRUE` : Prisma.sql`"userId" IN (SELECT id FROM users WHERE "adminId" = ${v.id})`;
-  const [r] = await prisma.$queryRaw<{ work: number; kyc_submitted: number; kyc_auto: number; payout: number; unmatched: number; support: number; to_pay: number }[]>`
+  const [r] = await prisma.$queryRaw<{ work: number; kyc_submitted: number; kyc_auto: number; payout: number; unmatched: number; support: number; to_pay: number; payout_requests: number }[]>`
     SELECT
       (SELECT count(*) FROM orders WHERE status IN ${work} AND ${mine})::int AS work,
       (SELECT count(*) FROM kyc_submissions WHERE status = 'SUBMITTED' AND ${mine})::int AS kyc_submitted,
@@ -41,7 +43,8 @@ const countsFor = cache(async (id: string, role: Viewer["role"]): Promise<AdminC
       ${sup ? Prisma.sql`(SELECT count(*) FROM incoming_transfers WHERE status = 'UNMATCHED')::int` : Prisma.sql`0`} AS unmatched,
       ((SELECT count(*) FROM support_threads WHERE status = 'OPEN' AND "lastFrom" = 'USER' AND ${mine})
         + (SELECT count(*) FROM support_messages WHERE "orderId" IS NULL AND handled = false AND ${mine}))::int AS support,
-      ${sup ? Prisma.sql`(SELECT count(*) FROM orders WHERE status = 'APPROVED')::int` : Prisma.sql`0`} AS to_pay`;
+      ${sup ? Prisma.sql`(SELECT count(*) FROM orders WHERE status = 'APPROVED')::int` : Prisma.sql`0`} AS to_pay,
+      ${sup ? Prisma.sql`(SELECT count(*) FROM admin_payout_requests WHERE status = 'OPEN')::int` : Prisma.sql`0`} AS payout_requests`;
   const kyc = r.kyc_submitted + r.kyc_auto;
   return {
     work: r.work,
@@ -53,5 +56,6 @@ const countsFor = cache(async (id: string, role: Viewer["role"]): Promise<AdminC
     unmatched: r.unmatched,
     support: r.support,
     toPay: r.to_pay,
+    payoutRequests: r.payout_requests,
   };
 });

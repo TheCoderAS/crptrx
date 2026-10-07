@@ -6,6 +6,7 @@ import { createQuote } from "@/server/orders/quote";
 import { markPaid } from "@/server/orders/actions";
 import { transition } from "@/server/orders/stateMachine";
 import { setReward, settleAdmin, splitFor, voidEarning } from "@/server/earnings";
+import { cancelPayoutRequest, closeOnDisable, declinePayoutRequest, requestPayout } from "@/server/payoutRequests";
 import { writeSetting } from "@/server/settings";
 import { baseSettings, makeUser, resetDb } from "./helpers";
 
@@ -139,5 +140,53 @@ describe("earnings ledger", () => {
     const house = await customerOf(null);
     await setReward({ id: "boss", role: "SUPER_ADMIN" }, BOSS, house.user.id, "0.1");
     expect(await prisma.auditLog.count({ where: { action: "CUSTOMER_REWARD_CHANGED" } })).toBe(2);
+  });
+
+  describe("payout requests", () => {
+    const actorOf = (a: Admin) => ({ type: "ADMIN" as const, id: a.id });
+
+    it("an admin asks once they're owed the minimum; paying closes the request", async () => {
+      await writeSetting("payout_request_min_inr", "150", SYS);
+      const u = await customerOf(ravi);
+      await quoteAndPay(u); // ₹100 owed
+      await expect(requestPayout(ravi, "", actorOf(ravi))).rejects.toThrow(/at least ₹150/);
+      await quoteAndPay(u, "50"); // ₹150 owed
+      const r = await requestPayout(ravi, "UPI as usual", actorOf(ravi));
+      expect(r.amount.toFixed(2)).toBe("150.00");
+      await expect(requestPayout(ravi, "", actorOf(ravi))).rejects.toThrow(/already/);
+      const st = await settleAdmin(ravi.id, { expectedAmount: "150.00" }, BOSS);
+      const done = await prisma.adminPayoutRequest.findUniqueOrThrow({ where: { id: r.id } });
+      expect(done).toMatchObject({ status: "PAID", settlementId: st.id, decidedBy: "boss" });
+      // Paid: nothing owed, so no new request.
+      await expect(requestPayout(ravi, "", actorOf(ravi))).rejects.toThrow(/Nothing/);
+    });
+
+    it("super admins don't ask; nothing owed means no request", async () => {
+      await expect(requestPayout({ id: "boss", role: "SUPER_ADMIN", name: "Boss" }, "", BOSS)).rejects.toThrow(/Only admins/);
+      await expect(requestPayout(sita, "", actorOf(sita))).rejects.toThrow(/Nothing/);
+    });
+
+    it("cancel (own only), decline (with a reason), and disabling closes it", async () => {
+      await writeSetting("payout_request_min_inr", "0", SYS);
+      await quoteAndPay(await customerOf(ravi));
+      const r = await requestPayout(ravi, "", actorOf(ravi));
+      await expect(cancelPayoutRequest(sita.id, r.id, actorOf(sita))).rejects.toThrow(/isn't waiting/);
+      await cancelPayoutRequest(ravi.id, r.id, actorOf(ravi));
+      const r2 = await requestPayout(ravi, "", actorOf(ravi));
+      await expect(declinePayoutRequest(r2.id, "no", BOSS)).rejects.toThrow(/why/);
+      await declinePayoutRequest(r2.id, "Bank holiday, next week", BOSS);
+      expect((await prisma.adminPayoutRequest.findUniqueOrThrow({ where: { id: r2.id } })).reason).toBe("Bank holiday, next week");
+      // Declined: earnings still owed, and the admin may ask again.
+      expect(await prisma.adminEarning.count({ where: { adminId: ravi.id, status: "PENDING" } })).toBe(1);
+      const r3 = await requestPayout(ravi, "", actorOf(ravi));
+      await prisma.$transaction((tx) => closeOnDisable(tx, ravi.id, BOSS));
+      expect((await prisma.adminPayoutRequest.findUniqueOrThrow({ where: { id: r3.id } })).status).toBe("CANCELLED");
+      expect(await prisma.auditLog.count({ where: { action: { startsWith: "ADMIN_PAYOUT_REQUEST" } } })).toBe(5);
+    });
+
+    it("the database allows only one waiting request per admin", async () => {
+      await prisma.adminPayoutRequest.create({ data: { adminId: ravi.id, amount: "1.00" } });
+      await expect(prisma.adminPayoutRequest.create({ data: { adminId: ravi.id, amount: "2.00" } })).rejects.toThrow();
+    });
   });
 });

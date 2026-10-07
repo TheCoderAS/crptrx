@@ -36,6 +36,7 @@ import * as transferRoute from "@/app/api/admin/transfers/[id]/route";
 import * as rewardRoute from "@/app/api/admin/users/[id]/reward/route";
 import * as settleRoute from "@/app/api/admin/earnings/settle/route";
 import * as voidRoute from "@/app/api/admin/earnings/[id]/void/route";
+import * as requestRoute from "@/app/api/admin/earnings/requests/[id]/route";
 
 const SYS = { type: "SYSTEM" as const, id: null };
 
@@ -138,6 +139,16 @@ describe("an admin can't reach another admin's customers (all answer 404)", () =
     await signIn(ravi);
     expect([403, 404]).toContain(((await settleRoute.POST(req("POST", { adminId: ravi.id }))) as Response).status);
     expect([403, 404]).toContain(((await voidRoute.POST(req("POST", { reason: "trying it" }), ctx("any"))) as Response).status);
+  });
+
+  it("payout requests: an admin can't decline, or cancel another admin's", async () => {
+    const r = await prisma.adminPayoutRequest.create({ data: { adminId: ravi.id, amount: "10.00" } });
+    await signIn(sita);
+    expect(((await requestRoute.POST(req("POST", { action: "cancel" }), ctx(r.id))) as Response).status).toBe(404);
+    await signIn(ravi);
+    expect(((await requestRoute.POST(req("POST", { action: "decline", reason: "not me deciding" }), ctx(r.id))) as Response).status).toBe(404);
+    expect((await prisma.adminPayoutRequest.findUniqueOrThrow({ where: { id: r.id } })).status).toBe("OPEN");
+    expect(((await requestRoute.POST(req("POST", { action: "cancel" }), ctx(r.id))) as Response).status).toBe(200);
   });
 
   it("unmatched payments are super admin only", async () => {

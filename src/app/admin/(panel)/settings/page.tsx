@@ -145,6 +145,9 @@ export default async function SettingsPage() {
                   <SettingRow label="Maximum fee" htmlFor="fee_max_inr" hint="Flat amount. Leave empty for no maximum.">
                     <UnitInput name="fee_max_inr" value={s.fee_max_inr} prefix="₹" />
                   </SettingRow>
+                  <SettingRow label="Lowest payout request" htmlFor="payout_request_min_inr" hint="Admins can ask to be paid once they're owed this much. 0 = any amount.">
+                    <UnitInput name="payout_request_min_inr" value={s.payout_request_min_inr} prefix="₹" />
+                  </SettingRow>
                   <SettingRow label="Tax held back (TDS)" htmlFor="tax_percent" hint="Change only after your CA confirms."><UnitInput name="tax_percent" value={s.tax_percent} unit="%" /></SettingRow>
                   <SettingRow label="Charge GST on the fee" htmlFor="gst_enabled"><Switch name="gst_enabled" checked={s.gst_enabled} label="Charge GST on the fee" /></SettingRow>
                   <SettingRow label="GST rate" htmlFor="gst_percent"><UnitInput name="gst_percent" value={s.gst_percent} unit="%" /></SettingRow>
