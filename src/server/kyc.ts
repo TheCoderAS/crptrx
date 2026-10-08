@@ -1,3 +1,4 @@
+import { adultBornBy, OLDEST_DOB } from "@/lib/time";
 import { audit, SYSTEM, type Actor } from "./audit";
 import { decrypt, encrypt } from "./crypto";
 import { prisma } from "./db";
@@ -28,12 +29,6 @@ export interface KycInput {
   files: Record<DocField, { buf: Buffer; type: string } | undefined>;
 }
 
-function age(dob: string, now = new Date()): number {
-  const [y, m, d] = dob.split("-").map(Number);
-  let a = now.getUTCFullYear() - y;
-  if (now.getUTCMonth() + 1 < m || (now.getUTCMonth() + 1 === m && now.getUTCDate() < d)) a--;
-  return a;
-}
 
 export async function submitKyc(userId: string, input: KycInput, actor: Actor) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
@@ -43,7 +38,9 @@ export async function submitKyc(userId: string, input: KycInput, actor: Actor) {
   const fullName = input.fullName?.trim().replace(/\s+/g, " ");
   if (!fullName || fullName.length < 3) throw new AppError("Enter your full name exactly as on your PAN card.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.dob ?? "") || isNaN(Date.parse(input.dob))) throw new AppError("Enter your date of birth.");
-  if (age(input.dob) < 18) throw new AppError("You must be 18 or older.");
+  // 18 or older today, in India (the date picker offers the same range).
+  if (input.dob > adultBornBy()) throw new AppError("You must be 18 or older.");
+  if (input.dob < OLDEST_DOB) throw new AppError("Check your date of birth.");
   const pan = (input.pan ?? "").trim().toUpperCase();
   if (!PAN_RE.test(pan)) throw new AppError("Enter a valid PAN, e.g. ABCDE1234F.");
   if (!input.address?.trim() || input.address.trim().length < 10) throw new AppError("Enter your full residential address.");
