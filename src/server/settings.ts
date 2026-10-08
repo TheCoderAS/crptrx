@@ -62,8 +62,8 @@ export const SETTING_DEFAULTS = {
   // Sign-in and onboarding (admin-controlled; see onboarding.ts)
   auth_google_enabled: true,
   auth_email_enabled: true,
-  auth_email_verification_required: true,
-  onboarding_mobile_required: true,
+  auth_email_verification_required: false, // on: new email sign-ups must click an emailed link
+  onboarding_mobile_required: false, // on: a mobile number confirmed by SMS code before selling
   kyc_required: true, // the owner may switch it off (the settings page warns about Live)
   kyc_auto_approve: false, // approve on submission; kept in a "review later" queue
   payout_auto_approve_on_name_match: false,

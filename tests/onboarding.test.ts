@@ -16,7 +16,7 @@ import {
   setPassword,
   verifyEmail,
 } from "@/server/auth/password";
-import { upsertUserFromIdentity } from "@/server/auth/user";
+import { saveMobileUnverified, upsertUserFromIdentity } from "@/server/auth/user";
 import { sha256 } from "@/server/crypto";
 import { baseSettings, makeOrder, makeUser, orderById, randTron, resetDb, transfer } from "./helpers";
 
@@ -48,11 +48,19 @@ async function bareUser(over: Record<string, unknown> = {}) {
 const fresh = (id: string) => prisma.user.findUniqueOrThrow({ where: { id } });
 
 describe("onboarding steps follow the admin settings", () => {
-  it("default: mobile, KYC and payout are required, wallet hidden", async () => {
+  it("default: KYC and payout are required, no mobile code, wallet hidden", async () => {
+    const { user } = await bareUser();
+    const o = await onboardingState(user);
+    expect(o.steps.map((s) => s.id)).toEqual(["kyc", "payout"]);
+    expect(o.ready).toBe(false);
+    expect(o.next?.id).toBe("kyc");
+  });
+
+  it("mobile confirmation switched on: the mobile step comes first", async () => {
+    await set("onboarding_mobile_required", true);
     const { user } = await bareUser();
     const o = await onboardingState(user);
     expect(o.steps.map((s) => s.id)).toEqual(["mobile", "kyc", "payout"]);
-    expect(o.ready).toBe(false);
     expect(o.next?.id).toBe("mobile");
   });
 
@@ -123,6 +131,7 @@ describe("settings guard rails", () => {
 
   it("the owner can switch KYC off, in Live too", async () => {
     await set("network_mode", "LIVE");
+    await set("onboarding_mobile_required", true);
     await updateSetting("kyc_required", false, ADMIN);
     const { user } = await bareUser({ mobileVerifiedAt: new Date() });
     expect((await onboardingState(user)).steps.map((s) => s.id)).toEqual(["mobile", "payout"]);
@@ -159,6 +168,7 @@ describe("KYC auto-approval", () => {
   });
 
   it("without auto-approval the submission waits; mobile check follows its switch", async () => {
+    await set("onboarding_mobile_required", true);
     const { user, actor } = await bareUser();
     await expect(submitKyc(user.id, kycInput(), actor)).rejects.toThrow(/mobile/);
     await set("onboarding_mobile_required", false);
@@ -230,7 +240,24 @@ describe("email and password sign-in", () => {
     return token!;
   };
 
+  it("mobile confirmation off: a number is saved without a code", async () => {
+    const { user } = await bareUser();
+    await saveMobileUnverified(user.id, "98765 43210");
+    const u = await fresh(user.id);
+    expect(u.mobile).toBe("+919876543210");
+    expect(u.mobileVerifiedAt).toBeNull();
+    expect(await prisma.otpCode.count({ where: { userId: user.id } })).toBe(0);
+    await expect(saveMobileUnverified(user.id, "12345")).rejects.toThrow(/10-digit/);
+  });
+
+  it("confirmation off (default): no email is sent", async () => {
+    const u = await registerWithPassword("quiet@example.com", "correct horse", "1.1.1.9");
+    expect(await prisma.outboundMessage.count({ where: { to: "quiet@example.com" } })).toBe(0);
+    expect(u?.emailVerified).toBe(false);
+  });
+
   it("sign up, confirm email, log in", async () => {
+    await set("auth_email_verification_required", true);
     const u = await registerWithPassword("New@Example.com", "correct horse", "1.1.1.1");
     expect(u?.email).toBe("new@example.com");
     expect(u?.emailVerified).toBe(false);

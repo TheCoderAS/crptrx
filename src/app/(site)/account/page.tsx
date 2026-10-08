@@ -30,7 +30,10 @@ export default async function Account() {
     pointsBalance(user.id),
   ]);
   const showRewards = s.referral_enabled || points.usable + points.pending + points.held > 0;
-  const mobileOk = !!(user.mobile && user.mobileVerifiedAt);
+  // With "Confirm mobile number" off, a saved number is enough (no SMS code).
+  const needCode = s.onboarding_mobile_required;
+  const mobileOk = !!(user.mobile && (user.mobileVerifiedAt || !needCode));
+  const emailOk = user.emailVerified || !s.auth_email_verification_required;
   const google = !!user.firebaseUid && !user.firebaseUid.startsWith("dev:");
   const methods = [google && "Google", user.passwordHash && "Email and password", user.firebaseUid?.startsWith("dev:") && "Test sign-in"].filter(Boolean) as string[];
   const kycDone = user.kycStatus === "APPROVED";
@@ -51,7 +54,7 @@ export default async function Account() {
               <p className="mt-0.5 text-sm text-slate-500">Needed before you can sell. We&apos;ll send a 6-digit code by SMS.</p>
             </div>
           </div>
-          <MobileForms user={user} />
+          <MobileForms user={user} needCode={needCode} />
         </section>
       )}
 
@@ -69,7 +72,7 @@ export default async function Account() {
       <section>
         <h2 className="mb-2 px-1 text-sm font-semibold text-slate-900">Verification</h2>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Check icon={<Mail className="size-4" aria-hidden />} label="Email" ok={user.emailVerified} detail={user.emailVerified ? "Confirmed" : "Not confirmed"} action={!user.emailVerified ? <Link href="/verify-email" className="text-xs font-semibold text-brand-700 hover:underline">Confirm</Link> : null} />
+          <Check icon={<Mail className="size-4" aria-hidden />} label="Email" ok={emailOk} detail={user.emailVerified ? "Confirmed" : emailOk ? "Added" : "Not confirmed"} action={!emailOk ? <Link href="/verify-email" className="text-xs font-semibold text-brand-700 hover:underline">Confirm</Link> : null} />
           <Check icon={<Smartphone className="size-4" aria-hidden />} label="Mobile" ok={mobileOk} detail={mobileOk ? user.mobile! : s.onboarding_mobile_required ? "Needed" : "Optional"} />
           <Check
             icon={<ScanFace className="size-4" aria-hidden />}
@@ -119,8 +122,8 @@ export default async function Account() {
               label="Mobile number"
               detail={mobileOk ? user.mobile! : "Not added"}
               action={
-                <ModalButton button={mobileOk ? "Change" : "Add"} buttonClassName="btn-ghost min-h-9 px-3 text-sm" title={mobileOk ? "Change mobile number" : "Add your mobile number"} description="We'll send a 6-digit code by SMS.">
-                  <MobileForms user={user} />
+                <ModalButton button={mobileOk ? "Change" : "Add"} buttonClassName="btn-ghost min-h-9 px-3 text-sm" title={mobileOk ? "Change mobile number" : "Add your mobile number"} description={needCode ? "We'll send a 6-digit code by SMS." : undefined}>
+                  <MobileForms user={user} needCode={needCode} />
                 </ModalButton>
               }
             />
@@ -182,7 +185,20 @@ export default async function Account() {
   );
 }
 
-function MobileForms({ user }: { user: User }) {
+function MobileForms({ user, needCode }: { user: User; needCode: boolean }) {
+  if (!needCode)
+    return (
+      <ApiForm action="/api/me/mobile" className="space-y-2">
+        <label className="label" htmlFor="mobile">Mobile number</label>
+        <div className="flex gap-2">
+          <div className="flex flex-1 overflow-hidden rounded-xl shadow-sm ring-1 ring-slate-300 focus-within:ring-2 focus-within:ring-brand-600">
+            <span className="grid place-items-center border-r border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-600">+91</span>
+            <input id="mobile" name="mobile" inputMode="numeric" autoComplete="tel-national" required className="w-full min-w-0 bg-transparent px-3 py-2.5 outline-none" placeholder="98765 43210" defaultValue={user.mobile?.replace("+91", "") ?? ""} />
+          </div>
+          <button className="btn-primary">Save</button>
+        </div>
+      </ApiForm>
+    );
   return (
     <div className="space-y-4">
       <ApiForm action="/api/me/mobile" className="space-y-2">

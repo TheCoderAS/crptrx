@@ -75,3 +75,17 @@ export async function verifyMobileOtp(userId: string, code: string) {
   ]);
   await audit({ type: "USER", id: userId }, "MOBILE_VERIFIED");
 }
+
+/**
+ * Saves a mobile number without an SMS code. Only while "Confirm mobile number" is off;
+ * the number is kept as not confirmed, so switching that setting on asks for a code again.
+ */
+export async function saveMobileUnverified(userId: string, mobileInput: string) {
+  const mobile = normalizeMobile(mobileInput);
+  await rateLimit(`mobile-save:${userId}`, 10, 60 * 60);
+  const old = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { mobile: true } });
+  if (old.mobile === mobile) return mobile;
+  await prisma.user.update({ where: { id: userId }, data: { mobile, mobileVerifiedAt: null } });
+  await audit({ type: "USER", id: userId }, "MOBILE_SAVED", { details: { old: old.mobile, new: mobile } });
+  return mobile;
+}
