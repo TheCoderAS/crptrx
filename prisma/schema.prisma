@@ -83,30 +83,35 @@ enum TransferStatus {
 }
 
 model User {
-  id               String     @id @default(cuid())
-  email            String     @unique
-  emailVerified    Boolean    @default(false)
-  firebaseUid      String?    @unique
-  mobile           String?
-  mobileVerifiedAt DateTime?
-  displayName      String?
-  passwordHash     String?
-  failedLogins     Int        @default(0)
-  lockedUntil      DateTime?
-  status           UserStatus @default(ACTIVE)
-  kycStatus        KycStatus  @default(NOT_STARTED)
+  id                    String     @id @default(cuid())
+  email                 String     @unique
+  emailVerified         Boolean    @default(false)
+  firebaseUid           String?    @unique
+  mobile                String?
+  mobileVerifiedAt      DateTime?
+  displayName           String?
+  passwordHash          String?
+  failedLogins          Int        @default(0)
+  lockedUntil           DateTime?
+  status                UserStatus @default(ACTIVE)
+  kycStatus             KycStatus  @default(NOT_STARTED)
   // The admin who brought this customer (invite code at sign-up). Null = house (super admin only).
-  adminId          String?
-  referredAt       DateTime?
+  adminId               String?
+  referredAt            DateTime?
   // Bonus on each order, as % of the order value, paid from the margin share of whoever owns
   // the customer (their admin, or the house). Capped at that share. 0 = none.
-  rewardPercent    Decimal    @default(0) @db.Decimal(7, 4)
+  rewardPercent         Decimal    @default(0) @db.Decimal(7, 4)
   // User-to-user referrals: this user's own code (made once their identity is approved),
   // and the user whose code they signed up with.
-  referralCode     String?    @unique
-  referredById     String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  referralCode          String?    @unique
+  referredById          String?
+  // Super admin overrides for this user's referral code (null = the Settings default).
+  referralDisabled      Boolean    @default(false)
+  referralMode          String? // FIRST | EVERY
+  referralPointsPerUsdt Decimal?   @db.Decimal(10, 2)
+  referralMaxPoints     Int? // 0 = no cap
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
 
   admin       Admin?            @relation("AdminCustomers", fields: [adminId], references: [id])
   referredBy  User?             @relation("UserReferrals", fields: [referredById], references: [id])

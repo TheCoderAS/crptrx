@@ -44,7 +44,7 @@ export default async function Reviews({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-4">
       <PageHeader title="Reviews" subtitle="Everything waiting for a person to check." icon={<ClipboardCheck className="size-5" />} tile="tile-violet" />
-      <nav className="flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Review queues">
+      <nav className="tab-row flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Review queues">
         {tabs.map((t) => (
           <Link
             key={t.id}

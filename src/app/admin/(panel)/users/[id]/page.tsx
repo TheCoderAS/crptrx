@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Ban, CheckCircle2, Gift, UserRound } from "lucide-react";
+import { ArrowRightLeft, Ban, CheckCircle2, Gift, Share2, UserRound } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminOrLogin } from "@/server/auth/pages";
@@ -6,6 +6,7 @@ import { prisma } from "@/server/db";
 import { pageUser } from "@/server/scope";
 import { D, fmtInr, fmtUsdt } from "@/server/money";
 import { maskedPayout } from "@/server/payouts";
+import { getSettings } from "@/server/settings";
 import { fmtIST } from "@/lib/time";
 import { ModalForm } from "@/components/Modal";
 import { Select } from "@/components/Select";
@@ -18,6 +19,12 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
   const u = await prisma.user.findUnique({ where: { id }, include: { admin: { select: { id: true, name: true } }, kycSubmissions: { orderBy: { submittedAt: "desc" } }, payoutMethods: true, wallets: { orderBy: { createdAt: "asc" } }, orders: { orderBy: { createdAt: "desc" }, take: 50 } } });
   if (!u) notFound();
   await pageUser(me, u.id);
+  const [s, invitedBy, friends] = await Promise.all([
+    getSettings(),
+    u.referredById ? prisma.user.findUnique({ where: { id: u.referredById }, select: { id: true, email: true } }) : null,
+    prisma.user.count({ where: { referredById: u.id } }),
+  ]);
+  const custom = !!(u.referralMode || u.referralPointsPerUsdt !== null || u.referralMaxPoints !== null);
   const admins = sup ? await prisma.admin.findMany({ where: { role: "ADMIN", status: "ACTIVE" }, select: { id: true, name: true, inviteCode: true }, orderBy: { name: "asc" } }) : [];
   const signIn = [u.firebaseUid && !u.firebaseUid.startsWith("dev:") && "Google", u.passwordHash && "Password", u.firebaseUid?.startsWith("dev:") && "Test"].filter(Boolean).join(", ") || "—";
   const bonus = D(u.rewardPercent);
@@ -39,6 +46,8 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
               <StatusPill status={u.kycStatus} label={`KYC: ${statusLabel(u.kycStatus)}`} />
               {bonus.gt(0) && <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 font-medium text-emerald-700 ring-1 ring-emerald-200 ring-inset">Bonus {bonus.toString()}% of share</span>}
               {sup && <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-700">{u.admin ? `Admin: ${u.admin.name}` : "No admin"}</span>}
+              {sup && u.referralDisabled && <span className="rounded-full bg-rose-50 px-2.5 py-0.5 font-medium text-rose-700 ring-1 ring-rose-200 ring-inset">Invite code off</span>}
+              {sup && !u.referralDisabled && custom && <span className="rounded-full bg-violet-50 px-2.5 py-0.5 font-medium text-violet-700 ring-1 ring-violet-200 ring-inset">Own referral rules</span>}
             </div>
           </div>
         </div>
@@ -76,6 +85,29 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
               <div><label className="label" htmlFor="move-reason">Reason (logged)</label><input id="move-reason" name="reason" required minLength={5} className="input" /></div>
             </ModalForm>
           )}
+          {sup && (
+            <ModalForm
+              button={<><Share2 className="size-4" aria-hidden /> Referral code</>}
+              buttonClassName="btn-secondary px-3 py-2 text-sm"
+              title={`Referral code${u.referralCode ? ` ${u.referralCode}` : ""}`}
+              description="Points this user earns when friends they invited sell. Empty fields use Settings → Referral points."
+              action={`/api/admin/users/${u.id}/referral`}
+              submitLabel="Save"
+            >
+              <label className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-200 ring-inset">
+                <span><b className="block text-slate-900">Code on</b><span className="text-xs text-slate-500">Off: nobody new can sign up with it, and it earns no more points.</span></span>
+                <input type="checkbox" name="enabled" defaultChecked={!u.referralDisabled} className="size-5 accent-brand-600" />
+              </label>
+              <div>
+                <label className="label" htmlFor="ref-mode">Reward on</label>
+                <Select id="ref-mode" name="mode" defaultValue={u.referralMode ?? ""} options={[{ value: "", label: `Default (${s.referral_mode === "FIRST" ? "first sale" : "every sale"})` }, { value: "FIRST", label: "First sale only" }, { value: "EVERY", label: "Every sale" }]} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label" htmlFor="ref-per">Points per USDT</label><input id="ref-per" name="pointsPerUsdt" defaultValue={u.referralPointsPerUsdt?.toString() ?? ""} placeholder={`Default ${s.referral_points_per_usdt}`} inputMode="decimal" className="input" /></div>
+                <div><label className="label" htmlFor="ref-max">Most per sale</label><input id="ref-max" name="maxPoints" defaultValue={u.referralMaxPoints ?? ""} placeholder={`Default ${s.referral_max_points_per_sale}`} inputMode="numeric" className="input" /></div>
+              </div>
+            </ModalForm>
+          )}
           <ModalForm
             button={active ? <><Ban className="size-4" aria-hidden /> Disable</> : <><CheckCircle2 className="size-4" aria-hidden /> Enable</>}
             buttonClassName={active ? "btn-ghost px-3 py-2 text-sm text-rose-700 hover:bg-rose-50" : "btn-secondary px-3 py-2 text-sm"}
@@ -99,6 +131,8 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
           <Row k="Joined" v={fmtIST(u.createdAt)} />
           {sup && u.admin && u.referredAt && <Row k="With admin since" v={fmtIST(u.referredAt)} />}
           <Row k="Paid orders" v={`${paid.length} · ${fmtInr(paidTotal)}`} />
+          {sup && invitedBy && <Row k="Invited by" v={<Link href={`/admin/users/${invitedBy.id}`} className="underline">{invitedBy.email}</Link>} />}
+          {(u.referralCode || friends > 0) && <Row k="Invite code" v={`${u.referralCode ?? "—"} · ${friends} invited${u.referralDisabled ? " · off" : ""}`} />}
         </Section>
         <Section title="Identity checks">
           {u.kycSubmissions.length === 0 ? <p className="muted">None yet.</p> : (

@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { CalendarClock, Gift, Link2, Sparkles, Users, Wallet } from "lucide-react";
+import { CalendarClock, Check, Gift, Link2, Sparkles, Users, Wallet } from "lucide-react";
 import { userOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { env } from "@/server/env";
-import { pointsBalance } from "@/server/points";
+import { pointsBalance, rulesFor } from "@/server/points";
 import { ensureReferralCode } from "@/server/referral";
 import { getSettings } from "@/server/settings";
 import { fmtISTShort } from "@/lib/time";
@@ -25,7 +25,8 @@ export default async function Rewards() {
   const s = await getSettings();
   const verified = user.kycStatus === "APPROVED";
   // The code is made once the person is verified, so codes only lead back to real people.
-  const code = s.referral_enabled && verified ? await ensureReferralCode(user.id) : user.referralCode;
+  const on = s.referral_enabled && !user.referralDisabled;
+  const code = on && verified ? await ensureReferralCode(user.id) : user.referralCode;
   const now = new Date();
   const [b, rows, used, joined, sold] = await Promise.all([
     pointsBalance(user.id),
@@ -35,8 +36,21 @@ export default async function Rewards() {
     prisma.user.count({ where: { referredById: user.id, orders: { some: { status: "PAID" } } } }),
   ]);
   const link = code ? `${env.appUrl.replace(/\/$/, "")}/signup?ref=${code}` : null;
-  const per = s.referral_points_per_usdt;
-  const how = `${per} ${per === "1" ? "point" : "points"} per USDT your friend sells${s.referral_mode === "FIRST" ? ", on their first sale" : ", on every sale"}${Number(s.referral_max_points_per_sale) > 0 ? ` (up to ${s.referral_max_points_per_sale} a sale)` : ""}.`;
+  // The rules for this user (a super admin may have given them their own).
+  const r = rulesFor(user, s);
+  const per = r.referral_points_per_usdt;
+  const cap = Number(r.referral_max_points_per_sale);
+  const hold = Number(s.referral_hold_days);
+  const expiry = Number(s.referral_expiry_days);
+  const benefits = [
+    "Share your code or link with friends. It's filled in for them when they sign up.",
+    `When a friend sells USDT, you get ${per} ${per === "1" ? "point" : "points"} for every USDT they sell${r.referral_mode === "FIRST" ? " (on their first sale)" : " (on every sale they make)"}.`,
+    ...(cap > 0 ? [`Up to ${cap} points from one sale.`] : []),
+    ...(Number(r.referral_min_sale_usdt) > 0 ? [`Sales under ${r.referral_min_sale_usdt} USDT don't earn points.`] : []),
+    hold > 0 ? `Points are ready to use ${hold} ${hold === 1 ? "day" : "days"} after your friend's sale is paid.` : "Points are ready as soon as your friend's sale is paid.",
+    "1 point = ₹1. Use them when you sell: they're added to your payout.",
+    ...(expiry > 0 ? [`Use them within ${expiry} days of being ready.`] : []),
+  ];
 
   const state = (r: (typeof rows)[number]) => {
     if (r.status === "BLOCKED") return { pill: "DISABLED", label: "Not given", note: r.reason };
@@ -73,7 +87,7 @@ export default async function Rewards() {
         <Link href="/sell" className="btn-primary w-full sm:w-auto">Sell and add ₹{b.usable} to your payout</Link>
       )}
 
-      {code ? (
+      {code && on ? (
         <section className="card space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -88,12 +102,23 @@ export default async function Rewards() {
               <ShareLink url={link} text={`Sell USDT for rupees on ${s.brand_name}. Sign up with my code ${code}:`} />
             </>
           )}
-          <p className="text-sm text-slate-600">{s.referral_enabled ? how : "Inviting is paused right now. Points you already have still work."}</p>
+          {on ? (
+            <ul className="space-y-2 border-t border-slate-100 pt-3">
+              {benefits.map((b) => (
+                <li key={b} className="flex gap-2.5 text-sm text-slate-700">
+                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check className="size-3.5" aria-hidden /></span>
+                  {b}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-600">{user.referralDisabled ? "Your invite code is switched off. Contact support if you think this is a mistake." : "Inviting is paused right now."} Points you already have still work.</p>
+          )}
           <p className="flex items-center gap-1.5 text-sm text-slate-600"><Users className="size-4 text-slate-400" aria-hidden /> {joined} joined · {sold} sold</p>
         </section>
       ) : (
         <section className="card text-sm text-slate-600">
-          {!s.referral_enabled ? "Inviting friends isn't open right now." : <>Your invite code appears once your identity check is approved. <Link href="/kyc" className="font-semibold text-brand-700 hover:underline">Identity check</Link></>}
+          {user.referralDisabled ? "Your invite code is switched off. Contact support if you think this is a mistake. Points you already have still work." : !s.referral_enabled ? "Inviting friends isn't open right now." : <>Your invite code appears once your identity check is approved. <Link href="/kyc" className="font-semibold text-brand-700 hover:underline">Identity check</Link></>}
         </section>
       )}
 

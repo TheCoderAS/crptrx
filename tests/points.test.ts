@@ -5,7 +5,7 @@ import { D } from "@/server/money";
 import { createQuote, expireQuotes } from "@/server/orders/quote";
 import { markPaid } from "@/server/orders/actions";
 import { transition } from "@/server/orders/stateMachine";
-import { cancelPoints, pointsBalance, pointsForSale } from "@/server/points";
+import { cancelPoints, pointsBalance, pointsForSale, setReferralRules } from "@/server/points";
 import { ensureReferralCode, resolveInvite, saveReferral } from "@/server/referral";
 import { updateSetting, writeSetting } from "@/server/settings";
 import { baseSettings, makeUser, resetDb } from "./helpers";
@@ -140,6 +140,34 @@ describe("earning points", () => {
     await expect(cancelPoints(p.id, "Fake friend account", BOSS, new Date(Date.now() + 8 * DAY))).rejects.toThrow(/Only pending/);
     await cancelPoints(p.id, "Fake friend account", BOSS);
     expect((await pointsBalance(a.user.id)).pending).toBe(0);
+  });
+});
+
+describe("one user's code: switched off or its own rules", () => {
+  it("its own rules replace the defaults; empty goes back to the default", async () => {
+    const a = await person();
+    await setReferralRules(a.user.id, { enabled: "on", mode: "EVERY", pointsPerUsdt: "3", maxPoints: "100" }, BOSS);
+    const b = await person(a.user.id);
+    await pay((await sell(b, "20")).id); // 60
+    await pay((await sell(b, "50")).id); // 150, capped at 100
+    expect((await pointsBalance(a.user.id)).usable).toBe(160);
+    await setReferralRules(a.user.id, { enabled: "on", mode: "", pointsPerUsdt: "", maxPoints: "" }, BOSS);
+    await pay((await sell(b, "20")).id); // default 1 per USDT
+    expect((await pointsBalance(a.user.id)).usable).toBe(180);
+    await expect(setReferralRules(a.user.id, { enabled: "on", mode: "SOMETIMES" }, BOSS)).rejects.toThrow(/Reward on/);
+    await expect(setReferralRules(a.user.id, { enabled: "on", maxPoints: "1.5" }, BOSS)).rejects.toThrow(/whole number/);
+    expect(await prisma.auditLog.count({ where: { action: "USER_REFERRAL_RULES_CHANGED" } })).toBe(2);
+  });
+
+  it("off: the code stops working and earns nothing more; points already earned stay", async () => {
+    const a = await person();
+    const code = await ensureReferralCode(a.user.id);
+    const b = await person(a.user.id);
+    await pay((await sell(b, "20")).id);
+    await setReferralRules(a.user.id, { mode: "" }, BOSS); // checkbox unticked = off
+    await expect(resolveInvite(code)).rejects.toThrow(/Code not found/);
+    await pay((await sell(b, "30")).id);
+    expect((await pointsBalance(a.user.id)).usable).toBe(20);
   });
 });
 
