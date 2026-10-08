@@ -23,10 +23,10 @@ const maskEmail = (e: string) => {
 export default async function Rewards() {
   const user = await userOrLogin();
   const s = await getSettings();
-  const verified = user.kycStatus === "APPROVED";
-  // The code is made once the person is verified, so codes only lead back to real people.
+  // Every user gets a code, verified or not: points are only earned when a friend's sale
+  // is paid, and only spent on the user's own sale, which needs whatever checks are on.
   const on = s.referral_enabled && !user.referralDisabled;
-  const code = on && verified ? await ensureReferralCode(user.id) : user.referralCode;
+  const code = on ? await ensureReferralCode(user.id) : user.referralCode;
   const now = new Date();
   const [b, rows, used, joined, sold] = await Promise.all([
     pointsBalance(user.id),
@@ -118,7 +118,7 @@ export default async function Rewards() {
         </section>
       ) : (
         <section className="card text-sm text-slate-600">
-          {user.referralDisabled ? "Your invite code is switched off. Contact support if you think this is a mistake. Points you already have still work." : !s.referral_enabled ? "Inviting friends isn't open right now." : <>Your invite code appears once your identity check is approved. <Link href="/kyc" className="font-semibold text-brand-700 hover:underline">Identity check</Link></>}
+          {user.referralDisabled ? "Your invite code is switched off. Contact support if you think this is a mistake. Points you already have still work." : "Inviting friends isn't open right now."}
         </section>
       )}
 
