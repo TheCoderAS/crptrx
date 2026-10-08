@@ -85,7 +85,9 @@ export async function registerWithPassword(emailInput: unknown, passwordInput: u
   }
   const user = await prisma.user.create({ data: { email, passwordHash: await bcrypt.hash(password, 12), emailVerified: false, ...inviteData(inv) } });
   await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: "password", ...inv }, ip });
-  await sendVerificationEmail(user);
+  // Only when the admin requires a confirmed email; otherwise no email and no code step.
+  const { getSettings } = await import("../settings");
+  if ((await getSettings()).auth_email_verification_required) await sendVerificationEmail(user);
   return user;
 }
 
