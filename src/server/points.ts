@@ -26,6 +26,19 @@ type Alloc = { id: string; points: number };
 const lockUser = (tx: Tx, userId: string) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`points:${userId}`}))`;
 const DAY = 24 * 3600_000;
 
+type Rules = Pick<Settings, "referral_mode" | "referral_points_per_usdt" | "referral_max_points_per_sale" | "referral_min_sale_usdt">;
+type Overrides = { referralMode: string | null; referralPointsPerUsdt: Decimal.Value | null; referralMaxPoints: number | null };
+
+/** The rules for one referrer: the Settings, with any super admin overrides for that user. */
+export function rulesFor(u: Overrides, s: Rules): Rules {
+  return {
+    referral_mode: u.referralMode === "FIRST" || u.referralMode === "EVERY" ? u.referralMode : s.referral_mode,
+    referral_points_per_usdt: u.referralPointsPerUsdt !== null ? D(u.referralPointsPerUsdt).toString() : s.referral_points_per_usdt,
+    referral_max_points_per_sale: u.referralMaxPoints ?? s.referral_max_points_per_sale,
+    referral_min_sale_usdt: s.referral_min_sale_usdt,
+  };
+}
+
 /** Points a friend's sale earns under the current settings (0 = none). */
 export function pointsForSale(usdt: Decimal.Value, s: Pick<Settings, "referral_points_per_usdt" | "referral_max_points_per_sale" | "referral_min_sale_usdt">): number {
   const u = D(usdt);
@@ -72,11 +85,13 @@ export async function awardReferralPoints(tx: Tx, orderId: string, now = new Dat
   const o = await tx.order.findUniqueOrThrow({ where: { id: orderId }, select: { userId: true, usdtAmount: true, user: { select: { referredById: true } } } });
   const referrerId = o.user.referredById;
   if (!referrerId) return null;
-  if (s.referral_mode === "FIRST" && (await tx.referralPoint.count({ where: { fromUserId: o.userId } })) > 0) return null;
-  const points = pointsForSale(o.usdtAmount, s);
+  const referrer = await tx.user.findUnique({ where: { id: referrerId }, select: { status: true, referralDisabled: true, referralMode: true, referralPointsPerUsdt: true, referralMaxPoints: true } });
+  // A switched-off code earns nothing more, also for friends who joined before.
+  if (!referrer || referrer.status !== "ACTIVE" || referrer.referralDisabled) return null;
+  const rules = rulesFor(referrer, s);
+  if (rules.referral_mode === "FIRST" && (await tx.referralPoint.count({ where: { fromUserId: o.userId } })) > 0) return null;
+  const points = pointsForSale(o.usdtAmount, rules);
   if (points <= 0) return null;
-  const referrer = await tx.user.findUnique({ where: { id: referrerId }, select: { status: true } });
-  if (!referrer || referrer.status !== "ACTIVE") return null;
   const blocked = await sameDetails(tx, referrerId, o.userId);
   const availableAt = new Date(now.getTime() + Number(s.referral_hold_days) * DAY);
   const expiry = Number(s.referral_expiry_days);
@@ -212,4 +227,27 @@ export async function cancelPoints(id: string, reason: unknown, actor: Actor, no
   const r = await prisma.referralPoint.updateMany({ where: { id, status: "ACTIVE", availableAt: { gt: now }, used: 0 }, data: { status: "CANCELLED", reason: why.slice(0, 300), cancelledBy: actor.id } });
   if (r.count !== 1) throw new AppError("Only pending points can be cancelled.");
   await audit(actor, "USER_POINTS_CANCELLED", { targetType: "user", targetId: p.userId, details: { pointsId: id, points: p.points, reason: why } });
+}
+
+/**
+ * Super admin: switch one user's code off (no new sign-ups with it, no new points), or give
+ * it its own reward rules. Empty fields = the Settings default. Logged.
+ */
+export async function setReferralRules(userId: string, input: { enabled?: unknown; mode?: unknown; pointsPerUsdt?: unknown; maxPoints?: unknown }, actor: Actor, ip?: string | null) {
+  const mode = String(input.mode ?? "").trim();
+  if (mode && mode !== "FIRST" && mode !== "EVERY") throw new AppError("Reward on: default, first sale or every sale.");
+  const per = String(input.pointsPerUsdt ?? "").trim();
+  if (per && (!/^\d+(\.\d{1,2})?$/.test(per) || D(per).gt(1000))) throw new AppError("Points per USDT: a number like 1 or 0.5 (1000 at most), or empty for the default.");
+  const max = String(input.maxPoints ?? "").trim();
+  if (max && (!/^\d+$/.test(max) || Number(max) > 1_000_000)) throw new AppError("Most points per sale: a whole number (0 = no limit), or empty for the default.");
+  const data = {
+    referralDisabled: !(input.enabled === true || input.enabled === "true" || input.enabled === "on"),
+    referralMode: mode || null,
+    referralPointsPerUsdt: per || null,
+    referralMaxPoints: max ? Number(max) : null,
+  };
+  const old = await prisma.user.findUnique({ where: { id: userId }, select: { referralDisabled: true, referralMode: true, referralPointsPerUsdt: true, referralMaxPoints: true } });
+  if (!old) throw new AppError("Not found", 404, "NOT_FOUND");
+  await prisma.user.update({ where: { id: userId }, data });
+  await audit(actor, "USER_REFERRAL_RULES_CHANGED", { targetType: "user", targetId: userId, details: { old: { ...old, referralPointsPerUsdt: old.referralPointsPerUsdt?.toString() ?? null }, new: data }, ip });
 }

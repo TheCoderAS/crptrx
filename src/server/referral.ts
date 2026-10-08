@@ -27,7 +27,7 @@ export async function adminForInviteCode(code: unknown, tx: Tx = prisma) {
 export async function userForReferralCode(code: unknown, tx: Tx = prisma) {
   const c = normalizeInviteCode(code);
   if (!INVITE_CODE_RE.test(c)) return null;
-  const u = await tx.user.findFirst({ where: { referralCode: c, status: "ACTIVE" }, select: { id: true, admin: { select: { id: true, status: true, role: true } } } });
+  const u = await tx.user.findFirst({ where: { referralCode: c, status: "ACTIVE", referralDisabled: false }, select: { id: true, admin: { select: { id: true, status: true, role: true } } } });
   if (!u) return null;
   const a = u.admin;
   return { id: u.id, adminId: a && a.status === "ACTIVE" && a.role === "ADMIN" ? a.id : null };

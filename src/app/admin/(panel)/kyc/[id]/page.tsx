@@ -1,4 +1,5 @@
-import { ScanFace } from "lucide-react";
+import { Ban, CheckCircle2, PencilLine, ScanFace } from "lucide-react";
+import { InfoTip } from "@/components/InfoTip";
 import { DocPreview } from "@/components/DocPreview";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -39,39 +40,45 @@ export default async function KycDetail({ params }: { params: Promise<{ id: stri
           {s.reason && <Row k="Reason" v={s.reason} />}
         </div>
         <div className="card space-y-2">
-          <h2 className="h2">Documents</h2>
-          <p className="muted">Opens here, on a private link valid for 5 minutes. Every view is logged with your name.</p>
+          <h2 className="h2 flex items-center gap-1.5">
+            Documents
+            <InfoTip>Opens here, on a private link valid for 5 minutes. Every view is logged with your name.</InfoTip>
+            <InfoTip tone="warn">Decline if the Aadhaar is NOT masked (all 12 digits visible). We must never keep a full Aadhaar number.</InfoTip>
+          </h2>
           <DocPreview docs={docs.map(([k, label]) => ({ label, href: `/api/admin/kyc/${s.id}/doc?doc=${k}` }))} />
-          <Banner inline tone="warn">Decline if the Aadhaar is NOT masked (all 12 digits visible). We must never keep a full Aadhaar number.</Banner>
         </div>
       </div>
       {needsCheck && <Banner tone="warn" title="Approved automatically">Nobody has looked at these documents yet. Check them, then confirm, or ask for changes / decline (the user can&apos;t place new orders until fixed).</Banner>}
       {(s.status === "SUBMITTED" || needsCheck) && (
-        <div className="card">
+        <div className="card space-y-4">
           <h2 className="h2">{needsCheck ? "Check" : "Decision"}</h2>
-          <div className="mt-4 grid gap-4 lg:grid-cols-[auto_1fr] lg:items-start">
-            <ApiForm action={`/api/admin/kyc/${s.id}`}>
+          <div className="grid gap-3 md:grid-cols-3">
+            <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex h-full flex-col justify-between gap-3 rounded-xl p-4 ring-1 ring-emerald-500/30">
+              <div>
+                <p className="flex items-center gap-1.5 font-semibold text-emerald-700"><CheckCircle2 className="size-4" aria-hidden /> {needsCheck ? "Looks good" : "Approve"}</p>
+                <p className="mt-1 text-xs text-slate-500">{needsCheck ? "Marks these documents as checked." : "The user can start selling."}</p>
+              </div>
               <input type="hidden" name="decision" value="APPROVED" />
-              <button className="btn w-full bg-emerald-600 px-6 text-white hover:brightness-110 lg:w-auto">{needsCheck ? "Looks good" : "Approve"}</button>
+              <button className="btn w-full bg-emerald-600 text-white hover:brightness-110">{needsCheck ? "Looks good" : "Approve"}</button>
             </ApiForm>
-            <div className="space-y-3">
-              <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-end">
-                <input type="hidden" name="decision" value="NEEDS_CHANGES" />
-                <div className="flex-1">
-                  <label className="label" htmlFor="reason-changes">Ask for changes (user sees the reason)</label>
-                  <input id="reason-changes" name="reason" required className="input" placeholder="e.g. Selfie is blurry" />
-                </div>
-                <button className="btn-secondary">Ask for changes</button>
-              </ApiForm>
-              <ApiForm action={`/api/admin/kyc/${s.id}`} confirm="Decline this identity check? The user will be blocked from placing orders." className="flex flex-col gap-2 rounded-xl bg-rose-50/60 p-3 sm:flex-row sm:items-end">
-                <input type="hidden" name="decision" value="DECLINED" />
-                <div className="flex-1">
-                  <label className="label" htmlFor="reason-decline">Decline (blocks the user; they see the reason)</label>
-                  <input id="reason-decline" name="reason" required className="input" placeholder="e.g. Not their documents" />
-                </div>
-                <button className="btn-danger">Decline</button>
-              </ApiForm>
-            </div>
+            <ApiForm action={`/api/admin/kyc/${s.id}`} className="flex h-full flex-col justify-between gap-3 rounded-xl p-4 ring-1 ring-amber-500/30">
+              <div>
+                <label className="flex items-center gap-1.5 font-semibold text-amber-700" htmlFor="reason-changes"><PencilLine className="size-4" aria-hidden /> Ask for changes</label>
+                <p className="mt-1 mb-2 text-xs text-slate-500">The user sees the reason and sends again.</p>
+                <input id="reason-changes" name="reason" required className="input" placeholder="e.g. Selfie is blurry" />
+              </div>
+              <input type="hidden" name="decision" value="NEEDS_CHANGES" />
+              <button className="btn-secondary w-full">Ask for changes</button>
+            </ApiForm>
+            <ApiForm action={`/api/admin/kyc/${s.id}`} confirm="Decline this identity check? The user will be blocked from placing orders." className="flex h-full flex-col justify-between gap-3 rounded-xl p-4 ring-1 ring-rose-500/30">
+              <div>
+                <label className="flex items-center gap-1.5 font-semibold text-rose-700" htmlFor="reason-decline"><Ban className="size-4" aria-hidden /> Decline</label>
+                <p className="mt-1 mb-2 text-xs text-slate-500">Blocks the user. They see the reason.</p>
+                <input id="reason-decline" name="reason" required className="input" placeholder="e.g. Not their documents" />
+              </div>
+              <input type="hidden" name="decision" value="DECLINED" />
+              <button className="btn-danger w-full">Decline</button>
+            </ApiForm>
           </div>
         </div>
       )}

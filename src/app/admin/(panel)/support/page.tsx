@@ -51,7 +51,7 @@ export default async function Support({ searchParams }: { searchParams: Promise<
       <InboxLive />
       <PageHeader title="Support" icon={<LifeBuoy className="size-6" />} tile="tile-rose" />
       <ListToolbar placeholder="Order ID or email" />
-      <nav className="-mx-4 flex gap-1 overflow-x-auto border-b border-slate-200 px-4 sm:mx-0 sm:px-0" aria-label="Chats">
+      <nav className="-mx-4 tab-row flex gap-1 overflow-x-auto border-b border-slate-200 px-4 sm:mx-0 sm:px-0" aria-label="Chats">
         {tabs.map((t) => (
           <Link
             key={t.id}
