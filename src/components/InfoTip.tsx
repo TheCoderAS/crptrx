@@ -2,13 +2,15 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Info } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 
 /**
  * A small (i) that shows extra detail on hover, focus or tap, so screens stay short.
  * The bubble is placed in the page's top layer and kept inside the screen on phones.
  */
-export function InfoTip({ children, label = "More info", className = "" }: { children: ReactNode; label?: string; className?: string }) {
+/** `tone="warn"`: an amber warning sign instead of the (i), for rules the reader must not miss. */
+export function InfoTip({ children, label, className = "", tone = "info" }: { children: ReactNode; label?: string; className?: string; tone?: "info" | "warn" }) {
+  const warn = tone === "warn";
   const btn = useRef<HTMLButtonElement>(null);
   const tip = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -48,7 +50,7 @@ export function InfoTip({ children, label = "More info", className = "" }: { chi
       <button
         ref={btn}
         type="button"
-        aria-label={label}
+        aria-label={label ?? (warn ? "Warning" : "More info")}
         aria-expanded={open}
         onClick={() => {
           setPinned(!pinned);
@@ -58,9 +60,9 @@ export function InfoTip({ children, label = "More info", className = "" }: { chi
         onMouseLeave={() => !pinned && setOpen(false)}
         onFocus={() => setOpen(true)}
         onBlur={() => !pinned && setOpen(false)}
-        className={`inline-grid size-5 shrink-0 place-items-center rounded-full align-middle text-slate-400 transition hover:text-slate-700 focus-visible:text-slate-700 ${className}`}
+        className={`inline-grid size-5 shrink-0 place-items-center rounded-full align-middle transition ${warn ? "text-amber-500 hover:text-amber-600" : "text-slate-400 hover:text-slate-700 focus-visible:text-slate-700"} ${className}`}
       >
-        <Info className="size-3.5" aria-hidden />
+        {warn ? <AlertTriangle className="size-4" aria-hidden /> : <Info className="size-3.5" aria-hidden />}
       </button>
       {open &&
         typeof document !== "undefined" &&

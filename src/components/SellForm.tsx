@@ -1,10 +1,10 @@
 "use client";
 import { InfoTip } from "./InfoTip";
 import { useMemo, useState } from "react";
-import { ArrowRight, Check, Landmark, Lock } from "lucide-react";
+import { ArrowRight, Check, Gift, Landmark, Lock } from "lucide-react";
 import { ApiForm } from "./ApiForm";
 import { NETWORK_CODES, NETWORK_INFO, type NetworkCode } from "@/lib/networks";
-import { calculatePayout, fmtInr, usdtForNetRupees } from "@/server/money";
+import { calculatePayout, D, feeLabel, fmtInr, rupees, usdtForNetRupees } from "@/server/money";
 import { NetworkMark } from "./ui";
 
 interface Props {
@@ -13,6 +13,12 @@ interface Props {
   feePercent: string;
   gstEnabled: boolean;
   gstPercent: string;
+  feeMin?: string;
+  feeMax?: string;
+  /** Bonus reward per USDT at today's rate ("0" = none). The quote fixes the exact amount. */
+  rewardPerUsdt?: string;
+  /** Referral points ready to use (1 point = ₹1). */
+  points?: number;
   min: string;
   max: string;
   available: Record<NetworkCode, boolean>;
@@ -35,17 +41,22 @@ export function SellForm(p: Props) {
   const [amountType, setAmountType] = useState<"USDT" | "INR">("USDT");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState(p.methods.find((m) => m.isDefault)?.id ?? p.methods[0]?.id);
-  const cfg = { rate: p.rate, taxPercent: p.taxPercent, feePercent: p.feePercent, gstEnabled: p.gstEnabled, gstPercent: p.gstPercent };
+  const points = p.points ?? 0;
+  const [usePoints, setUsePoints] = useState(points > 0);
+  const extra = usePoints ? points : 0;
+  const cfg = { rate: p.rate, taxPercent: p.taxPercent, feePercent: p.feePercent, gstEnabled: p.gstEnabled, gstPercent: p.gstPercent, feeMin: p.feeMin, feeMax: p.feeMax };
   const estimate = useMemo(() => {
     if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) return null;
     try {
       const usdt = amountType === "USDT" ? amount : usdtForNetRupees(amount, cfg).toString();
-      return { usdt, ...calculatePayout({ usdt, ...cfg }) };
+      const pay = calculatePayout({ usdt, ...cfg });
+      const bonus = rupees(D(usdt).mul(D(p.rewardPerUsdt ?? 0)));
+      return { usdt, ...pay, bonus, net: pay.net.plus(bonus).plus(extra) };
     } catch {
       return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, amountType]);
+  }, [amount, amountType, extra]);
   const outOfRange = !estimate ? null : Number(estimate.usdt) < Number(p.min) ? `The minimum is ${p.min} USDT.` : Number(estimate.usdt) > Number(p.max) ? `The maximum is ${p.max} USDT.` : null;
 
   return (
@@ -137,13 +148,27 @@ export function SellForm(p: Props) {
           {Number(p.taxPercent) > 0 && (
             <div className="flex justify-between"><dt className="text-slate-500">Tax held back ({p.taxPercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.taxHeld)}` : "—"}</dd></div>
           )}
-          {Number(p.feePercent) > 0 && (
-            <div className="flex justify-between"><dt className="text-slate-500">Platform fee ({p.feePercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.fee)}` : "—"}</dd></div>
+          {(estimate ? estimate.fee.gt(0) : Number(p.feePercent) > 0 || !!p.feeMin) && (
+            <div className="flex justify-between"><dt className="text-slate-500">{estimate ? feeLabel("Platform fee", { ...estimate, feePercent: p.feePercent }) : `Platform fee (${p.feePercent}%)`}</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.fee)}` : "—"}</dd></div>
           )}
-          {p.gstEnabled && Number(p.gstPercent) > 0 && Number(p.feePercent) > 0 && (
+          {p.gstEnabled && Number(p.gstPercent) > 0 && (estimate ? estimate.fee.gt(0) : Number(p.feePercent) > 0 || !!p.feeMin) && (
             <div className="flex justify-between"><dt className="text-slate-500">GST on fee ({p.gstPercent}%)</dt><dd className="tabular-nums">{estimate ? `− ${fmtInr(estimate.gstOnFee)}` : "—"}</dd></div>
           )}
+          {Number(p.rewardPerUsdt ?? 0) > 0 && (
+            <div className="flex justify-between"><dt className="text-emerald-700">Bonus reward</dt><dd className="tabular-nums text-emerald-700">{estimate ? `+ ${fmtInr(estimate.bonus)}` : "—"}</dd></div>
+          )}
+          {extra > 0 && (
+            <div className="flex justify-between"><dt className="text-emerald-700">Your points</dt><dd className="tabular-nums text-emerald-700">+ {fmtInr(extra)}</dd></div>
+          )}
         </dl>
+        {points > 0 && (
+          <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl bg-violet-50 p-3 text-sm ring-1 ring-violet-200">
+            <Gift className="size-4 shrink-0 text-violet-600" aria-hidden />
+            <span className="flex-1 text-slate-800">Use my {points} points <span className="text-slate-500">(+ {fmtInr(points)})</span></span>
+            <input type="checkbox" checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)} className="size-4 accent-violet-600" />
+          </label>
+        )}
+        <input type="hidden" name="usePoints" value={usePoints && points > 0 ? "true" : "false"} />
         <div className="mt-4 flex items-baseline justify-between border-t border-slate-100 pt-4">
           <span className="font-semibold text-slate-900">You receive</span>
           <span className="money text-2xl text-emerald-700">{estimate ? `≈ ${fmtInr(estimate.net)}` : "—"}</span>

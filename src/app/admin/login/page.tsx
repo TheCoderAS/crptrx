@@ -1,3 +1,4 @@
+import { Notify } from "@/components/Toaster";
 import { logoSrc } from "@/server/brand";
 import { redirect } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
@@ -19,7 +20,7 @@ export default async function AdminLogin({ searchParams }: { searchParams: Promi
             <h1 className="text-lg font-semibold text-slate-900">Admin sign-in</h1>
             <p className="text-sm text-slate-500">Step 1 of 2: password</p>
           </div>
-          {expired && <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200 ring-inset">You were logged out after 30 minutes without activity.</p>}
+          {expired && <Notify tone="warn">You were logged out after 30 minutes without activity.</Notify>}
           <div>
             <label className="label" htmlFor="email">Email</label>
             <input id="email" name="email" type="email" required autoComplete="username" className="input" />

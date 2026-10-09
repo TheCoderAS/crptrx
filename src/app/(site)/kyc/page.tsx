@@ -1,3 +1,4 @@
+import { adultBornBy, OLDEST_DOB } from "@/lib/time";
 import Link from "next/link";
 import { InfoTip } from "@/components/InfoTip";
 import { BadgeCheck, Clock3, ScanFace, ShieldX, TriangleAlert } from "lucide-react";
@@ -77,7 +78,8 @@ export default async function Kyc() {
               </div>
               <div>
                 <label className="label" htmlFor="dob">Date of birth</label>
-                <input id="dob" name="dob" type="date" required className="input" defaultValue={sub?.dob} />
+                <input id="dob" name="dob" type="date" required className="input" defaultValue={sub?.dob} min={OLDEST_DOB} max={adultBornBy()} />
+                <p className="hint">You must be 18 or older.</p>
               </div>
               <div>
                 <label className="label" htmlFor="pan">PAN</label>
@@ -91,7 +93,7 @@ export default async function Kyc() {
           </Section>
 
           <Section title="Documents" description="Clear photos in good light. All four are required.">
-            <Banner tone="warn" title="Upload only the masked Aadhaar">
+            <Banner inline tone="warn" title="Upload only the masked Aadhaar">
               First 8 digits hidden (XXXX XXXX 1234). Get it free from the UIDAI website. Unmasked copies are declined.
             </Banner>
             <div className="mt-4 grid grid-cols-2 gap-3">

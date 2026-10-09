@@ -1,9 +1,10 @@
 "use client";
+import { toastError } from "@/components/Toaster";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { encodeFunctionData, erc20Abi, parseUnits } from "viem";
-import { AlertCircle, Loader2, Wallet } from "lucide-react";
+import { Loader2, Wallet } from "lucide-react";
 import { InfoTip } from "./InfoTip";
 
 type Eip1193 = { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> };
@@ -37,7 +38,8 @@ export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mod
   const router = useRouter();
   const [injected, setInjected] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Messages go to the top-right pop-ups (Toaster).
+  const setError = (m: string | null) => void (m && toastError(m));
 
   useEffect(() => {
     // TronLink injects a moment after load.
@@ -190,11 +192,6 @@ export function PayWithWallet(p: { orderId: string; network: "BSC" | "TRON"; mod
             : `Pick your wallet app (${p.network === "BSC" ? "MetaMask, Trust Wallet…" : "TronLink, Trust Wallet…"}). On a computer, scan the QR code with your phone. Or send it yourself using the details below.`}
         </InfoTip>
       </div>
-      {error && (
-        <p role="alert" className="flex gap-2 text-sm text-rose-700">
-          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden /> {error}
-        </p>
-      )}
     </div>
   );
 }

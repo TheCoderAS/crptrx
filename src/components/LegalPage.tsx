@@ -7,7 +7,7 @@ export function LegalPage({ title, text, updated }: { title: string; text: strin
     <div className="mx-auto max-w-3xl">
       <PageHeader title={title} subtitle={updated} />
       {blocks.length === 0 ? (
-        <Banner tone="info">This page is being prepared. Please check back soon.</Banner>
+        <Banner inline tone="info">This page is being prepared. Please check back soon.</Banner>
       ) : (
         <article className="card space-y-4 text-[15px] leading-relaxed text-slate-700">
           {blocks.map((b, i) =>

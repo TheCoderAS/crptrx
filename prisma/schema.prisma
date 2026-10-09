@@ -83,20 +83,42 @@ enum TransferStatus {
 }
 
 model User {
-  id               String     @id @default(cuid())
-  email            String     @unique
-  emailVerified    Boolean    @default(false)
-  firebaseUid      String?    @unique
-  mobile           String?
-  mobileVerifiedAt DateTime?
-  displayName      String?
-  passwordHash     String?
-  failedLogins     Int        @default(0)
-  lockedUntil      DateTime?
-  status           UserStatus @default(ACTIVE)
-  kycStatus        KycStatus  @default(NOT_STARTED)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  id                    String     @id @default(cuid())
+  email                 String     @unique
+  emailVerified         Boolean    @default(false)
+  firebaseUid           String?    @unique
+  mobile                String?
+  mobileVerifiedAt      DateTime?
+  displayName           String?
+  passwordHash          String?
+  failedLogins          Int        @default(0)
+  lockedUntil           DateTime?
+  status                UserStatus @default(ACTIVE)
+  kycStatus             KycStatus  @default(NOT_STARTED)
+  // The admin who brought this customer (invite code at sign-up). Null = house (super admin only).
+  adminId               String?
+  referredAt            DateTime?
+  // Bonus on each order, as % of the order value, paid from the margin share of whoever owns
+  // the customer (their admin, or the house). Capped at that share. 0 = none.
+  rewardPercent         Decimal    @default(0) @db.Decimal(7, 4)
+  // User-to-user referrals: this user's own code (made once their identity is approved),
+  // and the user whose code they signed up with.
+  referralCode          String?    @unique
+  referredById          String?
+  // Super admin overrides for this user's referral code (null = the Settings default).
+  referralDisabled      Boolean    @default(false)
+  referralMode          String? // FIRST | EVERY
+  referralPointsPerUsdt Decimal?   @db.Decimal(10, 2)
+  referralMaxPoints     Int? // 0 = no cap
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  admin       Admin?            @relation("AdminCustomers", fields: [adminId], references: [id])
+  referredBy  User?             @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals   User[]            @relation("UserReferrals")
+  points      ReferralPoint[]   @relation("PointsEarned")
+  pointsFrom  ReferralPoint[]   @relation("PointsFrom")
+  redemptions PointRedemption[]
 
   kycSubmissions  KycSubmission[]
   payoutMethods   PayoutMethod[]
@@ -107,6 +129,8 @@ model User {
   wallets         UserWallet[]
   emailTokens     EmailToken[]
 
+  @@index([adminId])
+  @@index([referredById])
   @@map("users")
 }
 
@@ -126,6 +150,9 @@ model KycSubmission {
   autoApproved    Boolean   @default(false) // approved instantly by the kyc_auto_approve setting
   postReviewedAt  DateTime? // when an admin looked at an auto-approved submission
   postReviewedBy  String?
+  // An admin approved their own customer; a super admin gives the final approval.
+  recommendedBy   String?
+  recommendedAt   DateTime?
   status          KycStatus
   reviewerId      String?
   reason          String?
@@ -186,6 +213,19 @@ model Order {
   gstPercent        Decimal     @db.Decimal(7, 4)
   gstOnFee          Decimal     @db.Decimal(14, 2)
   net               Decimal     @db.Decimal(14, 2)
+  feeMin            Decimal?    @db.Decimal(14, 2) // fee limits in force when quoted; null = none
+  feeMax            Decimal?    @db.Decimal(14, 2)
+  marketRate        Decimal?    @db.Decimal(14, 4) // market price behind the rate; null = unknown
+  margin            Decimal?    @db.Decimal(14, 2) // usdt x (market - rate) in rupees; can be negative
+  // Fixed at quote time: the customer's admin (null = house), their share of the margin
+  // before the reward, and the reward added to the payout (already included in net).
+  adminId           String?
+  adminSharePercent Decimal?    @db.Decimal(7, 4)
+  adminShare        Decimal?    @db.Decimal(14, 2)
+  rewardPercent     Decimal?    @db.Decimal(7, 4)
+  reward            Decimal     @default(0) @db.Decimal(14, 2)
+  // Referral points the seller spent on this order (1 point = ₹1), already included in net.
+  pointsUsed        Int         @default(0)
   payoutMethodId    String
   payoutSnapshot    Json
   quoteExpiresAt    DateTime
@@ -431,13 +471,21 @@ model Admin {
   failedLogins        Int         @default(0)
   lockedUntil         DateTime?
   lastTotpStep        Int? // replay protection
+  // Referrals (ADMIN role only): customers who sign up with this code belong to this admin,
+  // who earns profitPercent of the rate margin on their paid orders.
+  inviteCode          String?     @unique
+  profitPercent       Decimal     @default(0) @db.Decimal(7, 4)
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
-  kycReviews    KycSubmission[]
-  payoutReviews PayoutMethod[]
-  notes         AdminNote[]
-  pushDevices   AdminPushDevice[]
+  customers      User[]               @relation("AdminCustomers")
+  earnings       AdminEarning[]
+  settlements    AdminSettlement[]
+  payoutRequests AdminPayoutRequest[]
+  kycReviews     KycSubmission[]
+  payoutReviews  PayoutMethod[]
+  notes          AdminNote[]
+  pushDevices    AdminPushDevice[]
 
   @@map("admins")
 }
@@ -550,4 +598,140 @@ model BrandAsset {
   updatedAt DateTime @updatedAt
 
   @@map("brand_assets")
+}
+
+enum EarningStatus {
+  PENDING // owed to the admin
+  SETTLED // paid out to the admin (see settlement)
+  VOID // cancelled by a super admin (reason kept)
+}
+
+/// An admin's share of one paid order's margin, minus the reward their customer got.
+model AdminEarning {
+  id           String        @id @default(cuid())
+  adminId      String
+  orderId      String        @unique
+  margin       Decimal       @db.Decimal(14, 2)
+  sharePercent Decimal       @db.Decimal(7, 4)
+  share        Decimal       @db.Decimal(14, 2) // before the reward
+  reward       Decimal       @db.Decimal(14, 2)
+  amount       Decimal       @db.Decimal(14, 2) // share - reward, never below 0
+  status       EarningStatus @default(PENDING)
+  settlementId String?
+  voidReason   String?
+  voidedBy     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  admin      Admin            @relation(fields: [adminId], references: [id])
+  settlement AdminSettlement? @relation(fields: [settlementId], references: [id])
+
+  @@index([adminId, status])
+  @@map("admin_earnings")
+}
+
+/// A payout of pending earnings to an admin, recorded by a super admin.
+model AdminSettlement {
+  id        String   @id @default(cuid())
+  adminId   String
+  amount    Decimal  @db.Decimal(14, 2)
+  count     Int
+  reference String? // bank reference / UTR
+  note      String?
+  createdBy String
+  createdAt DateTime @default(now())
+
+  admin    Admin               @relation(fields: [adminId], references: [id])
+  earnings AdminEarning[]
+  request  AdminPayoutRequest?
+
+  @@index([adminId, createdAt])
+  @@map("admin_settlements")
+}
+
+enum PayoutRequestStatus {
+  OPEN
+  PAID
+  DECLINED
+  CANCELLED
+}
+
+/// An admin asking the super admin to pay out what they're owed. At most one OPEN per admin
+/// (partial unique index in the migration). Paying it is the normal settlement.
+model AdminPayoutRequest {
+  id           String              @id @default(cuid())
+  adminId      String
+  amount       Decimal             @db.Decimal(14, 2) // owed when asked; the payout may differ
+  note         String?
+  status       PayoutRequestStatus @default(OPEN)
+  settlementId String?             @unique
+  reason       String? // why it was declined or closed
+  decidedBy    String?
+  decidedAt    DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  admin      Admin            @relation(fields: [adminId], references: [id])
+  settlement AdminSettlement? @relation(fields: [settlementId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([adminId, createdAt])
+  @@map("admin_payout_requests")
+}
+
+enum PointStatus {
+  ACTIVE // counts (pending until availableAt, usable until expiresAt)
+  CANCELLED // a super admin cancelled it while pending
+  BLOCKED // not given: the friend's details match the referrer's
+}
+
+/// Points a user earned when someone they invited sold USDT. 1 point = ₹1, spent only on
+/// the user's own sales. One row per paid order of the friend.
+model ReferralPoint {
+  id          String      @id @default(cuid())
+  userId      String // who earns
+  fromUserId  String // the friend who sold
+  orderId     String      @unique
+  usdt        Decimal     @db.Decimal(38, 18)
+  points      Int
+  used        Int         @default(0) // held or spent on the user's own orders
+  status      PointStatus @default(ACTIVE)
+  reason      String? // why cancelled or blocked
+  cancelledBy String?
+  availableAt DateTime
+  expiresAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user     User @relation("PointsEarned", fields: [userId], references: [id])
+  fromUser User @relation("PointsFrom", fields: [fromUserId], references: [id])
+
+  @@index([userId, status])
+  @@index([fromUserId])
+  @@index([createdAt])
+  @@map("referral_points")
+}
+
+enum RedemptionStatus {
+  HELD // on an open order
+  SPENT // the order was paid
+  RELEASED // the order expired or was closed; points went back
+}
+
+/// Points used on one of the user's own orders. `allocations` = [{ id, points }] taken from
+/// ReferralPoint rows (oldest expiry first), so they can be given back exactly.
+model PointRedemption {
+  id          String           @id @default(cuid())
+  userId      String
+  orderId     String           @unique
+  points      Int
+  status      RedemptionStatus @default(HELD)
+  allocations Json
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@map("point_redemptions")
 }

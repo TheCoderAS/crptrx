@@ -11,9 +11,9 @@ export const POST = api(async (req: Request) => {
   if (!(await getSettings()).auth_google_enabled) throw new AppError("Google sign-in is turned off. Please use another sign-in option.", 403, "METHOD_OFF");
   const ip = await clientIp();
   await rateLimit(`login:${ip}`, 20, 15 * 60);
-  const { idToken } = await body<{ idToken: string }>(req);
+  const { idToken, inviteCode, inviteSoft } = await body<{ idToken: string; inviteCode?: string; inviteSoft?: boolean }>(req);
   const identity = await verifyFirebaseIdToken(String(idToken ?? ""));
-  const user = await upsertUserFromIdentity(identity, ip);
+  const user = await upsertUserFromIdentity(identity, ip, { code: inviteCode, soft: inviteSoft === true });
   await createSession("USER", user.id);
   return { redirect: await afterLoginPath(user) };
 });

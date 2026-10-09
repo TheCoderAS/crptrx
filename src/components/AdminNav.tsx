@@ -2,9 +2,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertOctagon, BadgeCheck, FileClock, FlaskConical, Gauge, Landmark, LifeBuoy, ListOrdered, Menu, ScrollText, Settings, UserRound, Users, X } from "lucide-react";
+import { AlertOctagon, BadgeCheck, FileClock, FlaskConical, Gauge, Gift, HandCoins, Landmark, LifeBuoy, ListOrdered, Menu, ScrollText, Settings, UserRound, Users, X } from "lucide-react";
 
-const ICONS = { Gauge, BadgeCheck, Landmark, ListOrdered, AlertOctagon, LifeBuoy, Settings, Users, UserRound, FileClock, ScrollText, FlaskConical };
+const ICONS = { Gift, HandCoins, Gauge, BadgeCheck, Landmark, ListOrdered, AlertOctagon, LifeBuoy, Settings, Users, UserRound, FileClock, ScrollText, FlaskConical };
 export type AdminNavItem = { href: string; label: string; icon: keyof typeof ICONS; count?: number };
 
 export function AdminNav({ items }: { items: AdminNavItem[] }) {

@@ -11,8 +11,25 @@ explain() {
   adb logcat -d 2>/dev/null | grep -E "AndroidRuntime|FATAL|ActivityManager.*(${PKG}|Killing|died)|lowmemorykiller|VisionPay" | tail -40 | while IFS= read -r l; do echo "::notice title=system log::$l"; done
 }
 fail() { echo "::error title=App smoke test::$1"; explain; }
+# Android's own record of why the app's process ended (crash, killed by the system, low memory…).
+exit_reason() {
+  adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | grep -E "ApplicationExitInfo|reason|status|description|importance" | head -24 \
+    | while IFS= read -r l; do echo "::error title=Why the app stopped (Android exit info)::$l"; done
+  adb logcat -d 2>/dev/null | grep -E "$PKG" | grep -E "ActivityManager|libc|DEBUG|chromium|WebView" | tail -20 | while IFS= read -r l; do echo "::notice title=app process log::$l"; done
+}
 
 adb wait-for-device
+# A freshly booted emulator spends its first minutes setting itself up and stops and restarts
+# system apps ("Killing …: change …"). Start the test only once that has calmed down, so it
+# measures our app and not the phone's own start-up.
+for _ in $(seq 1 60); do [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] && break; sleep 2; done
+settled=""
+for _ in $(seq 1 12); do
+  adb logcat -c
+  sleep 15
+  if ! adb logcat -d 2>/dev/null | grep -qE "ActivityManager: Killing .*: change"; then settled=1; break; fi
+done
+[ -n "$settled" ] && note "Emulator" "Settled after start-up" || echo "::warning title=Emulator::Still busy setting itself up after 3 minutes; testing anyway"
 adb install -r -g "$APK" || { fail "Couldn't install the app on the emulator"; exit 1; }
 adb logcat -c
 adb shell am start -W -n "$PKG/com.visionpay.app.MainActivity" >/dev/null
@@ -28,7 +45,7 @@ ok=""
 # fails (offline screen), the app retries by itself when the network comes up.
 for _ in $(seq 1 120); do
   if adb logcat -d -s VisionPay:I | grep -E "page-finished url=https://$HOST" | grep -qv "title=$"; then ok=1; break; fi
-  if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app stopped right after starting (crash)"; break; fi
+  if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app stopped right after starting (crash)"; exit_reason; break; fi
   sleep 2
 done
 sleep 4
@@ -44,7 +61,7 @@ if [ -z "$ok" ]; then
   exit 1
 fi
 note "Loaded" "$(grep page-finished "$OUT/app-log.txt" | tail -1 | sed 's/.*page-finished //')"
-if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app stopped after loading the page"; exit 1; fi
+if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app stopped after loading the page"; exit_reason; exit 1; fi
 if ! adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG"; then fail "The app isn't on screen after loading the page"; exit 1; fi
 texts=$(grep -o 'text="[^"]\+"' "$OUT/1-start.xml" 2>/dev/null | sed 's/^text="//;s/"$//' | head -25 | paste -sd '|' -)
 note "On screen" "${texts:-<no text found in the screen dump>}"
@@ -57,10 +74,33 @@ note "Login page" "The website's login page loaded inside the app"
 
 # Back button on the start page: the app goes to the background, it doesn't crash.
 adb shell input keyevent 4; sleep 2
-if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app crashed on the back button"; exit 1; fi
+if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app crashed on the back button"; exit_reason; exit 1; fi
 # Reopen: comes back to the same page without a reload crash.
 adb shell am start -W -n "$PKG/com.visionpay.app.MainActivity" >/dev/null; sleep 3
 adb exec-out screencap -p > "$OUT/2-reopened.png" 2>/dev/null || true
-if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app crashed when reopened"; exit 1; fi
+if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then fail "The app crashed when reopened"; exit_reason; exit 1; fi
 if [ -s "$OUT/crash-log.txt" ] && grep -q "$PKG" "$OUT/crash-log.txt"; then fail "Crash logged for the app"; head -30 "$OUT/crash-log.txt"; exit 1; fi
-note "Smoke test" "Installed, opened $HOST, back button and reopen all fine"
+
+# Deep link: a link to the website (e.g. an invite) must open that exact page inside the app.
+adb logcat -c
+adb shell am start -W -a android.intent.action.VIEW -d "https://$HOST/signup?ref=SMOKE1234" "$PKG" >/dev/null
+link=""
+for _ in $(seq 1 45); do
+  link=$(adb logcat -d -s VisionPay:I | grep "page-finished url=https://$HOST/signup?ref=SMOKE1234" | tail -1)
+  [ -n "$link" ] && break
+  sleep 2
+done
+adb exec-out screencap -p > "$OUT/3-deep-link.png" 2>/dev/null || true
+if [ -z "$link" ]; then fail "A link to https://$HOST/signup?ref=… didn't open that page in the app"; exit 1; fi
+note "Deep link" "https://$HOST/signup?ref=… opened inside the app"
+# App Links: Android checks https://$HOST/.well-known/assetlinks.json. Informational only: the site
+# serves it once this code is deployed, so a pull request build can run before that.
+adb shell pm verify-app-links --re-verify "$PKG" >/dev/null 2>&1 || true
+for _ in $(seq 1 10); do
+  state=$(adb shell pm get-app-links "$PKG" 2>/dev/null | grep -E "^\s+$HOST:" | sed 's/^ *//')
+  echo "$state" | grep -q verified && break
+  sleep 3
+done
+if echo "$state" | grep -q ": verified"; then note "App Links" "$state (links open straight in the app)"
+else echo "::warning title=App Links not verified yet::${state:-no state for $HOST}. Links will open in the browser until https://$HOST/.well-known/assetlinks.json lists this app and key."; fi
+note "Smoke test" "Installed, opened $HOST, back button, reopen and deep link all fine"

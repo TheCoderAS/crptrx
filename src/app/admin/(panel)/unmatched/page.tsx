@@ -25,7 +25,8 @@ type Sort = (typeof SORTS)[number]["value"];
 const ORDER_BY: Record<Sort, Prisma.IncomingTransferOrderByWithRelationInput> = { new: { blockTime: "desc" }, old: { blockTime: "asc" }, high: { amount: "desc" }, low: { amount: "asc" } };
 
 export default async function Unmatched({ searchParams }: { searchParams: Promise<{ show?: string; q?: string; sort?: string }> }) {
-  await adminOrLogin();
+  // Unmatched payments and the audit log span every customer: super admin only.
+  await adminOrLogin("SUPER_ADMIN");
   const { show, q: rawQ, sort: sortParam } = await searchParams;
   const q = rawQ?.trim();
   const sort = pickSort(sortParam, SORTS.map((s) => s.value), "new");
@@ -69,7 +70,7 @@ export default async function Unmatched({ searchParams }: { searchParams: Promis
           <p className="text-xs break-all">From <span className="font-mono">{t.fromAddress}</span> → to <span className="font-mono">{t.toAddress}</span></p>
           {t.status === "IGNORED_WRONG_TOKEN" && <p className="text-xs text-red-700">Token contract {t.tokenContract} is not the official USDT. Never matched.</p>}
           {(t.status === "UNMATCHED" || t.status === "MANUAL_HANDLING") && (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200 ring-inset">
+            <p className="text-sm text-slate-700">
               <b>Why it wasn&apos;t matched: </b>
               {fromUs(t) ? "Sent from our own deposit address, so it isn't a customer's payment. Don't link it to an order." : (t.unmatchedReason ?? "Not recorded (this payment arrived before reasons were kept).")}
             </p>
@@ -90,7 +91,7 @@ export default async function Unmatched({ searchParams }: { searchParams: Promis
               <ApiForm action={`/api/admin/transfers/${t.id}`} className="space-y-2 rounded-lg bg-slate-50 p-2">
                 <input type="hidden" name="action" value="link" />
                 <input aria-label="Order ID, e.g. ORD-2026-000123" name="orderId" required className="input" placeholder="Order ID, e.g. ORD-2026-000123" />
-                <input aria-label="Why this belongs to that order (required)" name="note" required className="input" placeholder="Why this belongs to that order (required)" />
+                <input aria-label="Why this belongs to that order (required)" name="note" required className="input" placeholder="Why this order" />
                 <button className="btn-secondary">Link to order</button>
               </ApiForm>
               {t.status === "UNMATCHED" && (

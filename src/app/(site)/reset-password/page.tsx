@@ -14,9 +14,9 @@ export default async function Reset({ searchParams }: { searchParams: Promise<{ 
   return (
     <AuthShell brand={m.brand} logo={m.logo} title="Choose a new password" footer={<Link href="/login" className="font-semibold text-brand-700 hover:underline">Back to log in</Link>}>
       {!m.email ? (
-        <Banner tone="warn">Password sign-in is turned off right now.</Banner>
+        <Banner inline tone="warn">Password sign-in is turned off right now.</Banner>
       ) : !token ? (
-        <Banner tone="warn">This link is incomplete. Open the link from the email again, or <Link href="/forgot-password" className="underline">ask for a new one</Link>.</Banner>
+        <Banner inline tone="warn">This link is incomplete. Open the link from the email again, or <Link href="/forgot-password" className="underline">ask for a new one</Link>.</Banner>
       ) : (
         <ApiForm action="/api/auth/reset" className="space-y-4">
           <input type="hidden" name="token" value={token} />

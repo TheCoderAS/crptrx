@@ -68,7 +68,7 @@
 
 @layer components {
   /* Dark theme: surfaces built with @apply bg-white (see theme-dark.css for the palette). */
-  :root[data-theme="dark"] :is(.card, .input, .btn-secondary, .chip) { background-color: var(--surface); }
+  :root[data-theme="dark"] :is(.card, .input, .btn-secondary, .chip, .toast) { background-color: var(--surface); }
   :root[data-theme="dark"] .chip-active { background-color: var(--color-brand-600); }
 
   /* Admin panel: denser than the customer site (more on screen, less scrolling). */
@@ -166,4 +166,19 @@ body { @apply bg-slate-50 text-slate-900 antialiased; font-feature-settings: "cv
   from { width: 0; }
   10% { width: 35%; }
   to { width: 90%; }
+}
+
+/* Messages at the top right (Toaster). */
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.toast-in { animation: toast-in 0.18s ease-out; }
+@media (prefers-reduced-motion: reduce) { .toast-in { animation: none; } }
+
+/* Tab rows that scroll sideways on small screens: no scrollbar (the -1px tab underline
+   used to make the browser add a vertical one). */
+.tab-row {
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.tab-row::-webkit-scrollbar {
+  display: none;
 }

@@ -24,6 +24,8 @@ export function AppPromo() {
   useEffect(() => {
     if (inNativeApp() || /VisionPayApp\//.test(navigator.userAgent) || !/Android/i.test(navigator.userAgent)) return;
     if (path.startsWith("/app")) return;
+    // Someone who opened an invite link signs up here first, so the code isn't lost in the app.
+    if (new URLSearchParams(window.location.search).has("ref")) return;
     try {
       if (Date.now() - Number(localStorage.getItem(KEY) ?? 0) < SNOOZE_MS) return;
     } catch {

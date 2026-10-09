@@ -1,4 +1,5 @@
 "use client";
+import { toastError } from "@/components/Toaster";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckCheck, ImagePlus, Loader2, SendHorizontal, X } from "lucide-react";
@@ -40,7 +41,8 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [preparing, setPreparing] = useState(false); // picked image still being read/shrunk
-  const [error, setError] = useState<string | null>(null);
+  // Messages go to the top-right pop-ups (Toaster).
+  const setError = (m: string | null) => void (m && toastError(m));
   const list = useRef<HTMLDivElement>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
@@ -178,7 +180,6 @@ export function ChatPanel({ orderId, side, visible, onUnread, header, empty }: {
       >
         {side === "USER" ? messages.some((m) => m.from === "USER") && <PushPrompt who="user" /> : <PushPrompt who="admin" />}
         {status === "RESOLVED" && <p className="mb-2 text-center text-xs text-slate-500">{side === "USER" ? "Marked resolved. Write again to reopen." : "Resolved. A new message reopens it."}</p>}
-        {error && <p role="alert" className="mb-2 text-xs text-rose-700">{error}</p>}
         {preparing && (
           <div className="mb-2 grid h-20 w-20 place-items-center rounded-xl bg-slate-100 ring-1 ring-slate-200" role="status" aria-label="Preparing image">
             <Loader2 className="size-5 animate-spin text-brand-600" aria-hidden />
@@ -273,10 +274,10 @@ function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
     return () => window.removeEventListener("keydown", esc, true);
   }, [onClose]);
   return (
-    <div role="dialog" aria-label="Image" className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/95 p-3 pt-14" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div role="dialog" aria-label="Image" className="theme-lock absolute inset-0 z-20 flex items-center justify-center p-3 pt-14" style={{ background: "rgb(2 6 23 / 0.95)" }} onClick={(e) => e.target === e.currentTarget && onClose()}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="Image sent in chat" className="max-h-full max-w-full rounded-lg object-contain" />
-      <button type="button" onClick={onClose} aria-label="Close image" className="absolute top-3 right-3 grid size-9 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25">
+      <button type="button" onClick={onClose} aria-label="Close image" className="absolute top-3 right-3 grid size-10 place-items-center rounded-full shadow-lg ring-1 ring-black/10 hover:opacity-90" style={{ background: "#ffffff", color: "#0f172a" }}>
         <X className="size-5" aria-hidden />
       </button>
     </div>

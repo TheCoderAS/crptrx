@@ -54,7 +54,7 @@ describe("order chat", () => {
 
     await sendChat(order.id, U, "Paid 10 minutes ago");
     expect(await waitingOnUsCount()).toBe(1);
-    expect((await adminCounts()).support).toBe(1);
+    expect((await adminCounts({ id: "super", role: "SUPER_ADMIN" })).support).toBe(1);
     expect(await unreadForUser(user.id)).toEqual([]);
 
     const reply = await sendChat(order.id, A, "Checking now");
@@ -118,9 +118,12 @@ describe("live signal and push", () => {
     expect(JSON.stringify(m)).not.toContain("1234");
   });
 
-  it("customer messages push to active admins' devices; support replies don't", async () => {
+  it("customer messages push to their own admin's devices; support replies don't", async () => {
     const { order, user } = await makeOrder("TRON", "100");
     const admin = await makeAdmin();
+    const other = await makeAdmin("Other Admin");
+    await prisma.user.update({ where: { id: user.id }, data: { adminId: admin.id } });
+    await registerAdminPushDevice(other.id, "other-admin-token-cccccccccccc", "WEB"); // not their customer: no alert
     const gone = await makeAdmin("Left Company");
     await prisma.admin.update({ where: { id: gone.id }, data: { status: "DISABLED" } });
     await registerAdminPushDevice(admin.id, "admin-browser-token-aaaaaaaaaaaa", "WEB");

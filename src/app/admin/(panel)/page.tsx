@@ -5,27 +5,38 @@ import type { OrderStatus } from "@prisma/client";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { D, fmtInr, fmtUsdt } from "@/server/money";
+import { isSuper, ownedScope } from "@/server/scope";
 import { fmtIST, istDayStart } from "@/lib/time";
 import { PageHeader, Section, Stat, StatusPill } from "@/components/ui";
 
 export default async function Dashboard() {
-  await adminOrLogin();
+  const me = await adminOrLogin();
+  const sup = isSuper(me);
+  const mine = ownedScope(me);
   const today = istDayStart();
-  const [{ kyc, payout: pms, unmatched, support }, byStatus, received, paid, watchers] = await Promise.all([
-    adminCounts(),
-    prisma.order.groupBy({ by: ["status"], _count: true }),
-    prisma.order.aggregate({ _sum: { receivedAmount: true }, where: { confirmedAt: { gte: today } } }),
-    prisma.order.aggregate({ _sum: { paidAmount: true, taxHeld: true }, where: { status: "PAID", paidAt: { gte: today } } }),
+  const [{ kyc, payout: pms, unmatched, support, toPay }, byStatus, received, paid, watchers] = await Promise.all([
+    adminCounts(me),
+    prisma.order.groupBy({ by: ["status"], _count: true, where: mine }),
+    prisma.order.aggregate({ _sum: { receivedAmount: true }, where: { confirmedAt: { gte: today }, ...mine } }),
+    prisma.order.aggregate({ _sum: { paidAmount: true, taxHeld: true }, where: { status: "PAID", paidAt: { gte: today }, ...mine } }),
     prisma.watcherState.findMany(),
   ]);
   const count = (s: OrderStatus) => byStatus.find((b) => b.status === s)?._count ?? 0;
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" subtitle="What needs attention today." icon={<Gauge className="size-6" />} />
+      <PageHeader title="Dashboard" subtitle={sup ? "What needs attention today." : "Your customers: what needs attention today."} icon={<Gauge className="size-6" />} />
+      {sup && toPay > 0 && (
+        <div>
+          <p className="eyebrow mb-3">Waiting for you</p>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <Stat label="Approved orders to pay" value={toPay} href="/admin/orders?status=APPROVED" icon={<Banknote className="size-5" />} tile="tile-emerald" />
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label="KYC waiting" value={kyc} href="/admin/reviews?tab=kyc" icon={<BadgeCheck className="size-5" />} tile="tile-violet" />
         <Stat label="Payout methods waiting" value={pms} href="/admin/reviews?tab=payout" icon={<Landmark className="size-5" />} tile="tile-emerald" />
-        <Stat label="Unmatched payments" value={unmatched} href="/admin/unmatched?show=waiting" icon={<AlertOctagon className="size-5" />} tile="tile-amber" />
+        {sup && <Stat label="Unmatched payments" value={unmatched} href="/admin/unmatched?show=waiting" icon={<AlertOctagon className="size-5" />} tile="tile-amber" />}
         <Stat label="Open support messages" value={support} href="/admin/support?open=1" icon={<LifeBuoy className="size-5" />} tile="tile-rose" />
       </div>
       <div>

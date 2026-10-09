@@ -102,6 +102,15 @@ export const env = {
     get releasesRepo() {
       return opt("ANDROID_RELEASES_REPO") ?? "TheCoderAS/crptrx";
     },
+    /**
+     * SHA-256 fingerprints of the key the app files are signed with (comma separated), for
+     * Android App Links (/.well-known/assetlinks.json). Public, not a secret. Defaults to our
+     * release key; change it only if the signing key changes.
+     */
+    get certSha256(): string[] {
+      const v = opt("ANDROID_CERT_SHA256") ?? "2E:43:C1:E5:2C:6D:89:26:6E:1A:E2:D0:51:18:51:10:26:20:E7:98:F7:31:72:C5:3B:19:94:8D:95:FA:09:7C";
+      return v.split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
+    },
   },
   storage: {
     /** Supabase whenever it's configured, so a missing STORAGE_DRIVER can't send files to a disk that's wiped on redeploy. */

@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import type { User } from "@prisma/client";
+import { inviteData, resolveInvite } from "../referral";
 import { audit } from "../audit";
 import { randomToken, sha256 } from "../crypto";
 import { prisma } from "../db";
@@ -62,12 +63,14 @@ export async function sendVerificationEmail(user: Pick<User, "id" | "email">) {
 }
 
 /** Returns the new user, or null when the email is already registered (we don't say so on screen). */
-export async function registerWithPassword(emailInput: unknown, passwordInput: unknown, ip: string | null): Promise<User | null> {
+export async function registerWithPassword(emailInput: unknown, passwordInput: unknown, ip: string | null, inviteCode?: unknown): Promise<User | null> {
   await assertEmailSignInOn();
   await rateLimit(`signup:${ip}`, 10, 60 * 60);
   const email = normalizeEmail(emailInput);
   if (!EMAIL_RE.test(email) || email.length > 200) throw new AppError("Enter a valid email address.");
   const password = checkUserPassword(passwordInput);
+  // A wrong code is refused before anything else, so the person can fix it or clear it.
+  const inv = await resolveInvite(inviteCode);
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     await bcrypt.hash(password, 12); // same timing as a real sign-up
@@ -80,9 +83,11 @@ export async function registerWithPassword(emailInput: unknown, passwordInput: u
     );
     return null;
   }
-  const user = await prisma.user.create({ data: { email, passwordHash: await bcrypt.hash(password, 12), emailVerified: false } });
-  await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: "password" }, ip });
-  await sendVerificationEmail(user);
+  const user = await prisma.user.create({ data: { email, passwordHash: await bcrypt.hash(password, 12), emailVerified: false, ...inviteData(inv) } });
+  await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: "password", ...inv }, ip });
+  // Only when the admin requires a confirmed email; otherwise no email and no code step.
+  const { getSettings } = await import("../settings");
+  if ((await getSettings()).auth_email_verification_required) await sendVerificationEmail(user);
   return user;
 }
 

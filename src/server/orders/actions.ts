@@ -1,3 +1,5 @@
+import { awardReferralPoints } from "../points";
+import { recordEarning } from "../earnings";
 import type { OrderStatus } from "@prisma/client";
 import { txidNetwork } from "@/lib/networks";
 import { audit, type Actor } from "../audit";
@@ -113,13 +115,17 @@ export async function markPaid(orderId: string, input: { utr?: string; amount: s
   const dupUtr = utr ? await prisma.order.findFirst({ where: { utr, id: { not: orderId } }, select: { id: true } }) : null;
   if (dupUtr) throw new AppError(`This UTR is already recorded on ${dupUtr.id}.`, 409);
   try {
-    await prisma.$transaction((tx) =>
-      transition(tx, orderId, "PAID", actor, {
+    await prisma.$transaction(async (tx) => {
+      await transition(tx, orderId, "PAID", actor, {
         from: "APPROVED",
         publicMessage: utr ? `Paid. Bank reference ${utr}.` : "Paid.",
         data: { utr, paidAmount: D(o.net).toFixed(2), paidAt, paidByAdminId: actor.id },
-      }),
-    );
+      });
+      // The customer's admin earns their share now, in the same step (never twice: one row per order).
+      await recordEarning(tx, orderId);
+      // The seller's referrer (if any) earns points on this sale.
+      await awardReferralPoints(tx, orderId);
+    });
   } catch (e) {
     // Unique index on utr: two admins entering the same UTR at the same moment.
     if ((e as { code?: string }).code === "P2002") throw new AppError("This UTR is already recorded on another order.", 409);

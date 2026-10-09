@@ -1,5 +1,6 @@
 import { api } from "@/server/http";
 import { adminCtx } from "@/server/auth/guard";
+import { assertOwned } from "@/server/scope";
 import { kycDocLink, type DocField } from "@/server/kyc";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -12,6 +13,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export const GET = api(async (req: Request, ctx: Ctx) => {
   const a = await adminCtx();
   const { id } = await ctx.params;
+  await assertOwned(a.admin, "kycSubmission", id);
   const params = new URL(req.url).searchParams;
   const url = await kycDocLink(id, params.get("doc") as DocField, a.actor, a.ip);
   if (params.get("format") === "json") return { url };

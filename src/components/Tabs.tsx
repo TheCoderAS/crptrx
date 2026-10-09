@@ -31,8 +31,8 @@ export function Tabs({ tabs, layout = "top" }: { tabs: Tab[]; layout?: "top" | "
         aria-orientation={side ? "vertical" : "horizontal"}
         className={
           side
-            ? "-mx-4 mb-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-4 lg:mx-0 lg:mb-0 lg:flex-col lg:overflow-visible lg:px-0"
-            : "-mx-4 mb-5 flex gap-1 overflow-x-auto border-b border-slate-200 px-4 sm:mx-0 sm:px-0"
+            ? "tab-row -mx-4 mb-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-4 lg:mx-0 lg:mb-0 lg:flex-col lg:overflow-visible lg:px-0"
+            : "-mx-4 mb-5 tab-row flex gap-1 overflow-x-auto border-b border-slate-200 px-4 sm:mx-0 sm:px-0"
         }
       >
         {tabs.map((t) => {

@@ -5,7 +5,7 @@ import { CheckCircle2, Download, Hourglass, PauseCircle, RefreshCw, ShieldAlert,
 import { userOrLogin } from "@/server/auth/pages";
 import { RECHECKABLE_HOLDS } from "@/server/matching";
 import { prisma } from "@/server/db";
-import { D, fmtInr, fmtUsdt } from "@/server/money";
+import { D, feeLabel, fmtInr, fmtUsdt } from "@/server/money";
 import { userStatusText } from "@/server/orders/messages";
 import { maskedPayout, payoutLast4, type PayoutSnapshot } from "@/server/payouts";
 import { getSettings, tokenContractFor } from "@/server/settings";
@@ -61,8 +61,10 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <Row k="Rate" v={`${fmtInr(o.rate)} per USDT`} />
         <Row k="Gross" v={fmtInr(o.gross)} />
         {D(o.taxHeld).gt(0) && <Row k={`Tax held back (${D(o.taxPercent).toString()}%)`} v={`− ${fmtInr(o.taxHeld)}`} />}
-        {D(o.fee).gt(0) && <Row k={`Platform fee (${D(o.feePercent).toString()}%)`} v={`− ${fmtInr(o.fee)}`} />}
+        {D(o.fee).gt(0) && <Row k={feeLabel("Platform fee", o)} v={`− ${fmtInr(o.fee)}`} />}
         {D(o.gstOnFee).gt(0) && <Row k={`GST on fee (${D(o.gstPercent).toString()}%)`} v={`− ${fmtInr(o.gstOnFee)}`} />}
+        {D(o.reward).gt(0) && <Row k="Bonus reward" v={<span className="text-emerald-700">+ {fmtInr(o.reward)}</span>} />}
+        {o.pointsUsed > 0 && <Row k="Your points" v={<span className="text-emerald-700">+ {fmtInr(o.pointsUsed)}</span>} />}
         <Row strong k="You receive" v={<span className="text-emerald-700">{fmtInr(o.net)}</span>} />
         <Row k="Paid to" v={maskedPayout(snap)} />
       </div>
@@ -241,8 +243,8 @@ function depositQr(address: string) {
 /** One short safety line instead of paragraphs; the details sit behind the (i). */
 function NetworkOnly({ nw, n, walletsRequired }: { nw: string; n: NetworkCode; walletsRequired?: boolean }) {
   return (
-    <p className="flex items-center gap-2 rounded-xl bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-800 ring-1 ring-rose-200 ring-inset">
-      <ShieldAlert className="size-4 shrink-0" aria-hidden />
+    <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
+      <ShieldAlert className="size-4 shrink-0 text-rose-600" aria-hidden />
       <span className="flex-1">Send only USDT on {nw}</span>
       <InfoTip>
         Any other network or coin may be lost for good.{n === "BSC" ? " This is not an Ethereum (ERC-20) address, even though it looks similar." : ""}

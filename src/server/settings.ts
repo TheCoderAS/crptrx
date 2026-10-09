@@ -24,6 +24,21 @@ export const SETTING_DEFAULTS = {
   rate_min_sources: 2, // price sources that must agree
   rate_sources: ["coindcx", "wazirx", "coingecko"] as string[],
   fee_percent: "1", // OWNER
+  fee_min_inr: "", // flat lowest fee in rupees; empty = no minimum
+  fee_max_inr: "", // flat highest fee in rupees; empty = no maximum
+  // MANUAL mode: the market price you're buying against, so each order records its margin.
+  // Empty = margin isn't recorded. AUTO mode uses the live market price instead.
+  rate_market_manual: "",
+  // Admins can ask for a payout of their earnings once they're owed at least this much (rupees).
+  payout_request_min_inr: "500",
+  // User-to-user referrals (points.ts). 1 point = ₹1, spent only on the user's own sales.
+  referral_enabled: false,
+  referral_mode: "FIRST" as "FIRST" | "EVERY", // the friend's first rewarded sale only, or every sale
+  referral_points_per_usdt: "1", // points per USDT the friend sells (whole points, rounded down)
+  referral_max_points_per_sale: 500, // 0 = no cap
+  referral_min_sale_usdt: "10", // smaller sales earn nothing
+  referral_hold_days: 7, // points stay pending (cancellable) this long
+  referral_expiry_days: 365, // usable this long after they're ready; 0 = never expire
   gst_enabled: true, // OWNER
   gst_percent: "18", // OWNER
   tax_percent: "1", // OWNER + CA
@@ -47,8 +62,8 @@ export const SETTING_DEFAULTS = {
   // Sign-in and onboarding (admin-controlled; see onboarding.ts)
   auth_google_enabled: true,
   auth_email_enabled: true,
-  auth_email_verification_required: true,
-  onboarding_mobile_required: true,
+  auth_email_verification_required: false, // on: new email sign-ups must click an emailed link
+  onboarding_mobile_required: false, // on: a mobile number confirmed by SMS code before selling
   kyc_required: true, // the owner may switch it off (the settings page warns about Live)
   kyc_auto_approve: false, // approve on submission; kept in a "review later" queue
   payout_auto_approve_on_name_match: false,
@@ -98,14 +113,20 @@ export type SettingKey = keyof Settings;
  * (React cache); outside rendering (API routes, the watcher, tests) and inside a
  * transaction it always reads fresh.
  */
-export async function getSettings(tx: Tx = prisma): Promise<Settings & { rateUpdatedAt: Date | null }> {
+export async function getSettings(tx: Tx = prisma): Promise<LoadedSettings> {
   return tx === prisma ? structuredClone(await settingsForRender()) : loadSettings(tx);
 }
 const settingsForRender = cache(() => loadSettings(prisma));
 
-async function loadSettings(tx: Tx): Promise<Settings & { rateUpdatedAt: Date | null }> {
+export type LoadedSettings = Settings & {
+  rateUpdatedAt: Date | null;
+  /** Market price behind the current rate (live feed in Auto, typed in Manual), or null if unknown. */
+  marketRate: string | null;
+};
+
+async function loadSettings(tx: Tx): Promise<LoadedSettings> {
   const [rows, feed] = await Promise.all([tx.setting.findMany(), tx.rateFeedState.findUnique({ where: { id: 1 } })]);
-  const out = structuredClone(SETTING_DEFAULTS) as Settings & { rateUpdatedAt: Date | null };
+  const out = structuredClone(SETTING_DEFAULTS) as LoadedSettings;
   out.rateUpdatedAt = null;
   for (const r of rows) {
     if (r.key in SETTING_DEFAULTS) (out as Record<string, unknown>)[r.key] = r.value;
@@ -113,6 +134,7 @@ async function loadSettings(tx: Tx): Promise<Settings & { rateUpdatedAt: Date | 
   }
   // In Auto mode the rate is "fresh" when the live feed last succeeded, even if the value didn't change.
   if (out.rate_mode === "AUTO") out.rateUpdatedAt = feed?.lastOkAt ?? null;
+  out.marketRate = out.rate_mode === "AUTO" ? (feed?.lastMarket?.toString() ?? null) : out.rate_market_manual || null;
   // The deployment decides Live or Test (APP_MODE), not a setting anyone can flip.
   const fixed = (await import("./env")).env.appMode;
   if (fixed) out.network_mode = fixed;
@@ -123,6 +145,15 @@ async function loadSettings(tx: Tx): Promise<Settings & { rateUpdatedAt: Date | 
 export const SETTING_LABELS: Partial<Record<string, string>> = {
   rate: "Rate",
   fee_percent: "Platform fee %",
+  fee_min_inr: "Minimum fee",
+  fee_max_inr: "Maximum fee",
+  rate_market_manual: "Market price",
+  payout_request_min_inr: "Lowest payout request",
+  referral_points_per_usdt: "Points per USDT",
+  referral_max_points_per_sale: "Most points per sale",
+  referral_min_sale_usdt: "Smallest sale that earns",
+  referral_hold_days: "Pending for (days)",
+  referral_expiry_days: "Points expire after (days)",
   gst_percent: "GST %",
   tax_percent: "Tax held back %",
   rate_margin_percent: "Margin %",
@@ -158,6 +189,17 @@ export const EDITABLE_KEYS: SettingKey[] = [
   "rate_min_sources",
   "rate_sources",
   "fee_percent",
+  "fee_min_inr",
+  "fee_max_inr",
+  "rate_market_manual",
+  "payout_request_min_inr",
+  "referral_enabled",
+  "referral_mode",
+  "referral_points_per_usdt",
+  "referral_max_points_per_sale",
+  "referral_min_sale_usdt",
+  "referral_hold_days",
+  "referral_expiry_days",
   "gst_enabled",
   "gst_percent",
   "tax_percent",
@@ -201,6 +243,37 @@ export const EDITABLE_KEYS: SettingKey[] = [
 ];
 
 function validate(key: SettingKey, value: unknown, current: Settings): unknown {
+  if (key === "fee_min_inr" || key === "fee_max_inr" || key === "rate_market_manual") {
+    const v = String(value ?? "").trim();
+    if (v === "") return ""; // not set
+    const name = SETTING_LABELS[key];
+    const places = key === "rate_market_manual" ? 4 : 2;
+    if (!/^\d+(\.\d+)?$/.test(v)) throw new AppError(`${name}: enter a plain number, e.g. 25, or leave it empty.`);
+    if ((v.split(".")[1]?.length ?? 0) > places) throw new AppError(`${name}: use at most ${places} decimal places.`);
+    if (key === "rate_market_manual" && D(v).lte(0)) throw new AppError("Market price must be above 0, or leave it empty.");
+    return v;
+  }
+  if (key === "referral_points_per_usdt" || key === "referral_min_sale_usdt") {
+    const v = String(value ?? "").trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(v)) throw new AppError(`${SETTING_LABELS[key]}: enter a number like 1 or 0.5.`);
+    if (key === "referral_points_per_usdt" && D(v).gt(1000)) throw new AppError(`${SETTING_LABELS[key]}: 1000 at most.`);
+    return v;
+  }
+  if (key === "referral_max_points_per_sale" || key === "referral_hold_days" || key === "referral_expiry_days") {
+    const n = Number(String(value ?? "").trim() || "0");
+    const max = key === "referral_hold_days" ? 90 : key === "referral_expiry_days" ? 3650 : 1_000_000;
+    if (!Number.isInteger(n) || n < 0 || n > max) throw new AppError(`${SETTING_LABELS[key]}: a whole number from 0 to ${max}.`);
+    return n;
+  }
+  if (key === "referral_mode") {
+    if (value !== "FIRST" && value !== "EVERY") throw new AppError("Referral reward: first sale or every sale.");
+    return value;
+  }
+  if (key === "payout_request_min_inr") {
+    const v = String(value ?? "").trim() || "0";
+    if (!/^\d+(\.\d{1,2})?$/.test(v)) throw new AppError(`${SETTING_LABELS[key]}: enter rupees, e.g. 500, or 0 for any amount.`);
+    return v;
+  }
   const decimalKeys: SettingKey[] = [
     "rate",
     "fee_percent",
@@ -270,6 +343,7 @@ function validate(key: SettingKey, value: unknown, current: Settings): unknown {
     "kyc_required",
     "kyc_auto_approve",
     "payout_auto_approve_on_name_match",
+    "referral_enabled",
   ];
   if (boolKeys.includes(key)) return value === true || value === "true";
   if (key === "brand_primary_color" || key === "brand_accent_color") {
@@ -374,6 +448,11 @@ export const isRealValue = (v: string | null | undefined) => !!v && !/^\s*\[.*\]
 /** The official token contract for a network in the current mode (spec 8.1). */
 export function tokenContractFor(s: Settings, n: NetworkCode, mode: Mode = s.network_mode): string {
   return mode === "LIVE" ? NETWORK_INFO[n].mainnetUsdt : s.test_token_contract[n];
+}
+
+/** Refuses a minimum fee above the maximum. Pass the values about to be saved. */
+export function checkFeeLimits(min: string, max: string) {
+  if (min.trim() && max.trim() && D(min.trim()).gt(D(max.trim()))) throw new AppError("The minimum fee can't be more than the maximum fee.");
 }
 
 export function rateIsStale(s: Settings & { rateUpdatedAt: Date | null }, now = new Date()): boolean {

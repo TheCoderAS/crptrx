@@ -22,19 +22,22 @@ import { Banner, Logo } from "@/components/ui";
 
 export default async function Panel({ children }: { children: React.ReactNode }) {
   const admin = await adminOrLogin();
-  const [s, changes, delayed, counts] = await Promise.all([getSettings(), recentAddressChanges(), delayedNetworks(), adminCounts()]);
-  const { work, reviews, unmatched, support } = counts;
+  const [s, changes, delayed, counts] = await Promise.all([getSettings(), recentAddressChanges(), delayedNetworks(), adminCounts(admin)]);
+  const { work, reviews, unmatched, support, payoutRequests } = counts;
   const sup = admin.role === "SUPER_ADMIN";
   const items: AdminNavItem[] = [
     { href: "/admin", label: "Dashboard", icon: "Gauge" },
     { href: "/admin/orders", label: "Orders", icon: "ListOrdered", count: work },
     { href: "/admin/users", label: "Customers", icon: "UserRound" },
     { href: "/admin/reviews", label: "Reviews", icon: "BadgeCheck", count: reviews },
-    { href: "/admin/unmatched", label: "Unmatched payments", icon: "AlertOctagon", count: unmatched },
+    ...(sup ? ([{ href: "/admin/unmatched", label: "Unmatched payments", icon: "AlertOctagon", count: unmatched }] as AdminNavItem[]) : []),
     { href: "/admin/support", label: "Support", icon: "LifeBuoy", count: support },
-    { href: "/admin/audit", label: "Audit log", icon: "ScrollText" },
+    ...(sup ? ([{ href: "/admin/audit", label: "Audit log", icon: "ScrollText" }] as AdminNavItem[]) : []),
+    ...(sup ? [] : ([{ href: "/admin/referrals", label: "My invite", icon: "Gift" }] as AdminNavItem[])),
+    { href: "/admin/earnings", label: "Earnings", icon: "HandCoins", ...(sup ? { count: payoutRequests } : {}) },
     ...(sup
       ? ([
+          { href: "/admin/points", label: "Referral points", icon: "Gift" },
           { href: "/admin/reports", label: "Reports", icon: "FileClock" },
           { href: "/admin/admins", label: "Admins", icon: "Users" },
           { href: "/admin/settings", label: "Settings", icon: "Settings" },

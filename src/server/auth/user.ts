@@ -6,16 +6,19 @@ import { env } from "../env";
 import { AppError } from "../errors";
 import { sendSms } from "../notify";
 import { rateLimit } from "../ratelimit";
+import { inviteData, resolveInvite } from "../referral";
 import type { FirebaseIdentity } from "./firebase";
 
 /** Find or create the user for a verified Google identity. */
-export async function upsertUserFromIdentity(id: FirebaseIdentity, ip: string | null) {
+export async function upsertUserFromIdentity(id: FirebaseIdentity, ip: string | null, invite?: { code?: unknown; soft?: boolean }) {
   if (!id.emailVerified) throw new AppError("Please use a Google account with a verified email address.", 403);
   let user = await prisma.user.findFirst({ where: { OR: [{ firebaseUid: id.uid }, { email: id.email }] } });
   if (user && user.firebaseUid && user.firebaseUid !== id.uid) throw new AppError("This email is linked to a different sign-in. Contact support.", 409);
   if (!user) {
-    user = await prisma.user.create({ data: { email: id.email, emailVerified: true, firebaseUid: id.uid, displayName: id.name } });
-    await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: id.provider ?? "google" }, ip });
+    // The invite code counts only for a new account: an existing customer's admin never changes this way.
+    const inv = await resolveInvite(invite?.code, invite?.soft);
+    user = await prisma.user.create({ data: { email: id.email, emailVerified: true, firebaseUid: id.uid, displayName: id.name, ...inviteData(inv) } });
+    await audit({ type: "USER", id: user.id }, "USER_SIGNED_UP", { details: { provider: id.provider ?? "google", ...inv }, ip });
   } else if (!user.firebaseUid) {
     // Linking Google to an email account. If that email was never confirmed,
     // whoever set the password didn't prove they own the inbox: drop it.
@@ -71,4 +74,18 @@ export async function verifyMobileOtp(userId: string, code: string) {
     prisma.user.update({ where: { id: userId }, data: { mobile: otp.mobile, mobileVerifiedAt: new Date() } }),
   ]);
   await audit({ type: "USER", id: userId }, "MOBILE_VERIFIED");
+}
+
+/**
+ * Saves a mobile number without an SMS code. Only while "Confirm mobile number" is off;
+ * the number is kept as not confirmed, so switching that setting on asks for a code again.
+ */
+export async function saveMobileUnverified(userId: string, mobileInput: string) {
+  const mobile = normalizeMobile(mobileInput);
+  await rateLimit(`mobile-save:${userId}`, 10, 60 * 60);
+  const old = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { mobile: true } });
+  if (old.mobile === mobile) return mobile;
+  await prisma.user.update({ where: { id: userId }, data: { mobile, mobileVerifiedAt: null } });
+  await audit({ type: "USER", id: userId }, "MOBILE_SAVED", { details: { old: old.mobile, new: mobile } });
+  return mobile;
 }

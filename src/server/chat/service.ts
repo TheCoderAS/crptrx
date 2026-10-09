@@ -145,13 +145,14 @@ async function notifyReply(userId: string, orderId: string) {
 
 /** "Customer wrote" push to support staff's devices. No message text, same as for customers. */
 async function notifySupport(orderId: string) {
+  const o = await prisma.order.findUnique({ where: { id: orderId }, select: { userId: true } });
   await pushToAdmins({
     title: "New customer message",
     body: `Order ${orderId}`,
     link: `/admin/orders/${orderId}`,
     tag: `admin-chat-${orderId}`,
     data: { type: "chat_customer", orderId },
-  });
+  }, { forUser: o?.userId });
 }
 
 /** Orders where support replied after the customer last looked. */

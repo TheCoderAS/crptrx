@@ -8,10 +8,11 @@ import { currentDepositAddresses } from "@/server/deposit";
 import { getAdapter } from "@/server/networks";
 import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
-import { D, fmtInr, fmtUsdt } from "@/server/money";
+import { D, Decimal, feeLabel, fmtInr, fmtUsdt } from "@/server/money";
 import { fullAccountNumber, type PayoutSnapshot } from "@/server/payouts";
 import { ALLOWED_NEXT } from "@/server/orders/stateMachine";
 import { getSettings } from "@/server/settings";
+import { isSuper, pageUser } from "@/server/scope";
 import { explorerAddressUrl, explorerTxUrl, NETWORK_INFO, type Mode, type NetworkCode } from "@/lib/networks";
 import { fmtIST } from "@/lib/time";
 import { ApiForm } from "@/components/ApiForm";
@@ -23,13 +24,15 @@ import { AdminOrderChat } from "@/components/chat/AdminOrderChat";
 import { BackLink, NetworkBadge, Row, StatusPill, Timeline } from "@/components/ui";
 
 export default async function AdminOrder({ params }: { params: Promise<{ id: string }> }) {
-  await adminOrLogin();
+  const me = await adminOrLogin();
+  const sup = isSuper(me);
   const { id } = await params;
   const o = await prisma.order.findUnique({
     where: { id },
     include: { user: true, events: { orderBy: { createdAt: "asc" } }, notes: { include: { admin: true }, orderBy: { createdAt: "asc" } }, transfers: true, supportThread: true },
   });
   if (!o) notFound();
+  await pageUser(me, o.userId);
   const [s, kyc, admins, senderKnown] = await Promise.all([
     getSettings(),
     prisma.kycSubmission.findFirst({ where: { userId: o.userId }, orderBy: { submittedAt: "desc" } }),
@@ -236,7 +239,14 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
               </>
             )}
 
-            {o.status === "APPROVED" && (
+            {o.status === "APPROVED" && !sup && (
+              <NextStep icon={<Clock className="size-5" />} tile="tile-violet" title="Waiting for a super admin to pay">
+                Approved. A super admin sends {fmtInr(o.net)} and records it; the customer is told then.
+                <span className="mt-2 block">{holdButton("Problem? Put on hold", "text-sm font-medium text-amber-800 hover:underline")}</span>
+              </NextStep>
+            )}
+
+            {o.status === "APPROVED" && sup && (
               <>
                 <NextStep icon={<CheckCircle2 className="size-5" />} tile="tile-emerald" title={`Pay ${fmtInr(o.net)}, then record it`}>
                   Send it from the company bank account to the details below, then record it here.
@@ -325,9 +335,38 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
               <Row k="Rate" v={fmtInr(o.rate)} />
               <Row k="Gross" v={fmtInr(o.gross)} />
               {D(o.taxHeld).gt(0) && <Row k={`Tax held (${D(o.taxPercent)}%)`} v={`– ${fmtInr(o.taxHeld)}`} />}
-              {D(o.fee).gt(0) && <Row k={`Fee (${D(o.feePercent)}%)`} v={`– ${fmtInr(o.fee)}`} />}
+              {D(o.fee).gt(0) && <Row k={feeLabel("Fee", o)} v={`– ${fmtInr(o.fee)}`} />}
               {D(o.gstOnFee).gt(0) && <Row k={`GST on fee (${D(o.gstPercent)}%)`} v={`– ${fmtInr(o.gstOnFee)}`} />}
+              {D(o.reward).gt(0) && <Row k="Customer bonus reward" v={`+ ${fmtInr(o.reward)}`} />}
+              {o.pointsUsed > 0 && <Row k={sup ? "Customer's referral points (paid by you)" : "Customer's referral points"} v={`+ ${fmtInr(o.pointsUsed)}`} />}
               <Row k={<b>Net to pay</b>} v={<b>{fmtInr(o.net)}</b>} />
+              {/* Super admin: the whole margin split. An admin: only their own earning, never the
+                  market price, the margin or the house's part. */}
+              {sup && o.margin !== null && (
+                <div className="mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 ring-inset">
+                  <p className="mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">Margin</p>
+                  <Row k="Market price" v={fmtInr(o.marketRate ?? 0)} />
+                  <Row k="Margin on this order" v={fmtInr(o.margin)} />
+                  {o.adminShare !== null && (
+                    <>
+                      <Row k={`${adminName(o.adminId)}'s share (${D(o.adminSharePercent ?? 0)}%)`} v={fmtInr(o.adminShare)} />
+                      {D(o.reward).gt(0) && <Row k={`Less bonus reward (${D(o.rewardPercent ?? 0).toString()}% of share)`} v={`– ${fmtInr(o.reward)}`} />}
+                      <Row k={<b>Admin earns</b>} v={<b>{fmtInr(Decimal.max(D(o.adminShare).minus(D(o.reward)), 0))}</b>} />
+                    </>
+                  )}
+                  <Row k="House keeps from the margin" v={fmtInr(Decimal.max(D(o.margin), 0).minus(o.adminShare !== null ? D(o.adminShare) : D(o.reward)))} />
+                  <p className="mt-1 text-xs text-slate-500">{o.status === "PAID" ? "Booked when paid." : "Booked when the order is paid."} The platform fee is not shared.</p>
+                </div>
+              )}
+              {!sup && o.adminId === me.id && o.adminShare !== null && (
+                <div className="mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 ring-inset">
+                  <p className="mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">Your earning</p>
+                  <Row k="Your share" v={fmtInr(o.adminShare)} />
+                  {D(o.reward).gt(0) && <Row k="Less customer bonus" v={`– ${fmtInr(o.reward)}`} />}
+                  <Row k={<b>You earn</b>} v={<b>{fmtInr(Decimal.max(D(o.adminShare).minus(D(o.reward)), 0))}</b>} />
+                  <p className="mt-1 text-xs text-slate-500">{o.status === "PAID" ? "Booked when paid." : "Booked when the order is paid."}</p>
+                </div>
+              )}
             </section>
             <section className="card">
               <h2 className="h2 mb-2">Pay to</h2>

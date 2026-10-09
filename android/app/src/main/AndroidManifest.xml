@@ -34,8 +34,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Links to our website (from WhatsApp, email…) can open in the app. -->
-            <intent-filter>
+            <!-- Links to our website (from WhatsApp, email…) open in the app. autoVerify: Android checks
+                 the website's /.well-known/assetlinks.json (src/app/.well-known) and then opens these
+                 links straight in the app instead of the browser. -->
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />

@@ -91,6 +91,41 @@ describe("quotes (spec 4.4, 7.1, 7.2)", () => {
   });
 });
 
+describe("fee limits and margin on the order", () => {
+  it("records the fee limits and applies them", async () => {
+    await writeSetting("fee_min_inr", "25", SYS);
+    await writeSetting("fee_max_inr", "500", SYS);
+    const { order } = await makeOrder("TRON", "10"); // 1% of ₹900 = ₹9 -> ₹25
+    expect(order.fee.toFixed(2)).toBe("25.00");
+    expect(order.feeMin?.toFixed(2)).toBe("25.00");
+    expect(order.feeMax?.toFixed(2)).toBe("500.00");
+  });
+
+  it("no limits and no market price: nothing extra recorded", async () => {
+    const { order } = await makeOrder("TRON", "100");
+    expect(order.feeMin).toBeNull();
+    expect(order.feeMax).toBeNull();
+    expect(order.marketRate).toBeNull();
+    expect(order.margin).toBeNull();
+  });
+
+  it("Manual mode: margin from the typed market price", async () => {
+    await writeSetting("rate_market_manual", "92.5", SYS);
+    const { order } = await makeOrder("TRON", "100"); // (92.5 - 90) x 100
+    expect(order.marketRate?.toString()).toBe("92.5");
+    expect(order.margin?.toFixed(2)).toBe("250.00");
+  });
+
+  it("Auto mode: margin from the live market price", async () => {
+    await writeSetting("rate_mode", "AUTO", SYS);
+    await writeSetting("rate_market_manual", "999", SYS); // ignored in Auto
+    await prisma.rateFeedState.upsert({ where: { id: 1 }, create: { id: 1, lastOkAt: new Date(), lastMarket: "91.8" }, update: { lastOkAt: new Date(), lastMarket: "91.8" } });
+    const { order } = await makeOrder("TRON", "50"); // (91.8 - 90) x 50
+    expect(order.marketRate?.toString()).toBe("91.8");
+    expect(order.margin?.toFixed(2)).toBe("90.00");
+  });
+});
+
 describe("expiry job (spec 8.4)", () => {
   it("moves quotes past expiry to EXPIRED and writes the timeline", async () => {
     const { order } = await makeOrder("TRON", "100", new Date(Date.now() - 16 * 60_000));

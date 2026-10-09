@@ -1,7 +1,7 @@
 import { api, body } from "@/server/http";
 import { adminCtx, recheck2fa } from "@/server/auth/guard";
 import { AppError } from "@/server/errors";
-import { EDITABLE_KEYS, getSettings, updateSetting, type SettingKey } from "@/server/settings";
+import { checkFeeLimits, EDITABLE_KEYS, getSettings, updateSetting, type SettingKey } from "@/server/settings";
 import { refreshAutoRate } from "@/server/rateFeed";
 
 // Settings that can let money go to the wrong place or lock admins out.
@@ -31,6 +31,8 @@ export const POST = api(async (req: Request) => {
   // Check combined switches before saving anything, so a refused save never half-applies.
   const off = (k: string) => grouped[k] === false || grouped[k] === "false";
   if (off("auth_google_enabled") && off("auth_email_enabled")) throw new AppError("Keep at least one sign-in method on (Google or email/password).");
+  if ("fee_min_inr" in grouped || "fee_max_inr" in grouped)
+    checkFeeLimits(String(grouped.fee_min_inr ?? current.fee_min_inr), String(grouped.fee_max_inr ?? current.fee_max_inr));
   // Apply the mode first so a Manual -> Auto (or back) switch and its fields save together.
   // Apply the rate mode first, and switches being turned ON before ones turned OFF,
   // so swapping two related switches in one save never trips a "keep one on" rule.

@@ -1,3 +1,5 @@
+import { rewardPerUsdt } from "@/server/earnings";
+import { pointsBalance } from "@/server/points";
 import { contactChannels } from "@/server/contact";
 import { ContactLinks } from "@/components/ContactLinks";
 import Link from "next/link";
@@ -24,7 +26,7 @@ export default async function Sell() {
     return (
       <div>
         <PageHeader title="Sell USDT" tab />
-        <Banner tone={o.blockedReason ? "danger" : "warn"} title={o.blockedReason ? undefined : "Almost there"}>
+        <Banner inline tone={o.blockedReason ? "danger" : "warn"} title={o.blockedReason ? undefined : "Almost there"}>
           {notReadyMessage(o)} {!o.blockedReason && <Link className="font-medium underline" href="/dashboard">See what&apos;s left</Link>}
         </Banner>
         {o.blockedReason && <div className="mt-3"><ContactLinks channels={contactChannels(s)} /></div>}
@@ -36,7 +38,7 @@ export default async function Sell() {
     <div>
       <PageHeader tab title="Sell USDT" subtitle="Three choices. Exact amount before you send." icon={<ArrowLeftRight className="size-6" />} />
       {stale ? (
-        <Banner tone="warn">Our rate is being updated. Please try again shortly.</Banner>
+        <Banner inline tone="warn">Our rate is being updated. Please try again shortly.</Banner>
       ) : (
         <SellForm
           rate={s.rate}
@@ -44,6 +46,10 @@ export default async function Sell() {
           feePercent={s.fee_percent}
           gstEnabled={s.gst_enabled}
           gstPercent={s.gst_percent}
+          feeMin={s.fee_min_inr}
+          feeMax={s.fee_max_inr}
+          rewardPerUsdt={await rewardPerUsdt(user, s)}
+          points={(await pointsBalance(user.id)).usable}
           min={s.limit_min_order_usdt}
           max={s.limit_max_order_usdt}
           available={available}

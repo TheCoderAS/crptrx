@@ -6,7 +6,8 @@ import { linkTransferToOrder, markTransferManual } from "@/server/orders/actions
 type Ctx = { params: Promise<{ id: string }> };
 
 export const POST = api(async (req: Request, ctx: Ctx) => {
-  const a = await adminCtx();
+  // Unmatched payments may belong to anyone's customer: super admin only.
+  const a = await adminCtx("SUPER_ADMIN");
   const { id } = await ctx.params;
   const b = await body<Record<string, string>>(req);
   if (b.action === "link") await linkTransferToOrder(id, String(b.orderId ?? "").trim(), b.note, a.actor);

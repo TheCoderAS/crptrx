@@ -1,4 +1,5 @@
 "use client";
+import { toastError } from "@/components/Toaster";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useConfirm } from "./Confirm";
@@ -6,7 +7,8 @@ import { useConfirm } from "./Confirm";
 export function WalletRemoveButton({ id }: { id: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  // Messages go to the top-right pop-ups (Toaster).
+  const setErr = (m: string | null) => void (m && toastError(m));
   const confirmer = useConfirm();
   return (
     <span className="flex shrink-0 flex-col items-end">
@@ -31,7 +33,6 @@ export function WalletRemoveButton({ id }: { id: string }) {
       >
         {busy ? "Removing…" : "Remove"}
       </button>
-      {err && <span role="alert" className="text-xs text-rose-700">{err}</span>}
       {confirmer.prompt}
     </span>
   );

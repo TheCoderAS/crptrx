@@ -5,6 +5,7 @@ import { adminOrLogin } from "@/server/auth/pages";
 import { prisma } from "@/server/db";
 import { decrypt } from "@/server/crypto";
 import { namesMatch } from "@/server/payouts";
+import { ownedScope, type Viewer } from "@/server/scope";
 import type { Prisma } from "@prisma/client";
 import { fmtIST, fmtISTShort } from "@/lib/time";
 import { pickSort } from "@/lib/sort";
@@ -23,9 +24,9 @@ const SORTS = [
 type Sort = (typeof SORTS)[number]["value"];
 
 export default async function Reviews({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; sort?: string }> }) {
-  await adminOrLogin();
+  const me = await adminOrLogin();
   // Shared with the admin menu's counts (one query per page render).
-  const { kycSubmitted: kycCount, payout: payoutCount, kycAuto: autoCount } = await adminCounts();
+  const { kycSubmitted: kycCount, payout: payoutCount, kycAuto: autoCount } = await adminCounts(me);
   const sp = await searchParams;
   const requested = sp.tab as Tab | undefined;
   // Default: every identity check. The other tabs are the queues, with their counts.
@@ -43,7 +44,7 @@ export default async function Reviews({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-4">
       <PageHeader title="Reviews" subtitle="Everything waiting for a person to check." icon={<ClipboardCheck className="size-5" />} tile="tile-violet" />
-      <nav className="flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Review queues">
+      <nav className="tab-row flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Review queues">
         {tabs.map((t) => (
           <Link
             key={t.id}
@@ -57,17 +58,18 @@ export default async function Reviews({ searchParams }: { searchParams: Promise<
         ))}
       </nav>
       <ListToolbar placeholder={tab === "payout" ? "Email, name, account no., IFSC or UPI ID" : "Name, email or PAN"} sorts={[...SORTS]} defaultSort={defaultSort} />
-      {tab === "payout" ? <PayoutQueue q={q} sort={sort} /> : <KycQueue mode={tab} q={q} sort={sort} />}
+      {tab === "payout" ? <PayoutQueue v={me} q={q} sort={sort} /> : <KycQueue v={me} mode={tab} q={q} sort={sort} />}
     </div>
   );
 }
 
-async function KycQueue({ mode, q, sort }: { mode: "kyc" | "auto" | "history"; q?: string; sort: Sort }) {
+async function KycQueue({ v, mode, q, sort }: { v: Viewer; mode: "kyc" | "auto" | "history"; q?: string; sort: Sort }) {
+  const modeWhere: Prisma.KycSubmissionWhereInput = mode === "kyc" ? { status: "SUBMITTED" } : mode === "auto" ? AUTO_TO_CHECK : {};
   const search: Prisma.KycSubmissionWhereInput = q
     ? { OR: [{ fullName: { contains: q, mode: "insensitive" } }, { user: { email: { contains: q, mode: "insensitive" } } }, { panMasked: { contains: q.toUpperCase() } }] }
     : {};
   const subs = await prisma.kycSubmission.findMany({
-    where: { ...(mode === "kyc" ? { status: "SUBMITTED" as const } : mode === "auto" ? AUTO_TO_CHECK : {}), ...search },
+    where: { ...modeWhere, ...search, ...ownedScope(v) },
     orderBy: sort === "name" ? [{ fullName: "asc" }, { submittedAt: "asc" }] : { submittedAt: sort === "new" ? "desc" : "asc" },
     include: { user: true },
     take: 200,
@@ -119,7 +121,7 @@ async function KycQueue({ mode, q, sort }: { mode: "kyc" | "auto" | "history"; q
   );
 }
 
-async function PayoutQueue({ q, sort }: { q?: string; sort: Sort }) {
+async function PayoutQueue({ v, q, sort }: { v: Viewer; q?: string; sort: Sort }) {
   // Account numbers are encrypted, so they're matched on the last 4 digits.
   const search: Prisma.PayoutMethodWhereInput = q
     ? {
@@ -133,7 +135,7 @@ async function PayoutQueue({ q, sort }: { q?: string; sort: Sort }) {
       }
     : {};
   const pms = await prisma.payoutMethod.findMany({
-    where: { status: "PENDING", deletedAt: null, ...search },
+    where: { status: "PENDING", deletedAt: null, ...search, ...ownedScope(v) },
     orderBy: sort === "name" ? [{ holderName: "asc" }, { createdAt: "asc" }] : { createdAt: sort === "new" ? "desc" : "asc" },
     include: { user: true },
   });

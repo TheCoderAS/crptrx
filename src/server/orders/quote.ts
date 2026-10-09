@@ -5,7 +5,9 @@ import type { Actor } from "../audit";
 import { prisma, type Tx } from "../db";
 import { getActiveDepositAddress } from "../deposit";
 import { AppError } from "../errors";
-import { calculatePayout, D, Decimal, usdtForNetRupees } from "../money";
+import { calculatePayout, D, Decimal, feeLimit, rupees, usdtForNetRupees, type PayoutInput } from "../money";
+import { splitFor } from "../earnings";
+import { holdPoints } from "../points";
 import { payoutSnapshot } from "../payouts";
 import { notReadyMessage, onboardingState } from "../onboarding";
 import { getSettings, rateIsStale, tokenContractFor, type Settings } from "../settings";
@@ -21,6 +23,8 @@ export interface QuoteRequest {
   amountType: "USDT" | "INR";
   amount: string;
   payoutMethodId: string;
+  /** Add the seller's usable referral points to this payout. */
+  usePoints?: boolean;
 }
 
 /** Totals used by limit checks (spec 7.4). Counts orders not EXPIRED or CLOSED_MANUAL. */
@@ -67,13 +71,24 @@ export async function assertCanCreateOrders(tx: Tx, userId: string) {
   return user;
 }
 
+/** Today's pricing settings in the shape the payout math takes. */
+export const pricing = (s: Settings): Omit<PayoutInput, "usdt"> => ({
+  rate: s.rate,
+  taxPercent: s.tax_percent,
+  feePercent: s.fee_percent,
+  gstEnabled: s.gst_enabled,
+  gstPercent: s.gst_percent,
+  feeMin: s.fee_min_inr,
+  feeMax: s.fee_max_inr,
+});
+
 /** Validates settings and returns the base USDT amount (2 decimals) for a request. */
 export function baseAmountFor(req: Pick<QuoteRequest, "amountType" | "amount">, s: Settings): Decimal {
   const raw = req.amount.trim();
   if (!/^\d+(\.\d{1,2})?$/.test(raw)) throw new AppError("Enter an amount with up to 2 decimals.");
   const base =
     req.amountType === "INR"
-      ? usdtForNetRupees(raw, { rate: s.rate, taxPercent: s.tax_percent, feePercent: s.fee_percent, gstEnabled: s.gst_enabled, gstPercent: s.gst_percent })
+      ? usdtForNetRupees(raw, pricing(s))
       : D(raw);
   if (base.lte(0)) throw new AppError("Enter an amount above zero.");
   return base;
@@ -97,7 +112,8 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
     async (tx) => {
       // One quote at a time platform-wide: keeps unique amounts and limits race-free.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('create-quote'))`;
-      await assertCanCreateOrders(tx, req.userId);
+      const customer = await assertCanCreateOrders(tx, req.userId);
+      const owner = customer.adminId ? await tx.admin.findUnique({ where: { id: customer.adminId }, select: { id: true, profitPercent: true, status: true, role: true } }) : null;
       if (s.wallet_registration === "REQUIRED" && (await tx.userWallet.count({ where: { userId: req.userId, network: req.network, deletedAt: null } })) === 0)
         throw new AppError(`Add the ${info.name} wallet you'll send from (Account → Your wallets) before selling on this network.`, 403, "WALLET_REQUIRED");
       const pm = await tx.payoutMethod.findFirst({ where: { id: req.payoutMethodId, userId: req.userId, status: "APPROVED", deletedAt: null } });
@@ -108,9 +124,15 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
       const problem = await limitProblem(tx, s, req.userId, amount);
       if (problem) throw new AppError(problem, 422, "LIMIT");
 
-      const p = calculatePayout({ usdt: amount, rate: s.rate, taxPercent: s.tax_percent, feePercent: s.fee_percent, gstEnabled: s.gst_enabled, gstPercent: s.gst_percent });
+      const p = calculatePayout({ usdt: amount, ...pricing(s) });
       if (p.net.lte(0)) throw new AppError("This amount is too small to pay out.");
+      const margin = s.marketRate ? rupees(amount.mul(D(s.marketRate).minus(D(s.rate)))) : null;
+      const split = splitFor({ margin, customer, admin: owner });
+      // The reward is on top of the payout; it's paid from the owner's margin share (earnings.ts).
       const { id, seq } = await nextOrderId(tx, now);
+      // Referral points the seller chose to use: set aside for this order (points.ts), 1 point = ₹1.
+      const pointsUsed = req.usePoints ? await holdPoints(tx, req.userId, id, Infinity, now) : 0;
+      const net = p.net.plus(D(split.reward)).plus(pointsUsed);
       await tx.order.create({
         data: {
           id,
@@ -130,7 +152,13 @@ export async function createQuote(req: QuoteRequest, actor: Actor, now = new Dat
           fee: p.fee.toString(),
           gstPercent: s.gst_enabled ? s.gst_percent : "0",
           gstOnFee: p.gstOnFee.toString(),
-          net: p.net.toString(),
+          net: net.toString(),
+          feeMin: feeLimit(s.fee_min_inr)?.toString() ?? null,
+          feeMax: feeLimit(s.fee_max_inr)?.toString() ?? null,
+          marketRate: s.marketRate,
+          margin: margin?.toString() ?? null,
+          ...split,
+          pointsUsed,
           payoutMethodId: pm.id,
           payoutSnapshot: payoutSnapshot(pm),
           quoteExpiresAt: new Date(now.getTime() + QUOTE_TTL_MS),

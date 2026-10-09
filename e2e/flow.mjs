@@ -57,21 +57,20 @@ await admin.waitForURL(BASE + "/admin");
 await shot(admin, "02-admin-dashboard");
 console.log("admin logged in with 2FA");
 
-// 2. User sign-in (test login), mobile OTP
+// 2. User sign-in (test login); mobile number saved without a code (the default)
 await user.goto(BASE + "/login");
 // Test sign-in is folded away when real sign-in methods are on.
 if (await user.locator("summary:has-text('Test sign-in')").count()) await user.click("summary:has-text('Test sign-in')");
 await user.fill("#dev-email", "tester@example.com");
 await user.click("text=Continue with test sign-in");
-await user.waitForURL("**/account");
+await user.waitForURL("**/dashboard");
+await user.goto(BASE + "/account");
+await user.click("button:has-text('Add')");
 await user.fill("#mobile", "9876543210");
-await user.click("text=Send code");
-await expectText(user, "your code is");
-const otp = (await user.getByText("your code is").innerText()).match(/(\d{6})/)[1];
-await user.fill("#code", otp);
-await user.click("button:has-text('Confirm')");
-await user.waitForURL("**/kyc");
-console.log("mobile verified");
+await user.click("[role=dialog] button:has-text('Save')");
+await expectText(user, "Mobile number saved");
+await user.goto(BASE + "/kyc");
+console.log("mobile saved");
 
 // 3. KYC
 await user.fill("#fullName", "Test Kumar Sharma");
