@@ -548,7 +548,7 @@ class MainActivity : AppCompatActivity() {
         return "denied"
     }
 
-    fun onBridgeCall(method: String, id: Int, @Suppress("UNUSED_PARAMETER") args: String) {
+    fun onBridgeCall(method: String, id: Int, args: String) {
         // Only our own website may use the bridge.
         if (!Uri.parse(web.url ?: "").host.equals(BASE.host, ignoreCase = true)) return
         when (method) {
@@ -582,6 +582,18 @@ class MainActivity : AppCompatActivity() {
                     resolve(id, JSONObject().put("error", "denied"))
                 } else {
                     sendPushToken(id)
+                }
+            }
+            // The phone's share menu (WhatsApp, Telegram, SMS…), e.g. for an invite link.
+            "share" -> {
+                val a = try { JSONObject(args) } catch (e: Exception) { JSONObject() }
+                val text = listOf(a.optString("text"), a.optString("url")).filter { it.isNotBlank() }.joinToString(" ")
+                if (text.isBlank()) {
+                    resolve(id, JSONObject().put("error", "empty"))
+                } else {
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+                    openOutside(Intent.createChooser(send, a.optString("title").ifBlank { null }))
+                    resolve(id, JSONObject().put("ok", true))
                 }
             }
             else -> resolve(id, JSONObject().put("error", "unknown"))
