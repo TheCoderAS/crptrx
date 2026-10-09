@@ -8,10 +8,16 @@
     <string name="downloading">Downloading %1$s…</string>
     <string name="download_failed">Couldn\'t download the file.</string>
     <string name="choose_file">Choose a file</string>
-    <string name="update_title">Update available</string>
-    <string name="update_body">Version %1$s is ready. Update now to get the latest fixes.</string>
+    <string name="update_title">Update required</string>
+    <string name="update_body">Version %1$s is ready. Update to keep using the app. Your login stays.</string>
     <string name="update_now">Update</string>
-    <string name="later">Later</string>
+    <string name="update_install">Install</string>
+    <string name="update_browser">Use browser</string>
+    <string name="update_downloading">Downloading the update…</string>
+    <string name="update_downloading_pct">Downloading the update… %1$d%%</string>
+    <string name="update_failed">The download didn\'t finish. Check your internet and try again.</string>
+    <string name="update_allow">Allow this app to install updates, then come back and tap Install.</string>
+    <string name="update_ready">Downloaded. Tap Install to finish.</string>
     <string name="channel_chat">Support replies</string>
     <string name="channel_chat_desc">Replies from support about your orders</string>
 </resources>
