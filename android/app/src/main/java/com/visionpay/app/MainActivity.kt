@@ -50,7 +50,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.Dispatchers
@@ -76,7 +75,6 @@ class MainActivity : AppCompatActivity() {
         private val BASE: Uri = Uri.parse(BuildConfig.BASE_URL)
         private const val START_PATH = "/dashboard"
         private const val SPLASH_MAX_MS = 8_000L
-        private const val UPDATE_SNOOZE_MS = 24 * 3600_000L
     }
 
     private lateinit var web: WebView
@@ -89,7 +87,7 @@ class MainActivity : AppCompatActivity() {
     private var keepSplash = true
     private var pageShown = false
     private var mainFrameFailed = false
-    private var updateChecked = false
+    private val updater by lazy { Updater(this) }
 
     @Volatile
     var canRefresh = true
@@ -182,6 +180,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         web.onResume()
         visiblePath = web.url?.let { Uri.parse(it).path }
+        updater.onResume()
     }
 
     override fun onPause() {
@@ -298,10 +297,7 @@ class MainActivity : AppCompatActivity() {
             visiblePath = Uri.parse(url).path
             view.evaluateJavascript(TOUCH_JS, null)
             matchBarsToPage()
-            if (!updateChecked) {
-                updateChecked = true
-                checkForUpdate()
-            }
+            updater.check() // no-op if checked in the last half hour
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -614,28 +610,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun resolve(id: Int, result: JSONObject) {
         runOnUiThread { web.evaluateJavascript("window.__vpResolve && window.__vpResolve($id, $result)", null) }
-    }
-
-    // ---- Updates ----
-
-    /** A newer app file on the server: offer it (the page download keeps working meanwhile). */
-    private fun checkForUpdate() {
-        lifecycleScope.launch {
-            val latest = withContext(Dispatchers.IO) { Http.getJson("${BuildConfig.BASE_URL}/api/app/latest") } ?: return@launch
-            val code = latest.optInt("versionCode", 0)
-            val url = latest.optString("url").takeIf { it.startsWith("https://") } ?: return@launch
-            val name = latest.optString("versionName")
-            if (code <= BuildConfig.VERSION_CODE) return@launch
-            val prefs = getSharedPreferences("update", MODE_PRIVATE)
-            if (prefs.getInt("snoozedCode", 0) == code && System.currentTimeMillis() - prefs.getLong("snoozedAt", 0) < UPDATE_SNOOZE_MS) return@launch
-            if (isFinishing) return@launch
-            MaterialAlertDialogBuilder(this@MainActivity)
-                .setTitle(R.string.update_title)
-                .setMessage(getString(R.string.update_body, name))
-                .setPositiveButton(R.string.update_now) { _, _ -> openOutside(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                .setNegativeButton(R.string.later) { _, _ -> prefs.edit().putInt("snoozedCode", code).putLong("snoozedAt", System.currentTimeMillis()).apply() }
-                .show()
-        }
     }
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
